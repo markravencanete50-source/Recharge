@@ -36,12 +36,13 @@ test('the Management centre opens on its cards; a link to one tool opens that to
 test('Guest relations, Client relations and Accounts: a link to one tool shows it alone; opened whole, a labelled picker', () => {
   for (const [file, back, label] of [['GuestRelations.tsx', 'Guest relations', 'GUEST_SUB_LABEL'], ['ClientRelations.tsx', 'Client relations', 'CLIENT_SUB_LABEL']]) {
     const text = source(file);
-    assert.match(text, /const \[alone, setAlone\] = useState\(\(\) => subs\.length > 1 && subs\.some\(s => s === focus\?\.sub\)\);/, file);
-    assert.match(text, new RegExp(`\\{alone \\? <ToolHeader p=\\{p\\} back="${back}" onBack=\\{\\(\\) => setAlone\\(false\\)\\} title=\\{${label}\\[sub\\]\\} \\/> : <>`), file);
+    // A menu link opened as a tool page is headed by the Work area (lib/tool-focus.ts, tests/tool-focus-pages.test.mjs).
+    assert.match(text, /const \[alone, setAlone\] = useState\(\(\) => !!focus\?\.tool \|\| \(subs\.length > 1 && subs\.some\(s => s === focus\?\.sub\)\)\);/, file);
+    assert.match(text, new RegExp(`\\{alone \\? !focus\\?\\.tool && <ToolHeader p=\\{p\\} back="${back}" onBack=\\{\\(\\) => setAlone\\(false\\)\\} title=\\{${label}\\[sub\\]\\} \\/> : <>`), file);
   }
   const accounts = source('LiveAccounts.tsx');
-  assert.match(accounts, /const \[alone, setAlone\] = useState\(\(\) => focus\?\.sub === view\);/);
-  assert.match(accounts, /\{alone \? <ToolHeader p=\{p\} back="Accounts" onBack=\{\(\) => setAlone\(false\)\} title=\{TAB_LABEL\[view\]\} \/>/);
+  assert.match(accounts, /const \[alone, setAlone\] = useState\(\(\) => !!focus\?\.tool \|\| focus\?\.sub === view\);/);
+  assert.match(accounts, /\{alone \? !focus\?\.tool && <ToolHeader p=\{p\} back="Accounts" onBack=\{\(\) => setAlone\(false\)\} title=\{TAB_LABEL\[view\]\} \/>/);
   assert.match(accounts, /\{!alone && <StatGrid>/);
   // The finance-only tabs stay finance-only.
   assert.match(accounts, /\.filter\(v => \(v !== "receivable" && v !== "maker" && v !== "performance" && v !== "aircover"\) \|\| \(isFinanceRole\(role\) && \(v !== "aircover" \|\| !!sectionProps\)\)\)\} \/>\}/);

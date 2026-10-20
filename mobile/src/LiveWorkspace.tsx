@@ -68,7 +68,10 @@ import { invoiceViewSchema, journeyViewSchema, noticeViewSchema, operationViewSc
 import { workDetails } from "../../lib/work-details";
 import { AccountsWork } from "./LiveAccountsWork";
 import { CelebrateProvider } from "./Celebrate";
-import { Anchor, AnchorRegistry, WorkFocusContext, dayLabel, type WorkFocus } from "./LiveKit";
+import { Anchor, AnchorRegistry, OnlySection, WorkFocusContext, dayLabel, type WorkFocus } from "./LiveKit";
+import { ToolHeader, ToolTitled } from "./ToolPage";
+import { LiveTraining } from "./LiveTraining";
+import { DEPARTMENT_BACK, toolPageFor, type ToolPageInfo } from "../../lib/tool-focus";
 import type { HomeToolTarget } from "../../lib/home-tools";
 import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
 import { gateDiscountPolicy, inspectionReportFrom, workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
@@ -196,16 +199,17 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [form, setForm] = useState<WorkflowForm | null>(null), [openWork, setOpenWork] = useState<OperationView | null>(null);
   const [billOpen, setBillOpen] = useState<string | null>(null);
   const [workView, setWorkView] = useState<WorkView | "">(""), [workFilter, setWorkFilter] = useState("Active"), [workQuery, setWorkQuery] = useState("");
-  // The team a link asked the Calendar to show (Maintenance calendar: "ready"), or the kind of work (Safety & Compliance
+  // The calendar of one type a link opens, locked to it (Maintenance calendar: "ready"; Safety & Compliance
   // Calendar: "safety"); a fresh nonce opens it afresh each time.
   const [calendarTeam, setCalendarTeam] = useState<{ team?: CalendarTeam; preset?: CalendarPreset; nonce: number } | null>(null);
   // The bottom bar and sidebar open each page at its start, not where a Home tool last pointed.
   // Accounts' Invoices opens Work → Accounts on its expenses.
   // Opens a place named by a deep link (lib/workspace-map.ts deepLinkFor): a page, or a Work area and its sub-page.
-  const openLink = (link: DeepLink) => {
+  // `tool` opens the link as a tool page: that one part of the department alone (lib/tool-focus.ts).
+  const openLink = (link: DeepLink, tool?: ToolPageInfo | null) => {
     const { section: to, view, sub, anchor, open, workId } = link;
     if (to === "work" && view) setWorkView(view);
-    setFocus(to === "work" || anchor || open || workId ? { sub, anchor, open, workId, nonce: freshNonce() } : null);
+    setFocus(to === "work" || anchor || open || workId ? { sub, anchor, open, workId, ...(tool ? { tool } : {}), nonce: freshNonce() } : null);
     setChatUpdates(link.messagesTab === "updates" ? freshNonce() : null);
     setCalendarTeam(link.team ? { team: link.team, nonce: freshNonce() } : link.preset ? { preset: link.preset, nonce: freshNonce() } : null);
     setTab(to);
@@ -434,10 +438,12 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const [searchOpen, setSearchOpen] = useState(false), [propertyFocus, setPropertyFocus] = useState<{ id: string; nonce: number } | null>(null);
   const [tracker, setTracker] = useState<Tool | null>(null), [calculator, setCalculator] = useState(false), [viewAsOpen, setViewAsOpen] = useState(false);
   // A Home tool opens its place: the Work view (and tab inside it), or another page, then the section.
-  const openTool = (target: HomeToolTarget) => {
+  // A tool that is one part of a department (Receivable invoices, Form submissions…) opens on a page of its own with only
+  // that part (lib/tool-focus.ts); `label` is the menu's name for it, used as the page's title.
+  const openTool = (target: HomeToolTarget, label?: string) => {
     if (target.kind === "tracker") setTracker(toolsFor(account.role, account.modules).find(t => t.id === target.module) ?? null);
     else if (target.kind === "calculator") setCalculator(true);
-    else { const link = deepLinkFor(target); if (link) openLink(link); }
+    else { const link = deepLinkFor(target); if (link) openLink(link, toolPageFor(account.role, account.modules, target, label)); }
   };
   // The Calendar page and the other Work areas open each other (a changeover opens its Work area).
   const openView = (view: WorkView, sub?: string) => { setFocus(sub ? { sub, nonce: Date.now() } : null); setWorkView(view); setTab("work"); };
@@ -478,7 +484,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     return () => document.removeEventListener("keydown", keydown);
   }, []);
   useEffect(() => {
-    if (!focus?.anchor) return;
+    // A tool page shows its one section at the top already, so there is nothing to scroll to.
+    if (!focus?.anchor || focus.tool) return;
     // Sections appear once their data has loaded, so look for a few seconds, then bring it into view
     // (with a brief glow on the web, so the eye lands on it).
     let tries = 0;
@@ -545,7 +552,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
       if (to && to.section !== "work") { navigate(to.section); setPanelPick({ key: link.key, tab: to.section, view: "" }); return; }
       setFocus(null); setVisit(v => v + 1); setWorkView(link.view); setTab("work"); setPanelPick({ key: link.key, tab: "work", view: link.view }); return;
     }
-    openTool(link.target);
+    openTool(link.target, link.label);
     // Where the tool opens (a calendar tool opens the Calendar page, Client enquiries opens in Client relations).
     const to = link.target.kind === "work" || link.target.kind === "tab" ? deepLinkFor(link.target) : null;
     if (to) setPanelPick({ key: link.key, tab: to.section, view: to.section === "work" ? to.view ?? "" : "" });
@@ -583,10 +590,16 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // Issued invoices and their payments: on Reports for admins, inside Work → Accounts for Accounts
   // (their navigation has no Reports tab).
   const invoiceSearch = useListSearch(invoices, invoice => [invoice.reference, names.get(invoice.property_id), readableStage(invoice.status), formatMoney(invoice.amount_minor)]);
+  // The tool page open now, if any (lib/tool-focus.ts), and its link back to the whole department or page.
+  const toolPage = focus?.tool ?? null;
+  const toolBack = () => {
+    setFocus(tab === "work" ? { nonce: freshNonce() } : null); setVisit(v => v + 1);
+    setPanelPick(tab === "work" && currentView ? { key: "area:" + currentView, tab: "work", view: currentView } : null);
+  };
   const invoiceList = (
     <Anchor id="section-invoices"><View style={{ gap: 10 }}>
       <InvoiceAnalytics p={p} invoices={invoices} />
-      <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Invoices</Text>
+      {!(tab === "work" && toolPage) && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Invoices</Text>}
       <ListSearchBox p={p} search={invoiceSearch} nouns="invoices" />
       {!invoiceSearch.missed && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, paddingVertical: 4, gap: 0 }]}>
         {invoiceSearch.shown.map((invoice, i) => (
@@ -603,14 +616,24 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const workPage = (
     <>
       {/* The Work areas are listed in the left panel on desktop, so the row of tabs shows only without it (phones, or the panel hidden). */}
-      {workViews.length > 1 && !(desktop && !sidebarHidden) && <FilterBar values={orderWorkViews(workViews, panel).map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => { const view = (Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(v => WORK_VIEW_LABEL[v] === label) ?? ""; if (view === "calendar") navigate("calendar"); else setWorkView(view); }} palette={p} />}
+      {/* A tool page has no picker: only its link back to the department (ToolPage.tsx). */}
+      {workViews.length > 1 && !(desktop && !sidebarHidden) && !toolPage && <FilterBar values={orderWorkViews(workViews, panel).map(view => WORK_VIEW_LABEL[view])} selected={currentView ? WORK_VIEW_LABEL[currentView] : ""} onSelect={label => { const view = (Object.keys(WORK_VIEW_LABEL) as WorkView[]).find(v => WORK_VIEW_LABEL[v] === label) ?? ""; if (view === "calendar") navigate("calendar"); else setWorkView(view); }} palette={p} />}
       {currentView === "calendar" && <LiveCalendar palette={p} account={account} work={work} desktop={desktop} properties={properties} onOpenWork={setOpenWork} onOpenView={openView} />}
+      {/* A tool page (lib/tool-focus.ts): back to the department, the tool's title and line, then only that tool. The Management
+          centre heads its own tool pages. Sections of the department other than the tool's render nothing (LiveKit.tsx Section). */}
+      {toolPage && currentView && currentView !== "management" && <ToolHeader p={p} back={DEPARTMENT_BACK[currentView] ?? WORK_VIEW_LABEL[currentView]} onBack={toolBack} title={toolPage.title} detail={toolPage.detail} />}
+      <OnlySection.Provider value={toolPage?.only.startsWith("section-") ? toolPage.only : null}>
       {currentView === "management" && <LiveManagement key={"management:" + (focus?.sub ?? "") + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />}
       {currentView === "stays" && <GuestRelations key={"stays:" + (focus?.nonce ?? "") + ":" + visit} {...sectionProps} onRefresh={() => refresh(true)} minimumNights={policy?.minimum_nights} />}
       {currentView === "clients" && <ClientRelations key={"clients:" + (focus?.nonce ?? "") + ":" + visit} {...sectionProps} onOpenProperty={id => { void refresh(); setPropertyFocus({ id, nonce: Date.now() }); setTab("properties"); }} onRefresh={() => refresh(true)} />}
       {currentView === "cleans" && <LiveCleans key={"cleans:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onForm={setForm} />}
       {currentView === "repairs" && <LiveRepairs key={"repairs:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} sectionProps={sectionProps} />}
-      {currentView === "accounts" && <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} sectionProps={sectionProps} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />{account.role === "accounts" && !!invoices.length && invoiceList}</>}
+      {/* The Accounts desk as a whole; a tool of it alone: one of its tabs, one of its work sections, or the invoices. */}
+      {currentView === "accounts" && (!toolPage ? <><LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} sectionProps={sectionProps} /><AccountsWork palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />{account.role === "accounts" && !!invoices.length && invoiceList}</>
+        : toolPage.only === "section-invoices" ? (invoices.length ? invoiceList : <EmptyState palette={p} icon="inbox" title="No invoices yet" detail="Issued invoices and their payments show here." />)
+        : toolPage.only.startsWith("section-") ? <AccountsWork key={"accounts-work:" + (focus?.nonce ?? "")} palette={p} account={account} properties={properties} onOpenWork={setOpenWork} />
+        : <LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} sectionProps={sectionProps} />)}
+      </OnlySection.Provider>
       {currentView === "all" && <>
         <PageHeading palette={p} title="All work" subtitle={WORK_TITLE[account.role][1]} />
         {policy && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: desktop ? "row" : "column", alignItems: desktop ? "center" : "stretch", gap: 12 }]}>
@@ -667,11 +690,11 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     ? <LiveHome palette={p} desktop={desktop} account={account} snapshot={snapshot} period={period} properties={properties} journeys={journeys} work={work} notices={notices} loading={loading} onNavigate={section => (section === "activity" ? navigate(section) : setTab(section))} onTool={openTool} favoriteEntries={entries} onOpenEntry={openEntry} />
     : tab === "todo" ? <TodoList {...sectionProps} />
     : tab === "decisions" ? <ManagementApprovals palette={p} account={account} properties={properties} work={work} onOpenWork={setOpenWork} />
-    : tab === "calendar" ? <LiveCalendar key={"calendar:" + (calendarTeam?.nonce ?? "")} palette={p} account={account} work={work} desktop={desktop} properties={properties} focusTeam={calendarTeam?.team} focusPreset={calendarTeam?.preset} onOpenWork={setOpenWork} onOpenView={openView} />
+    : tab === "calendar" ? <LiveCalendar key={"calendar:" + (calendarTeam?.nonce ?? "")} palette={p} account={account} work={work} desktop={desktop} properties={properties} locked={calendarTeam?.team ?? calendarTeam?.preset ?? null} onOpenWork={setOpenWork} onOpenView={openView} />
     : tab === "favorites" ? <FavoritesPage palette={p} desktop={desktop} entries={entries} onOpen={openEntry} onSearch={() => setSearchOpen(true)} />
     : tab === "work" ? workPage
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} focusProperty={propertyFocus} />
-    : tab === "analytics" ? (account.role === "client" ? <LiveClientReports palette={p} /> : reportsPage)
+    : tab === "analytics" ? (account.role === "client" ? <LiveClientReports key={"portfolio:" + (focus?.nonce ?? "")} palette={p} tool={toolPage} onBack={toolBack} /> : reportsPage)
     : tab === "mailbox" ? <OwnerMailbox palette={p} account={account} journeys={journeys} properties={properties} onOpenProperty={openProperty} onSign={() => navigate("approvals")} />
     : tab === "approvals" ? <LiveApprovals palette={p} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onForm={setForm} onRefresh={() => refresh()} onInbox={() => navigate("inbox")} onProperties={() => navigate("properties")} />
     : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
@@ -681,6 +704,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} />
     : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} guestEmailWaiting={guestEmailWaiting} openConversation={chatTarget?.id} focusReply={!!chatTarget?.reply}
         updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={() => openMessages("")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} onLeave={() => navigate("home")} />
+    : toolPage?.only === "section-training" ? <><ToolHeader p={p} back="Help" onBack={toolBack} title={toolPage.title} detail={toolPage.detail} /><ToolTitled.Provider value={true}><LiveTraining palette={p} /></ToolTitled.Provider></>
     : <LiveHelp palette={p} account={account} properties={properties} busy={busy} onSignOut={() => void logout()} onOpen={(next, view, sub) => { setTab(next); if (view) setWorkView(view); setFocus(sub ? { sub, nonce: Date.now() } : null); }} />;
   // Tabs already fade in; switching between Work views (Cleans, Repairs, All work…) slides the new view in too.
   const animatedPage = <SwapIn swapKey={tab === "work" ? "work:" + currentView : tab} style={{ gap: 24 }}>{page}</SwapIn>;

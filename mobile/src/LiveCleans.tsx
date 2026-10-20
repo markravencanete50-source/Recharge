@@ -6,7 +6,7 @@ import { Text } from "./Typography";
 import { ListSearchBox, PropertySelect, SearchPicker, useListSearch } from "./SearchPicker";
 import { useCelebrate, useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
-import { addDays, Button, dayLabel, Field, LIST_PREVIEW, london, message, Notice, Section, ShowMore, Tag, useRequestId, useWorkFocus, Loading, RefreshButton, StatGrid, StatTile } from "./LiveKit";
+import { addDays, Button, dayLabel, Field, LIST_PREVIEW, london, message, Notice, Section, ShowMore, Tag, useRequestId, useWorkFocus, Loading, OnlySection, RefreshButton, StatGrid, StatTile, useOnlySection } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
 import { pillBox, pillInk } from "./Pills";
 import { Chip, SheetTable, cellText, type Column } from "./SheetTable";
@@ -79,6 +79,9 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const focus = useWorkFocus();
+  // A tool page (Form submissions, Disputes, My month...: lib/tool-focus.ts) shows its one section and nothing else of
+  // the page: no heading (the tool page has its own), no figures, no buttons for the rest of the cleaning work.
+  const only = useOnlySection();
   // Home's Today board opens a clean straight away.
   const [openJob, setOpenJob] = useState<string | null>(() => focus?.workId ?? null);
   const [creating, setCreating] = useState(() => focus?.open === "new-clean" && account.role !== "cleans");
@@ -159,23 +162,24 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
 
   return (
     <View style={{ gap: space.section }}>
-      <View style={{ gap: 4 }}>
+      {!only && <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>{manager ? "Cleaning team" : "Your cleans"}</Text>
         <Text style={[ui.body, { color: p.muted }]}>{manager ? "Schedule, review and assign every clean you look after." : "Your jobs, checklists and results, straight from the office."}</Text>
-      </View>
+      </View>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
 
-      <StatGrid>
+      {!only && <StatGrid>
         <StatTile p={p} icon="calendar" tone="cleans" label="Today" value={cleans.filter(w => w.dueOn === today).length} detail="Cleans due" />
         <StatTile p={p} icon={manager ? "eye" : "clock"} tone="cleans" label={manager ? "To review" : "This week"} value={manager ? toReview.length : cleans.filter(w => w.dueOn && w.dueOn >= today && w.dueOn <= addDays(today, 6)).length} detail={manager ? "Submitted cleans" : "Next 7 days"} attention={manager && toReview.length > 0} />
         <StatTile p={p} icon={manager ? "user-plus" : "award"} tone="cleans" label={manager ? "Unassigned" : "Accepted"} value={manager ? unassigned.length : mine?.accepted ?? 0} detail={manager ? "Need a cleaner" : "This month"} attention={manager && unassigned.length > 0} />
-      </StatGrid>
+      </StatGrid>}
 
-      {!manager && mine && (mine.warning || mine.openComplaints.length > 0) && (
-        <Section title="Needs your response" count={mine.openComplaints.filter(c => !c.cleanerStatement).length} p={p}>
-          {mine.warning && <Notice text={`You have ${mine.rejected} rejected cleans this month. Management will review your work.`} p={p} tone="bad" />}
-          {mine.openComplaints.map(c => {
+      {!manager && (only === "section-needs-your-response" || (mine && (mine.warning || mine.openComplaints.length > 0))) && (
+        <Section title="Needs your response" count={(mine?.openComplaints ?? []).filter(c => !c.cleanerStatement).length} p={p}>
+          {mine?.warning && <Notice text={`You have ${mine.rejected} rejected cleans this month. Management will review your work.`} p={p} tone="bad" />}
+          {!loading && !mine?.warning && !mine?.openComplaints.length && <Notice text="Nothing needs your response." p={p} />}
+          {(mine?.openComplaints ?? []).map(c => {
             // The rejected clean itself carries the reviewer's reason.
             const source = c.sourceWorkId ? byId.get(c.sourceWorkId) : undefined;
             const reason = typeof source?.data.reviewNote === "string" ? source.data.reviewNote : null;
@@ -205,7 +209,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
         </Section>
       )}
 
-      {manager && (
+      {manager && !only && (
         <View style={{ flexDirection: "row", gap: space.row, flexWrap: "wrap" }}>
           {canStart(account, "new-clean") && <Button label="New clean" icon="plus" primary p={p} onPress={() => setCreating(true)} />}
           {templates.data?.canEdit && <Button label="Checklists" icon="check-square" quiet p={p} onPress={() => setEditingChecklists(true)} />}
@@ -325,7 +329,7 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
             }) : <Notice text="Cleaner results appear after the first reviewed clean." p={p} />}
           </Section>
           {/* Requests for invoice: a cleaning manager reads their own cleaners' and sets each clean's outcome; Accounts and admins decide them in Accounts. */}
-          {account.role === "cleaning_manager" && <CleanerRequestsForManager p={p} />}
+          {account.role === "cleaning_manager" && !only && <CleanerRequestsForManager p={p} />}
         </>
       )}
       {!manager && (
@@ -334,20 +338,21 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
             : !loading && <Notice text="Anything broken or not working at a property? Open the clean and report it as a repair. It shows here with where it is up to." p={p} />}
         </Section>
       )}
-      {!manager && mine && (
+      {!manager && (mine || only === "section-your-month") && (
         <Section title="Your month" p={p}>
-          <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 8 }]}>
+          {!mine ? !loading && <Notice text="Your month's results show here after your first reviewed clean." p={p} /> : <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 8 }]}>
             <View style={[ui.between, { gap: 12 }]}>
               <Text style={{ color: p.text, flex: 1, minWidth: 0 }}>{mine.accepted} accepted · {mine.rejected} rejected{mine.overturned ? ` · ${mine.overturned} overturned` : ""}</Text>
               <Tag label={mine.warning ? "Warning" : "Good standing"} tone={mine.warning ? "bad" : "good"} p={p} />
             </View>
             <Text style={[ui.small, { color: p.muted }]}>Amount for this month: {monthPay(mine).label}{monthPay(mine).rateMinor !== null ? ` (${monthPay(mine).detail})` : ""}</Text>
-          </View>
+          </View>}
         </Section>
       )}
       {/* Requests for invoice: earnings, waiting to be paid, projected, and the cleaner's own requests. */}
-      {!manager && <CleanerPay p={p} tick={payTick} />}
-      {!manager && <RefreshButton p={p} loading={loading} onPress={() => void load()} />}
+      {/* On My month's own page its pay comes with it. */}
+      {!manager && (!only || only === "section-your-month") && <OnlySection.Provider value={null}><CleanerPay p={p} tick={payTick} /></OnlySection.Provider>}
+      {!manager && !only && <RefreshButton p={p} loading={loading} onPress={() => void load()} />}
 
       <JobSheet p={p} account={account} manager={manager} op={job} mine={mine} repairs={repairs} flags={flags} now={now} propertyName={jobRow?.propertyName ?? properties.find(x => x.id === job?.propertyId)?.name ?? "Clean"} onClose={() => setOpenJob(null)} onDone={saved(async () => { setOpenJob(null); await load(); })}
         onRespond={id => { setOpenJob(null); setStatementFor(id); }} onChanged={load} onForm={onForm && (f => { setOpenJob(null); onForm(f); })} />

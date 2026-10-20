@@ -37,10 +37,11 @@ export function ClientRelations(props: SectionProps & { onOpenProperty: (propert
   const [sub, setSub] = useState<ClientSub>(() => pickSub(subs, focus?.sub, defaultClientSub(subs)));
   // A link to one section opens it on its own page with "Client relations" to come back (ToolPage.tsx); opened as a
   // whole, the labelled dropdown chooses the section.
-  const [alone, setAlone] = useState(() => subs.length > 1 && subs.some(s => s === focus?.sub));
+  // A menu link or search result opened as a tool page (lib/tool-focus.ts) is headed by the Work area, which brings it back.
+  const [alone, setAlone] = useState(() => !!focus?.tool || (subs.length > 1 && subs.some(s => s === focus?.sub)));
   return (
     <View style={{ gap: space.section }}>
-      {alone ? <ToolHeader p={p} back="Client relations" onBack={() => setAlone(false)} title={CLIENT_SUB_LABEL[sub]} /> : <>
+      {alone ? !focus?.tool && <ToolHeader p={p} back="Client relations" onBack={() => setAlone(false)} title={CLIENT_SUB_LABEL[sub]} /> : <>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Client relations</Text>
         <Text style={[ui.body, { color: p.muted }]}>Onboarding, leads, licensing, listings, pricing, reviews and purchases for your clients’ properties.</Text>

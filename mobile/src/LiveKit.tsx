@@ -7,12 +7,14 @@ import { Entrance, MotionPress, Shimmer, Stagger, SwapIn, TweenNumber } from "./
 import { departmentColor, primaryFill, space, textSize, ui, web, type Palette } from "./theme";
 import { formatCount } from "../../lib/format";
 import { sectionAnchor } from "../../lib/home-tools";
+import type { ToolPageInfo } from "../../lib/tool-focus";
 import { readableError } from "../../lib/error-copy";
 
 // Where a Home tool asked to land: a tab inside a Work view (sub) and a section to scroll to (anchor).
 // The nonce changes on every tap, so tapping the same tool again lands again.
 // workId opens one job straight away (Home's Today board).
-export type WorkFocus = { sub?: string; anchor?: string; open?: string; workId?: string; nonce: number };
+// `tool` is set when the link opens one tool on a page of its own (lib/tool-focus.ts): the part to show and its heading.
+export type WorkFocus = { sub?: string; anchor?: string; open?: string; workId?: string; tool?: ToolPageInfo; nonce: number };
 export const WorkFocusContext = createContext<WorkFocus | null>(null);
 export const useWorkFocus = () => useContext(WorkFocusContext);
 // Places a Home tool can scroll to. On the web they are found by id; in the phone app each one
@@ -89,8 +91,14 @@ export function Notice({ text, p, tone = "plain" }: { text: string; p: Palette; 
 export function Loading({ p, rows = 3 }: { p: Palette; rows?: number }) {
   return <Shimmer rows={rows} color={p.surface} highlight={p.elevated} />;
 }
+// The one section a tool page shows (lib/tool-focus.ts: "section-waiting-for-your-review"), or null for the whole page.
+// Inside a tool page every other Section of the department renders nothing; the one shown clears it for what it holds.
+export const OnlySection = createContext<string | null>(null);
+export const useOnlySection = () => useContext(OnlySection);
 export function Section({ title, count, p, children }: { title: string; count?: number; p: Palette; children: ReactNode }) {
   // Each section can be opened directly from a Home tool by its heading (section-daily-checks).
+  const only = useContext(OnlySection);
+  if (only && only !== sectionAnchor(title)) return null;
   return (
     <Anchor id={sectionAnchor(title)}><Entrance style={{ gap: space.row }}>
       {/* The heading on its own: no accent bar, so the page has fewer marks competing for the eye. */}
@@ -100,7 +108,7 @@ export function Section({ title, count, p, children }: { title: string; count?: 
         {!!count && <Tag label={String(count)} tone="wait" p={p} />}
       </View>
       {/* Cards and rows inside a section arrive one after another. */}
-      {Children.toArray(children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}
+      <OnlySection.Provider value={null}>{Children.toArray(children).map((child, n) => <Stagger key={isValidElement(child) && child.key != null ? child.key : n} index={n}>{child}</Stagger>)}</OnlySection.Provider>
     </Entrance></Anchor>
   );
 }
