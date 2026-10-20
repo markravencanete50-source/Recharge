@@ -10,8 +10,7 @@ import { integrationSettings } from './integration-server';
 import { sendEmail } from './integration-providers';
 import { formAnswersSchema, enquiryEmail, enquiryFileType, MAX_ENQUIRY_FILE_BYTES, tokenHash, tokenPattern } from './client-enquiry';
 import type { RpcContext } from './workspace-rpc-route';
-import { deletedEnquiryFiles, removeStoredCopies } from './enquiry-storage-cleanup';
-import { LEAD_BUCKET } from './lead-files-server';
+import { LEAD_FILES_BUCKET, deletedEnquiryFiles, removeStoredCopies } from './enquiry-storage-cleanup';
 import type { TeamsAction } from './workspace-teams-policy';
 
 // Client Enquiries on the server: the team's "send the form" (the link and the email), the
@@ -69,7 +68,7 @@ export async function sendEnquiryForm(context: RpcContext, input: Invite) {
 export async function deleteEnquiry(context: RpcContext, input: Extract<TeamsAction, { action: 'deleteEnquiry' }>) {
   const result = await context.client.rpc('workspace_teams_action', { input });
   if (result.error) return databaseFailure(result.error);
-  const batches = deletedEnquiryFiles(result.data, { enquiry: ENQUIRY_BUCKET, lead: LEAD_BUCKET });
+  const batches = deletedEnquiryFiles(result.data, { enquiry: ENQUIRY_BUCKET, lead: LEAD_FILES_BUCKET });
   if (batches.length) {
     const client = secretClient();
     await removeStoredCopies(batches, {

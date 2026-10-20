@@ -421,7 +421,7 @@ test('the screen asks first, for admins only, and the server removes the stored 
   assert.match(readFileSync('mobile/src/LiveWorkspace.tsx', 'utf8'), /<ClientRelations [^\n]*onRefresh=\{\(\) => refresh\(true\)\} \/>/);
   const server = readFileSync('lib/client-enquiry-server.ts', 'utf8');
   assert.match(server, /export async function deleteEnquiry\(/);
-  assert.match(server, /deletedEnquiryFiles\(result\.data, \{ enquiry: ENQUIRY_BUCKET, lead: LEAD_BUCKET \}\)/);
+  assert.match(server, /deletedEnquiryFiles\(result\.data, \{ enquiry: ENQUIRY_BUCKET, lead: LEAD_FILES_BUCKET \}\)/);
   assert.match(server, /removeStoredCopies\(batches, \{/);
   assert.match(server, /rpc\('workspace_storage_removed', \{ bucket_name: bucket, removed \}\)/);
   assert.match(readFileSync('lib/workspace-finance-server.ts', 'utf8'), /input\.action === 'deleteEnquiry' \? import\('\.\/client-enquiry-server'\)\.then\(m => m\.deleteEnquiry\(context, input\)\)/);

@@ -7,12 +7,13 @@ import { isNativeRequest } from './native-request-policy';
 import { MAX_TRAINING_FILE_BYTES, trainingFileType } from './training-files';
 import { boundedFormData } from './bounded-form';
 import { LEAD_FILE_MIMES } from './lead-policy';
+import { LEAD_FILES_BUCKET } from './enquiry-storage-cleanup';
 
 // The PriceLabs report kept with a lead (External Analysis, migration 20261025300000): a PDF, a Word document or a picture
 // in the private "lead-files" bucket. The same pattern as course files (lib/training-files-server.ts): only the server
 // touches the bucket, the database decides who may add, remove or open a file (the team who work with enquiries), and
 // opening gives a 10-minute link.
-export const LEAD_BUCKET = 'lead-files';
+export const LEAD_BUCKET = LEAD_FILES_BUCKET;
 const bucket = () => {
   const config = authSecurityConfiguration();
   if (!config) return null;

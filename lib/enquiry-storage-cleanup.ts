@@ -4,6 +4,9 @@
 // straight away with the service client and marks them removed. Best effort: a removal that fails never fails the
 // delete; it is logged (the bucket and how many, never the paths) and stays queued on record.
 
+// The lead's PriceLabs reports (lib/lead-files-server.ts). Kept here, with no server imports, so the delete can name it.
+export const LEAD_FILES_BUCKET = 'lead-files';
+
 export type StorageBucket = { remove(paths: string[]): Promise<{ error: unknown }> };
 export type RemovalBatch = { bucket: string; paths: readonly string[] };
 // workspace_storage_removed takes up to 100 paths at a time.
