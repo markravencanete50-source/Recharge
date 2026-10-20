@@ -277,9 +277,10 @@ test('the screens are wired where people look for them', () => {
   assert.match(screens, /<InvoiceSheet p=\{p\} invoiceId=\{open\} canSetOutcome onClose/, 'the cleaning manager');
   const cleans = read('mobile/src/LiveCleans.tsx');
   assert.match(cleans, /<CleanerPay p=\{p\}/);
-  assert.match(cleans, /account\.role === "cleaning_manager" && <CleanerRequestsForManager p=\{p\} \/>/);
+  assert.match(cleans, /account\.role === "cleaning_manager" && !only && <CleanerRequestsForManager p=\{p\} \/>/);
   assert.match(cleans, /<PayPeriodSheet/);
-  assert.match(read('mobile/src/LiveAccountsWork.tsx'), /canPayCleaners && <AccountsCleanerPay p=\{p\} canSetOutcome=\{\["admin", "super_admin"\]\.includes\(account\.role\)\} \/>/);
+  // On the Payable invoices tool page (lib/tool-focus.ts) the requests come with the cleaner invoices.
+  assert.match(read('mobile/src/LiveAccountsWork.tsx'), /canPayCleaners && \(!only \|\| only === sectionAnchor\("Cleaner invoices"\)\) && <OnlySection\.Provider value=\{null\}><AccountsCleanerPay p=\{p\} canSetOutcome=\{\["admin", "super_admin"\]\.includes\(account\.role\)\} \/><\/OnlySection\.Provider>/);
   // Every word a person reads in these screens says request, not invoice ("request for invoice" itself aside).
   const words = [...screens.matchAll(/(?:title|label|empty|text)="([^"]*)"|>([^<>{}]+)</g)].map(m => (m[1] ?? m[2]).trim()).filter(Boolean);
   assert.deepEqual(words.filter(w => !/[;=()]/.test(w) && /\binvoices?\b/i.test(w.replace(/requests? for invoice|amount to invoice|send us your invoice/gi, ''))), [], 'no bare "invoice" on screen');

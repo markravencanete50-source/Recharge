@@ -58,7 +58,7 @@ test('the workspace mounts every page and builds the section props once', () => 
   assert.match(workspace, /currentView === "clients" && <ClientRelations key=\{"clients:" \+ \(focus\?\.nonce \?\? ""\) \+ ":" \+ visit\} \{\.\.\.sectionProps\}/);
   assert.match(workspace, /currentView === "cleans" && <LiveCleans /);
   assert.match(workspace, /currentView === "repairs" && <LiveRepairs /);
-  assert.match(workspace, /currentView === "accounts" && <><LiveAccounts /);
+  assert.match(workspace, /currentView === "accounts" && \(!toolPage \? <><LiveAccounts /);
   assert.match(workspace, /currentView === "management" && <LiveManagement [^>]*properties=\{properties\} work=\{work\} onOpenWork=\{setOpenWork\}/);
   assert.match(workspace, /tab === "todo" \? <TodoList \{\.\.\.sectionProps\} \/>/);
   assert.match(workspace, /tab === "decisions" \? <ManagementApprovals palette=\{p\} account=\{account\} properties=\{properties\} work=\{work\} onOpenWork=\{setOpenWork\} \/>/);
@@ -166,7 +166,7 @@ test('owners keep their own path: no team pages, no Updates tab, their own bar',
   assert.match(workspace, /todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES/);
   assert.ok(!/TEAM_ROLES: Role\[\] = [^;]*"client"/.test(workspace));
   assert.match(workspace, /updates=\{team \?/);
-  assert.match(workspace, /<LiveClientReports palette=\{p\} \/>/, 'owners still get their own reports');
+  assert.match(workspace, /<LiveClientReports key=\{"portfolio:" \+ \(focus\?\.nonce \?\? ""\)\} palette=\{p\} tool=\{toolPage\} onBack=\{toolBack\} \/>/, 'owners still get their own reports');
   assert.match(workspace, /tab === "mailbox" \? <OwnerMailbox /, 'and their own Mailbox page');
   assert.match(workspace, /tab === "approvals" \? <LiveApprovals /);
   assert.deepEqual(map.phoneBarFor('client'), map.ownerNavigation());

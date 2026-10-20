@@ -204,7 +204,8 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
   const [view, setView] = useState<Tab>(() => (["expenses", "payouts", "statements", "receivable", "maker", "performance", "aircover"] as const).find(v => v === focus?.sub && ((v !== "receivable" && v !== "maker" && v !== "performance" && v !== "aircover") || isFinanceRole(account.role)) && (v !== "aircover" || !!sectionProps)) ?? "expenses");
   // A link to one tool (Owner statements, search, a Home card) opens it on its own page with "Accounts" to come back
   // and no picker (ToolPage.tsx). Opened as a whole, Accounts shows its month, its figures and the labelled picker.
-  const [alone, setAlone] = useState(() => focus?.sub === view);
+  // A menu link opened as a tool page (lib/tool-focus.ts) is headed by the Work area, which brings back the Accounts desk.
+  const [alone, setAlone] = useState(() => !!focus?.tool || focus?.sub === view);
   const [status, setStatus] = useState<Expense["status"]>("to_approve");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [limit, setLimit] = useState<LimitState | null>(null);
@@ -297,7 +298,7 @@ export function LiveAccounts({ palette: p, account, properties, sectionProps }: 
 
   return (
     <View style={{ gap: space.section }}>
-      {alone ? <ToolHeader p={p} back="Accounts" onBack={() => setAlone(false)} title={TAB_LABEL[view]} /> : <View style={{ gap: 4 }}>
+      {alone ? !focus?.tool && <ToolHeader p={p} back="Accounts" onBack={() => setAlone(false)} title={TAB_LABEL[view]} /> : <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Accounts</Text>
         <Text style={[ui.body, { color: p.muted }]}>Approve costs with evidence, reconcile platform payouts and pay owners.</Text>
       </View>}

@@ -7,7 +7,8 @@ import { Text } from "./Typography";
 import { useSaved } from "./Celebrate";
 import { MotionPress } from "./motion";
 import { Sheet } from "./TeamFlows";
-import { ui, type Palette } from "./theme";
+import { space, ui, type Palette } from "./theme";
+import { useToolTitled } from "./ToolPage";
 import { Button, Field, message, Notice, Section, Tag, useRequestId, Loading } from "./LiveKit";
 import { List, Row } from "./LiveAccounts";
 import { courseFileLink, readTeams, removeCourseFile, uploadCourseFile, writeTeams, WorkspaceApiError } from "./backend/client";
@@ -250,8 +251,11 @@ export function LiveTraining({ palette: p, manage = false }: { palette: Palette;
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   const todo = courses.filter(c => c.published && !c.completedAt).length;
-  const training = (
-    <Section title="Training" count={manage ? undefined : todo} p={p}>
+  // On Training's own page (lib/tool-focus.ts) the tool header already says "Training", so the list has no heading of its
+  // own. The Management centre keeps it: there it sits under the staff contracts.
+  const titled = useToolTitled() && !manage;
+  const content = (
+    <>
       {loading && <Loading p={p} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {manage && <Button label="New course" icon="plus" p={p} onPress={() => setEditing("new")} />}
@@ -265,8 +269,9 @@ export function LiveTraining({ palette: p, manage = false }: { palette: Palette;
       </List>
       <CourseSheet p={p} course={open} onClose={() => setOpen(null)} onCompleted={load} />
       {manage && <CourseEditor p={p} course={editing === "new" ? null : editing} visible={editing !== null} onClose={() => setEditing(null)} onDone={saved(load)} onRequiredFailed={setError} />}
-    </Section>
+    </>
   );
+  const training = titled ? <View style={{ gap: space.row }}>{content}</View> : <Section title="Training" count={manage ? undefined : todo} p={p}>{content}</Section>;
   // Management sees the staff contracts first: they and the required courses gate new staff.
   return manage ? <View style={{ gap: 28 }}><StaffContracts p={p} />{training}</View> : training;
 }

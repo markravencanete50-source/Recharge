@@ -111,7 +111,7 @@ test('the daily routine tops Guest relations for Stays and admins, and Ready see
   assert.match(routine, /<TodaysRoutine p=\{p\} account=\{account\} properties=\{properties\} operations=\{work\} schedule=\{schedule\}/);
   assert.match(routine, /section: "schedule"/);
   const repairs = read('mobile/src/LiveRepairs.tsx');
-  assert.match(repairs, /account\.role === "ready" && !!sectionProps && account\.modules\.includes\("purchase-order"\) && <Anchor id="section-purchase-orders"><PurchaseOrdersList \{\.\.\.sectionProps\} \/><\/Anchor>/);
+  assert.match(repairs, /account\.role === "ready" && !!sectionProps && account\.modules\.includes\("purchase-order"\) && \(!only \|\| only === "section-purchase-orders"\) && <Anchor id="section-purchase-orders"><OnlySection\.Provider value=\{null\}><PurchaseOrdersList \{\.\.\.sectionProps\} \/><\/OnlySection\.Provider><\/Anchor>/);
   assert.ok(repairs.indexOf('<PurchaseOrdersList') > repairs.indexOf('Preventative maintenance'), 'below the repairs list');
   assert.match(read('mobile/src/LiveWorkspace.tsx'), /<LiveRepairs key=\{"repairs:"[^>]*sectionProps=\{sectionProps\} \/>/);
   // Ready's Purchases tile lands on it; Accounts already see purchase requests in their own Purchases section.

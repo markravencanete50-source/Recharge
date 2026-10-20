@@ -16,7 +16,7 @@ import { Sheet } from "./TeamFlows";
 import { DateField } from "./CalendarPicker";
 import { Dropdown } from "./Dropdown";
 import { icon, radius, space, textSize, ui, type Palette } from "./theme";
-import { addDays, Anchor, Button, dayLabel, Field, LIST_PREVIEW, london, message, Notice, Section, ShowMore, Tag, useRequestId, useWorkFocus, Loading } from "./LiveKit";
+import { addDays, Anchor, Button, dayLabel, Field, LIST_PREVIEW, london, message, Notice, Section, ShowMore, Tag, useRequestId, useWorkFocus, Loading, OnlySection, useOnlySection } from "./LiveKit";
 import { formatDay, formatMoney } from "../../lib/format";
 import { raisedByLine } from "../../lib/cleaner-repairs";
 import { readOperations, readTeams, readWorkMedia, workspaceRequest, writeInbox, writeOperation, writeTeams } from "./backend/client";
@@ -77,6 +77,8 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
   const [visitOps, setVisitOps] = useState<Operation[]>([]);
   const [recordingId, setRecordingId] = useState<string | null>(null);
   const focus = useWorkFocus();
+  // A tool page (Reactive jobs, Garden maintenance, Place order...: lib/tool-focus.ts) shows its one section alone.
+  const only = useOnlySection();
   // Ready Home opens this page on one stage of the pipeline.
   const [stage, setStage] = useState<string>(() => focus?.sub && ["action", "open", ...REPAIR_STAGES.map(s => s.phase)].includes(focus.sub) ? focus.sub : "open");
   const [loading, setLoading] = useState(true);
@@ -135,14 +137,14 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
 
   return (
     <View style={{ gap: space.section }}>
-      <View style={{ gap: 4 }}>
+      {!only && <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Maintenance</Text>
         <Text style={[ui.body, { color: p.muted }]}>{account.role === "client" ? "Repairs at your properties, and costs waiting for your approval." : "Every repair from report to completion, with routine visits."}</Text>
-      </View>
+      </View>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
 
-      {canStart(account, "report-repair") && <Button label="Report a repair" icon="alert-triangle" primary p={p} onPress={() => setReporting(true)} />}
+      {(!only || only === "section-reactive-maintenance") && canStart(account, "report-repair") && <Button label="Report a repair" icon="alert-triangle" primary p={p} onPress={() => setReporting(true)} />}
 
       <Section title="Reactive maintenance" p={p}>
         <Dropdown p={p} label="Show" value={stage} onChange={setStage}
@@ -203,7 +205,7 @@ export function LiveRepairs({ palette: p, account, properties, showRoutines = tr
         </Section>
       )}
 
-      {account.role === "ready" && !!sectionProps && account.modules.includes("purchase-order") && <Anchor id="section-purchase-orders"><PurchaseOrdersList {...sectionProps} /></Anchor>}
+      {account.role === "ready" && !!sectionProps && account.modules.includes("purchase-order") && (!only || only === "section-purchase-orders") && <Anchor id="section-purchase-orders"><OnlySection.Provider value={null}><PurchaseOrdersList {...sectionProps} /></OnlySection.Provider></Anchor>}
 
       <RepairSheet p={p} account={account} role={account.role} repair={open} propertyName={open ? nameOf(open.propertyId) : ""} today={today}
         ownerPhone={open ? sectionProps?.journeys.find(j => j.propertyId === open.propertyId)?.enquiry?.phone ?? null : null} onClose={() => setOpenId(null)} onDone={saved(async () => { setOpenId(null); await load(); })} />

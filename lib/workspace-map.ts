@@ -77,7 +77,7 @@ export const WORK_SUBS: readonly WorkSub[] = [
   { view: "clients", sub: "purchases", label: "Purchase orders", words: "purchase orders purchases furnishing supplies ordering" },
   { view: "clients", sub: "furnishing", label: "Furnishing Studio", words: "furnishing studio catalogue client quotes shopping list furniture estimate" },
 ];
-const SUBS_BY_VIEW: Partial<Record<WorkView, readonly string[]>> = {
+export const SUBS_BY_VIEW: Partial<Record<WorkView, readonly string[]>> = {
   stays: GUEST_RELATIONS_SUBS, clients: CLIENT_RELATIONS_SUBS, management: MANAGEMENT_SUBS, accounts: ACCOUNTS_SUBS, calendar: [...CALENDAR_TEAMS, ...CALENDAR_PRESETS],
 };
 // Whether a Work area opens a sub-page by that name. Areas whose tabs are not listed here (Cleans,
@@ -87,8 +87,9 @@ export const isWorkSub = (view: WorkView, sub: string) => { const known = SUBS_B
 // Every top-level page a deep link can name. "activity" is no longer a menu entry; it stays here so old
 // links resolve (they open Messages, Updates).
 export const PAGE_SECTIONS: readonly WorkspaceSection[] = ["home", "mailbox", "todo", "work", "calendar", "inbox", "decisions", "properties", "analytics", "favorites", "approvals", "statements", "enquiries", "feedback", "moderation", "help", "activity"];
-// `team` opens the Calendar filtered to that team's work (the person can switch back to All teams there).
-// `preset` opens it on one kind of work (safety visits, onboarding inspections), which the person can clear there.
+// `team` opens that team's own calendar (Booking, Maintenance, Housekeeping), and `preset` the calendar of one kind of
+// work (safety visits, onboarding inspections): each shows only its type, with no way to switch (lib/calendar-live.ts
+// CALENDAR_LOCKS). The plain Calendar page, with neither, is the all-teams calendar.
 export type DeepLink = { section: WorkspaceSection; view?: WorkView; sub?: string; anchor?: string; open?: string; workId?: string; messagesTab?: "updates"; team?: CalendarTeam; preset?: CalendarPreset; redirected?: boolean };
 // Client enquiries has one home, the Enquiries chip in Client relations (Lee, 16 October 2026). "Client enquiries" in
 // the menu, its old page links and the enquiry notices open it there; the page itself is no longer a page of its own.

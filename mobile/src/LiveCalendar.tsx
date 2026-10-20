@@ -16,10 +16,10 @@ import { DateField } from "./CalendarPicker";
 import { radius, icon, ui, type Palette } from "./theme";
 import type { DimensionalName } from "./DimensionalIcon";
 import {
-  CALENDAR_FOCUS, calendarEntries, calendarPeople, calendarProperties, calendarScheduleSchema, calendarTeamsFor, changeoversBetween, CLEAN_STATE_LABEL, CLEAN_STATE_TONE, ENTRY_KINDS, entryTitle,
-  eventsOn, filterEntries, filterFocus, filterProperty, guestNameOf, KIND_COLOUR, KIND_LABEL, kindCount, monthCounts, monthGrid, monthLabel, paymentSummary, periodLabel, scheduleFor, shiftMonth, shiftWeekDay,
+  CALENDAR_LOCK_PAGE, calendarEntries, calendarPeople, calendarProperties, calendarScheduleSchema, calendarTeamsFor, changeoversBetween, CLEAN_STATE_LABEL, CLEAN_STATE_TONE, ENTRY_KINDS, entryTitle,
+  eventsOn, filterEntries, filterLock, filterProperty, guestNameOf, KIND_COLOUR, KIND_LABEL, kindCount, monthCounts, monthGrid, monthLabel, paymentSummary, periodLabel, scheduleFor, shiftMonth, shiftWeekDay,
   shortDay, stayDates, stayDetail, stayLabel, stayNights, teamEventsSchema, TEAM_EVENT_COLOUR, TEAM_LABEL, teamPeople, timelineRows, timeRange, weekDays, weekRangeLabel, weekStart,
-  type CalendarEntry, type CalendarFocus, type CalendarSchedule, type Changeover, type DayCounts, type EntryKind, type Team, type TeamEvent, type TeamEvents, type TimelineRow,
+  type CalendarEntry, type CalendarLock, type CalendarSchedule, type Changeover, type DayCounts, type EntryKind, type Team, type TeamEvent, type TeamEvents, type TimelineRow,
 } from "../../lib/calendar-live";
 import { CHANNEL_LABEL, type GuestChannel } from "../../lib/guest-inbox-policy";
 import { workViewsFor, type WorkView } from "../../lib/tool-directory";
@@ -43,6 +43,8 @@ const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const PAY_STATUS = { draft: ["To issue", "wait"], issued: ["Issued, payout due", "plain"], paid: ["Paid", "good"] } as const;
 const MODES = ["month", "week", "changeovers", "team"] as const;
 type Mode = (typeof MODES)[number];
+// A calendar of one type (`locked`) has Month and Week only: Changeovers and Team are views across the teams.
+const LOCKED_MODES: readonly Mode[] = ["month", "week"];
 const MODE_LABEL: Record<Mode, string> = { month: "Month", week: "Week", changeovers: "Changeovers", team: "Team" };
 const longDate = (iso: string) => new Date(iso + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 const channelName = (channel?: string | null) => channel ? CHANNEL_LABEL[channel as GuestChannel] ?? readableStage(channel) : "";
@@ -178,16 +180,15 @@ function WeekTimeline({ p, days, today, rows, onStay, onWork }: { p: Palette; da
   );
 }
 
-export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, onOpenView, properties = [], focusTeam, focusPreset }: {
+export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, onOpenView, properties = [], locked }: {
   palette: Palette; account: WorkspaceAccount; work: OperationView[]; desktop: boolean; onOpenWork: (item: OperationView) => void; onOpenView?: (view: WorkView, sub?: string) => void;
   // Optional: with the property list the Changeovers view shows each full address.
   properties?: PropertyView[];
-  // Optional: the team the Calendar opens on (the menu's Maintenance, Booking and Housekeeping calendars). The Team
-  // filter starts there and can be changed; a team the role cannot filter by opens on all teams.
-  focusTeam?: Team;
-  // Optional: the kind of work the Calendar opens on (the menu's Safety & Compliance and Onboarding calendars:
-  // lib/calendar-live.ts CALENDAR_FOCUS). Shown as a filter the person can clear.
-  focusPreset?: CalendarFocus;
+  // Optional: a calendar of one type only (the menu's Booking, Maintenance, Housekeeping, Safety & Compliance and
+  // Onboarding calendars: lib/calendar-live.ts CALENDAR_LOCKS). It has its own title, shows only that type's entries
+  // in Month and Week, and has no team filter, no "All teams", no team events and nothing to clear; the property and
+  // person filters stay. Without it this is the all-teams Calendar.
+  locked?: CalendarLock | null;
 }) {
   const { width } = useWindowDimensions();
   const roomy = width >= 700;
@@ -195,9 +196,8 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
   const today = london(new Date());
   const [mode, setMode] = useState<Mode>("month");
   const [month, setMonth] = useState(today.slice(0, 7)), [selected, setSelected] = useState(today);
-  const [team, setTeam] = useState<Team | "all">(() => focusTeam && calendarTeamsFor(account.role).includes(focusTeam) ? focusTeam : "all"), [person, setPerson] = useState<{ id: string; name: string } | null>(null), [propertyId, setPropertyId] = useState("");
+  const [team, setTeam] = useState<Team | "all">("all"), [person, setPerson] = useState<{ id: string; name: string } | null>(null), [propertyId, setPropertyId] = useState("");
   const [filter, setFilter] = useState<"property" | "person" | null>(null);
-  const [preset, setPreset] = useState<CalendarFocus | null>(() => focusPreset ?? null);
   const [schedule, setSchedule] = useState<CalendarSchedule | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [events, setEvents] = useState<TeamEvents | null>(null), [eventsMissing, setEventsMissing] = useState(false), [rota, setRota] = useState<RotaPlan | null>(null);
   const [open, setOpen] = useState<CalendarEntry | null>(null), [eventSheet, setEventSheet] = useState<{ event: TeamEvent | null; day: string } | null>(null);
@@ -242,12 +242,13 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
     return () => { active = false; };
   }, [staff, rotaFrom, rotaTo]);
 
-  const entries = useMemo(() => schedule ? calendarEntries(schedule) : [], [schedule]);
+  // A locked calendar never holds another type's entries, so its days, counts, people and agenda are that type's alone.
+  const entries = useMemo(() => schedule ? filterLock(calendarEntries(schedule), locked) : [], [schedule, locked]);
   // Each clean's checkout time and next guests ("Checkout 10:00 · next guests 15:00"), for cleaners too: times, never names.
   const cleanTimes = useMemo(() => new Map((schedule?.cleanGuests ?? []).map(g => [g.workId, g])), [schedule]);
   const timesOf = (e: CalendarEntry) => e.work && e.kind === "clean" ? cleanTimesLine(cleanTimes.get(e.work.workId), e.date) : null;
-  const evList = useMemo(() => events?.events ?? [], [events]);
-  const teams = calendarTeamsFor(account.role);
+  const evList = useMemo(() => locked ? [] : events?.events ?? [], [events, locked]);
+  const teams = locked ? [] : calendarTeamsFor(account.role);
   const propertyList = useMemo(() => {
     const list = new Map(schedule ? calendarProperties(schedule) : []);
     if (propertyId && !list.has(propertyId)) list.set(propertyId, properties.find(x => x.id === propertyId)?.name ?? "This property");
@@ -256,12 +257,13 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
   const people = useMemo(() => {
     if (!staff) return [];
     const list = new Map(calendarPeople(entries));
-    for (const [id, name] of teamPeople(rota, evList)) if (!list.has(id)) list.set(id, name);
+    // The rota and team events add everyone on the team; a locked calendar lists only the people with its work.
+    if (!locked) for (const [id, name] of teamPeople(rota, evList)) if (!list.has(id)) list.set(id, name);
     if (person && !list.has(person.id)) list.set(person.id, person.name);
     return Array.from(list.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [staff, entries, rota, evList, person]);
+  }, [staff, entries, rota, evList, person, locked]);
   const propertyLabel = propertyList.find(([id]) => id === propertyId)?.[1];
-  const shown = useMemo(() => filterEntries(filterFocus(filterProperty(entries, propertyId || null), preset), teams.length > 1 ? team : "all", person?.id ?? null), [entries, propertyId, teams.length, team, person, preset]);
+  const shown = useMemo(() => filterEntries(filterProperty(entries, propertyId || null), teams.length > 1 ? team : "all", person?.id ?? null), [entries, propertyId, teams.length, team, person]);
   // Team events have no property, so a property filter leaves them out.
   const eventsShown = useMemo(() => propertyId ? [] : person ? evList.filter(e => e.userId === person.id) : evList, [evList, propertyId, person]);
   const cells = useMemo(() => monthCounts(month, shown, eventsShown), [month, shown, eventsShown]);
@@ -312,7 +314,7 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
       </View>
       <View style={[ui.row, { gap: 8 }]}>
         {loading && <ActivityIndicator accessibilityLabel="Loading the calendar" color={p.primary} />}
-        {staff && (
+        {staff && !locked && (
           <MotionPress accessibilityRole="button" accessibilityLabel="Add an absence, meeting or time away" onPress={() => openEvent(null)} style={[ui.row, { gap: 6, minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
             <Feather name="plus" size={icon.row} color={p.text} /><Text style={{ color: p.text, fontSize: 13, fontWeight: "500" }}>Add</Text>
           </MotionPress>
@@ -479,20 +481,11 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
   const filters = staff && (propertyList.length > 1 || !!propertyId || people.length > 1 || !!person);
   return (
     <View style={{ gap: 16 }}>
-      <PageHeading palette={p} title="Calendar" subtitle={staff ? "Bookings with guest names, changeovers, cleans, maintenance and where the team is. Tap a day or a booking for its details." : "Tap a day to see what is happening, then an entry for its details."} />
-      {staff && <Segmented p={p} label="Calendar view" items={MODES.map(m => ({ key: m, label: MODE_LABEL[m] }))} value={mode} onChange={setMode} />}
+      {locked ? <PageHeading palette={p} title={CALENDAR_LOCK_PAGE[locked].title} subtitle={CALENDAR_LOCK_PAGE[locked].detail} />
+        : <PageHeading palette={p} title="Calendar" subtitle={staff ? "Bookings with guest names, changeovers, cleans, maintenance and where the team is. Tap a day or a booking for its details." : "Tap a day to see what is happening, then an entry for its details."} />}
+      {staff && <Segmented p={p} label="Calendar view" items={(locked ? LOCKED_MODES : MODES).map(m => ({ key: m, label: MODE_LABEL[m] }))} value={mode} onChange={setMode} />}
       {(mode === "month" || mode === "week") && teams.length > 1 && <Dropdown p={p} label="Team" hideLabel value={team} onChange={setTeam}
         options={(["all", ...teams] as (Team | "all")[]).map(v => ({ value: v, label: v === "all" ? "All teams" : TEAM_LABEL[v] }))} />}
-      {!!preset && mode !== "team" && (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          <MotionPress accessibilityRole="button" accessibilityLabel={`Showing ${CALENDAR_FOCUS[preset].label.toLowerCase()} only. Clear this filter`} onPress={() => setPreset(null)}
-            style={[ui.row, { gap: 8, minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: p.primary, backgroundColor: p.wash }]}>
-            <Feather name="filter" size={14} color={p.primary} />
-            <Text numberOfLines={1} style={{ color: p.text, fontSize: 13, fontWeight: "500", flexShrink: 1 }}>{CALENDAR_FOCUS[preset].label} only</Text>
-            <Feather name="x" size={14} color={p.muted} />
-          </MotionPress>
-        </View>
-      )}
       {filters && (
         <View style={{ gap: 10 }}>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
