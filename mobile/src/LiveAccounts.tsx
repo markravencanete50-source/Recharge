@@ -14,7 +14,7 @@ import { fitsPayoutUpload, MAX_PAYOUT_LINES, readPayoutLines, transferSummary } 
 import { isPayoutChannel, PAYOUT_CHANNEL_LABEL, RECONCILED_CHANNELS, type PayoutChannel } from "../../lib/payout-report-formats";
 import { readFinance, writeFinance, WorkspaceApiError } from "./backend/client";
 import { PayoutExamples } from "./AccountsFiles";
-import { PayoutStays } from "./PayoutStays";
+import { lazyScreen } from "./lazyScreen";
 import { PayoutLinesSheet, type LinesStay } from "./PayoutLinesSheet";
 import { PayoutApproveSheet } from "./PayoutApproveSheet";
 import { AccountsPayable, ExpenseSheet, List, NewExpenseSheet, Row, type LimitState, type NoteAsk, type Overview } from "./AccountsPayable";
@@ -33,6 +33,7 @@ import type { FinanceAction } from "../../lib/workspace-finance-policy";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { PropertyView } from "../../lib/workspace-view";
 import type { z } from "zod";
+const PayoutStays = lazyScreen(() => import("./PayoutStays").then(module => module.PayoutStays));
 
 // Live Accounts: expenses with evidence, payout reconciliation and owner
 // statements, read from and written to the backend. Nothing here uses sample data.

@@ -9,11 +9,12 @@ import { ListingHealthList, PricingList, RelistingList, ReviewsList } from "./Li
 import { LiveEnquiries } from "./LiveEnquiries";
 import { OnboardingTracker } from "./OnboardingTracker";
 import { PurchaseOrdersList } from "./PurchaseOrdersList";
-import { FurnishingStudio } from "./FurnishingStudio";
+import { lazyScreen } from "./lazyScreen";
 import { StaysRoutineCard } from "./StaysRoutineCard";
 import type { SectionProps } from "./SectionProps";
 import { space, ui } from "./theme";
 import { CLIENT_SUB_LABEL, clientSubsFor, defaultClientSub, pickSub, type ClientSub } from "../../lib/relations-subs";
+const FurnishingStudio = lazyScreen(() => import("./FurnishingStudio").then(module => module.FurnishingStudio));
 
 // Client relations (the owners and their properties, before and after they join): one calm strip of
 // sections, one list at a time.

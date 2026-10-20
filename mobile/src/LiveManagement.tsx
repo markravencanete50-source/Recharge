@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 import { Text } from "./Typography";
-import { AccessControl } from "./LiveAccessControl";
+import { lazyScreen } from "./lazyScreen";
 import { space, ui, type Palette } from "./theme";
 import { Button, Notice, Section, useWorkFocus, Loading } from "./LiveKit";
 import { List, Row } from "./LiveAccounts";
 import { ToolCards, ToolHeader, ToolTitled, type ToolCard } from "./ToolPage";
 import { LiveTraining } from "./LiveTraining";
-import { LivePeople } from "./LivePeople";
 import { LiveTeamPerformance } from "./LiveShifts";
 import { LiveProductivity } from "./LiveProductivity";
 import { shiftChangesSchema, type ShiftChanges } from "../../lib/workspace-teams-policy";
@@ -28,6 +27,9 @@ import { performanceSchema } from "../../lib/cleans-live";
 import type { SectionProps } from "./SectionProps";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { z } from "zod";
+// Super admin and admin tools opened now and then, loaded when first opened.
+const AccessControl = lazyScreen(() => import("./LiveAccessControl").then(module => module.AccessControl));
+const LivePeople = lazyScreen(() => import("./LivePeople").then(module => module.LivePeople));
 
 // Live Management: the approvals list (everything waiting on admins, in ManagementApprovals), the
 // cleaning team's month, training, the team's day reflections and the daily tasks added to each to-do
