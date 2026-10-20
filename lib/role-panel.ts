@@ -182,6 +182,14 @@ export function rolePanel(role: string, modules: readonly string[], layout?: Men
   const groups: PanelGroup[] = spec.groups.map(([key, title, specs]) => ({
     key, title, links: specs.flatMap(resolve).filter(link => !used.has(link.key) && !!used.add(link.key)),
   }));
+  // A section left holding only a team calendar is not shown for this role (accounts get no Maintenance section for
+  // its calendar alone); a role left with no calendar link gets the plain Calendar in My Recharge instead.
+  const isCalendar = (l: PanelLink) => l.key.startsWith('tool:calendar-');
+  for (const g of groups.slice(1)) if (g.links.length && g.links.every(isCalendar)) g.links = [];
+  if (views.includes('calendar') && groups[0] && !groups.some(g => g.links.some(isCalendar))) {
+    const calendar = page('calendar');
+    if (calendar) groups[0].links.push(calendar);
+  }
   // Anything the role has that the layout does not place yet still gets a place, under More. (Its key is not the
   // old "more", so an order saved for the old More section cannot pull links out of their sections into it.)
   const rest = [...views.map(v => area(v)), ...tools.map(t => fromTool(t))].filter((l): l is PanelLink => !!l && !used.has(l.key) && !!used.add(l.key));

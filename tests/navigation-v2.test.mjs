@@ -74,7 +74,7 @@ test('the new pages and areas exist for the right roles and nobody else', () => 
   for (const role of TEAM) {
     for (const key of ['page:home', 'page:todo', 'page:inbox', 'page:decisions', 'page:analytics']) assert.ok(has(role, key), `${role} has ${key}`);
     // The Calendar opens from the team calendars in Alex's menu (Maintenance, Booking, Housekeeping).
-    assert.ok(links(role).some(l => l.key.startsWith('tool:calendar-')), role + ' has a calendar');
+    assert.ok(links(role).some(l => l.key.startsWith('tool:calendar-') || l.key === 'page:calendar'), role + ' has a calendar');
   }
   // Owners never see the team's pages or areas.
   // Favorites is for every role since round 6, owners included.

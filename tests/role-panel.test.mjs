@@ -155,10 +155,20 @@ test('the team menu runs My Recharge to Finance in Alex\'s order, Home, Favourit
 test('the menu\'s calendars open the Calendar on one team, for the teams the role can filter by', () => {
   const TEAM_OF = { 'tool:calendar-ready': 'ready', 'tool:calendar-stays': 'stays', 'tool:calendar-cleans': 'cleans' };
   for (const role of roles.filter(r => r !== 'client')) {
-    const calendars = links(rolePanel(role, DEFAULT_ROLE_MODULES[role])).filter(l => l.key.startsWith('tool:calendar-'));
-    assert.deepEqual(calendars.map(l => TEAM_OF[l.key]).sort(), calendarTeamsFor(role).filter(t => t !== 'accounts').sort(), role);
+    const panel = rolePanel(role, DEFAULT_ROLE_MODULES[role]), calendars = links(panel).filter(l => l.key.startsWith('tool:calendar-'));
+    for (const l of calendars) assert.ok(calendarTeamsFor(role).includes(TEAM_OF[l.key]), role + ' ' + l.key);
+    // A section is never only a calendar; a role whose calendars would each stand alone keeps the plain Calendar.
+    for (const g of panel.groups) assert.ok(!g.links.every(l => l.key.startsWith('tool:calendar-')), role + ': ' + g.title + ' is only a calendar');
+    assert.ok(calendars.length || panel.groups[0].links.some(l => l.key === 'page:calendar'), role + ' can open the Calendar');
     for (const l of calendars) assert.deepEqual(deepLinkFor(l.target), { section: 'calendar', team: TEAM_OF[l.key] }, role + ' ' + l.key);
   }
+  // Admins and Guest relations keep all three; accounts' would each stand alone, so they get the plain Calendar.
+  for (const role of ['admin', 'super_admin', 'stays']) assert.equal(links(rolePanel(role, DEFAULT_ROLE_MODULES[role])).filter(l => l.key.startsWith('tool:calendar-')).length, 3, role);
+  const accounts = rolePanel('accounts', DEFAULT_ROLE_MODULES.accounts);
+  assert.ok(!links(accounts).some(l => l.key.startsWith('tool:calendar-')));
+  assert.deepEqual(accounts.groups.map(g => g.title), ['My Recharge', 'Management', 'Finance', 'Start something']);
+  assert.equal(linkOf('accounts', 'page:calendar').label, 'Calendar');
+  assert.ok(!linkOf('ready', 'tool:calendar-stays') && !linkOf('cleaning_manager', 'tool:calendar-stays'), 'no Listing Management for a Booking calendar alone');
   assert.equal(linkOf('ready', 'tool:calendar-ready').label, 'Maintenance Calendar');
   assert.equal(sectionOf('ready', 'tool:calendar-ready'), 'Maintenance');
   assert.equal(linkOf('stays', 'tool:calendar-stays').label, 'Booking Calendar');
