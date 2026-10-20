@@ -697,7 +697,7 @@ function dayGroups(rows: readonly NoticeRow[]): [string, NoticeRow[]][] {
 // item someone may not see is simply "no longer available"), and "Show older updates" pages back 50 at a time.
 export function LiveActivity({ palette: p, notices, loading, onRead, work = [], onOpenWork, onOpenMessages, onOpenProperty, onOpenEnquiries }: {
   palette: Palette; notices: NoticeView[]; loading: boolean; onRead?: (ids: number[]) => void;
-  work?: readonly OperationView[]; onOpenWork?: (item: OperationView) => void; onOpenMessages?: () => void;
+  work?: readonly OperationView[]; onOpenWork?: (item: OperationView) => void; onOpenMessages?: (conversation?: string) => void;
   // An onboarding update (an estimate ready to open, an agreement to sign) opens its property's onboarding.
   onOpenProperty?: (propertyId: string) => void;
   // An enquiry update (a form back, a possible duplicate) opens Client enquiries, in Client relations.
@@ -760,7 +760,8 @@ export function LiveActivity({ palette: p, notices, loading, onRead, work = [], 
     if (row.notices.length > 1) return () => setOpened(opened === row.key ? null : row.key);
     const t = row.target;
     if (t?.kind === "work" && onOpenWork) { const item = byId.get(t.workId); return item ? () => onOpenWork(item) : () => void openWork(t.workId); }
-    if (t?.kind === "messages" && onOpenMessages) return onOpenMessages;
+    // A guest message opens its conversation in Messages > Guests when the feed names it (20261025500000).
+    if (t?.kind === "messages" && onOpenMessages) return () => onOpenMessages(t.guestThreadId ? "guest:" + t.guestThreadId : undefined);
     if (t?.kind === "property" && onOpenProperty) return () => onOpenProperty(t.propertyId);
     if (t?.kind === "enquiries" && onOpenEnquiries) return onOpenEnquiries;
     return undefined;
