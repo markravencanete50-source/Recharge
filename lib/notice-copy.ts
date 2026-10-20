@@ -140,6 +140,8 @@ const EXACT: Record<string, NoticeCopy> = {
   'team.shift_corrected': copy('Your timesheet was corrected', 'Management has corrected or added one of your shifts, with a note of why.'),
   'enquiry.received': copy('A client enquiry is back', 'A landlord has filled in the property enquiry form. Their details are in Client enquiries, ready to value.'),
   // The same people, when that form is a possible duplicate (migration 20261020800000).
+  // The landlord made their account with the email from their enquiry, so the property moved onto it (20261025200000).
+  'enquiry.owner_linked': copy('An enquiry now has an owner account', 'A landlord created their Recharge account with the email from their enquiry. Their property is on their account now, and they follow the onboarding in the app.'),
   'enquiry.duplicate': copy('An enquiry may be a duplicate', 'A returned enquiry form matches a property at the same address, an owner we already work with, or another enquiry. Check it in Client enquiries before valuing.'),
   'feedback.received': copy('New team feedback', 'Someone on the team has sent feedback. Read it in Feedback, mark it seen or done, and reply if you like.'),
   'feedback.replied': copy('A reply to your feedback', 'A super admin has replied to feedback you sent. Open Feedback to read it.'),

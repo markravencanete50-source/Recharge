@@ -21,6 +21,8 @@ export type Projection = {
 
 export const AVAILABLE_NIGHTS = 365;
 export const OCCUPANCY_RANGE = { min: 3000, max: 9500, step: 500 };
+// Where the occupancy starts when the team published none (Alex: 75%, was 70%).
+export const DEFAULT_OCCUPANCY_BPS = 7500;
 export const DIRECT_RANGE = { min: 0, max: 5000, step: 500 };
 
 // What the team published, read safely. Fees are only used when the team published them.
@@ -30,7 +32,7 @@ export function readEstimate(estimate: Record<string, unknown> | null | undefine
 }
 export const hasFees = (e: PublishedEstimate) => e.managementFeeBps !== undefined && e.otaFeeBps !== undefined;
 export function startingChoices(e: PublishedEstimate): Choices {
-  return { scenario: 'medium', occupancyBps: snap(e.occupancyBps ?? 7000, OCCUPANCY_RANGE), directBookingBps: snap(e.directBookingBps ?? 1000, DIRECT_RANGE) };
+  return { scenario: 'medium', occupancyBps: snap(e.occupancyBps ?? DEFAULT_OCCUPANCY_BPS, OCCUPANCY_RANGE), directBookingBps: snap(e.directBookingBps ?? 1000, DIRECT_RANGE) };
 }
 export function snap(value: number, range: { min: number; max: number; step: number }) {
   return Math.min(range.max, Math.max(range.min, Math.round(value / range.step) * range.step));

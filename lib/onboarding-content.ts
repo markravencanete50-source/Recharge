@@ -47,3 +47,23 @@ export const INSPECTION_CHECKS: { key: string; label: string }[] = [
   { key: 'safetyItems', label: 'Fire blanket, first-aid kit and safety items in place' },
   { key: 'guestReady', label: 'Clean and ready for guests' },
 ];
+
+// The owner's onboarding checklist (Alex's framework, migration 20261025200000): the welcome from the directors, and the
+// fees beside the services and the process. Words only; a video can sit above each (Onboarding videos, super admins).
+export const WELCOME: { title: string; paragraphs: string[] } = {
+  title: 'Welcome to Recharge',
+  paragraphs: [
+    'We are Recharge Property Management, a Scottish short-term letting company run by our directors, Alex and Rachel.',
+    'We look after everything a short-term let needs: listings and pricing, guests, cleaning, repairs, licensing and furnishing. You keep the property; we run it day to day and tell you what we did.',
+    'How we work: everything happens in this app. You can see each step of your onboarding here, ask us a question at any point, and the team answers on this page.',
+    'Next, read how the process works and what it costs. Then your estimate is here as soon as it is ready.',
+  ],
+};
+
+export const FEES: { title: string; detail: string }[] = [
+  { title: 'Management fee', detail: 'A percentage of the booking income, taken when you are paid. Your estimate shows the rate and what it means in pounds.' },
+  { title: 'Platform fees', detail: 'Airbnb and Booking.com charge their own fee on each booking made through them. Direct bookings have none.' },
+  { title: 'Onboarding invoice', detail: 'A one-off invoice to set the property up, sent once the agreement is signed. Nothing is charged before then.' },
+  { title: 'Cleaning and repairs', detail: 'Cleans are charged per stay. Repairs are charged at cost, and anything over your repair limit comes to you first.' },
+  { title: 'Extras', detail: 'Licensing, furnishing, garden and bins are only charged if you ask for them, and we quote first.' },
+];

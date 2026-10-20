@@ -71,22 +71,22 @@ test('publishing emails the estimate once per publish, from ownerrelations@ with
   assert.equal(mail.body.from, 'Recharge Group <ownerrelations@rechargegroup.co.uk>');
   assert.equal(mail.body.reply_to, 'ownerrelations@rechargegroup.co.uk');
   assert.deepEqual(mail.body.to, ['morag@example.com']);
-  assert.equal(mail.body.subject, 'Your free performance estimate for Holmhead flat');
+  assert.equal(mail.body.subject, 'Your free performance estimate for Holmhead flat is ready');
   const auto = await policy.autoRequestId(requestId);
   assert.match(auto, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   assert.equal(auto, await policy.autoRequestId(requestId), 'the same publish, the same email');
   assert.equal(mail.headers['idempotency-key'], `recharge-estimate/${USER}/${auto}`);
-  const link = mail.body.text.match(/https:\/\/app\.test\/estimate\?t=([0-9a-f]{64})/);
-  assert.ok(link, 'the email holds the private link');
+  // Since 20261025200000 the email opens the app (create an account or sign in with this email), not the private link.
+  assert.ok(mail.body.text.includes('https://app.test/workspace?from=estimate&email=morag%40example.com'), 'the email opens the app with their email');
+  assert.doesNotMatch(mail.body.text + mail.body.html, /\/estimate\?t=/, 'no private link in new emails');
   const issue = state.rpc.find(r => r.input.action === 'issue');
-  assert.equal(issue.input.tokenHash, await enquiry.tokenHash(link[1]), 'only the hash goes to the database');
-  assert.ok(!JSON.stringify(state.rpc).includes(link[1]), 'never the token itself');
-  assert.match(mail.body.html, /View your estimate/);
+  assert.match(issue.input.tokenHash, /^[0-9a-f]{64}$/, 'a link is still issued (the team can copy it), and only its hash goes to the database');
+  assert.match(mail.body.html, /View your estimate in the app/);
   assert.ok(mail.body.html.indexOf('recharge-email-logo.png') > mail.body.html.lastIndexOf('</p>'), 'the Recharge logo is a signature at the bottom');
   assert.match(mail.body.html, /<strong>Recharge Group<\/strong><br><a href="mailto:ownerrelations@rechargegroup\.co\.uk"/);
   assert.doesNotMatch(mail.body.text, /recharge-email-logo/);
-  assert.match(mail.body.text, /Expected: £110\.00/);
-  assert.match(mail.body.text, /Flat nearby, £105\.00 a night: https:\/\/www\.airbnb\.co\.uk\/rooms\/1/);
+  assert.match(mail.body.text, /create your Recharge account with this email address, or sign in/);
+  assert.doesNotMatch(mail.body.text, /£110\.00/, 'the figures stay in the app');
   assert.doesNotMatch(mail.body.text + mail.body.html, /javascript:|—/, 'only https comparables; no em dashes');
   // A retried publish (the database replays its receipt) never sends a second email.
   await journeys.journeyRoute(publish(requestId));

@@ -14,7 +14,12 @@ export async function POST(request: Request) {
     const client = await workspaceSupabase();
     if (!body.success || !client) return NextResponse.json({ error: "Check your sign-in details" }, { status: 400, headers: securityHeaders });
     const result = await passwordLogin(client, body.data);
-    if (result.ok) return NextResponse.json({ ok: true }, { headers: securityHeaders });
+    if (result.ok) {
+      // A landlord who enquired with this (verified) email gets their property on their account (migration 20261025200000).
+      // Never stops the sign-in.
+      await client.rpc("workspace_enquiry_owner_claim").then(() => undefined, () => undefined);
+      return NextResponse.json({ ok: true }, { headers: securityHeaders });
+    }
     return refused(result);
   } catch {
     return NextResponse.json({ error: "Secure sign-in is temporarily unavailable. Please try again later." }, { status: 503, headers: securityHeaders });
