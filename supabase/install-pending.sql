@@ -30,3 +30,5 @@
 -- 20261025500000 lead_files_guest_push, 20261025600000 shift_hours_clip_open_limit, 20261025700000 view_as_super_admins: installed by Lee 2026-10-20, verified
 
 -- 20261025800000 operations_read_kind: installed by Lee 2026-10-20, verified
+
+-- 20261025900000 operations_read_fast: installed by Lee 2026-10-20, verified
