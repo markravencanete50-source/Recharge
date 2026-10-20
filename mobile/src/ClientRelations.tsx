@@ -18,7 +18,7 @@ import { CLIENT_SUB_LABEL, clientSubsFor, defaultClientSub, pickSub, type Client
 // Client relations (the owners and their properties, before and after they join): one calm strip of
 // sections, one list at a time.
 //   onboarding   properties moving through the onboarding stages, enquiries first (OnboardingTracker)
-//   enquiries    the New Property Enquiry Form sent to landlords and their answers (LiveEnquiries)
+//   enquiries    Leads: the New Property Enquiry Form sent to landlords, their answers and each lead's ticket (LiveEnquiries)
 //   licensing    licence applications (LicensingList)
 //   listings     the daily listing check (ListingHealthList)
 //   pricing      empty nights to price (PricingList)
@@ -43,7 +43,7 @@ export function ClientRelations(props: SectionProps & { onOpenProperty: (propert
       {alone ? <ToolHeader p={p} back="Client relations" onBack={() => setAlone(false)} title={CLIENT_SUB_LABEL[sub]} /> : <>
       <View style={{ gap: 4 }}>
         <Text accessibilityRole="header" style={[ui.title, { color: p.text }]}>Client relations</Text>
-        <Text style={[ui.body, { color: p.muted }]}>Onboarding, enquiries, licensing, listings, pricing, reviews and purchases for your clients’ properties.</Text>
+        <Text style={[ui.body, { color: p.muted }]}>Onboarding, leads, licensing, listings, pricing, reviews and purchases for your clients’ properties.</Text>
       </View>
       <StaysRoutineCard palette={p} account={account} properties={props.properties} work={props.work} part="clients" />
       {subs.length > 1 && <Pills p={p} title="Choose a client relations tool" showTitle values={subs} value={sub} onChange={setSub} label={v => CLIENT_SUB_LABEL[v]} />}

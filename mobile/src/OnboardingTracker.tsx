@@ -59,7 +59,7 @@ export function OnboardingTracker({ palette: p, account, properties, journeys, w
       <TrackerList p={p} items={items} owner={owner} percent sectionOf={onboardingSection} onOpen={i => setOpenId(i.id)} empty="No properties are onboarding." />
       <TrackerDetailSheet p={p} item={open} owner={owner} percent forms={forms} onForm={onForm} onClose={() => setOpenId(null)}>
         {!!open && <View style={{ gap: 10 }}>
-          {!journey && <Button label="Open Client enquiries" icon="external-link" primary p={p} onPress={() => { setOpenId(null); onTool({ kind: "work", view: "clients", sub: "enquiries" }); }} />}
+          {!journey && <Button label="Open Leads" icon="external-link" primary p={p} onPress={() => { setOpenId(null); onTool({ kind: "work", view: "clients", sub: "enquiries" }); }} />}
           {!!root && <Button label="Open the full ticket" icon="external-link" p={p} onPress={() => { setOpenId(null); onOpenWork(root); }} />}
           {!!journey && <FlagButton p={p} role={account.role} target={{ workId: journey.workId, propertyId: open.propertyId, title: `Onboarding: ${open.address}` }} onDone={() => void load()} />}
           {!!enquiry && <DeleteEnquiryAction p={p} role={account.role} enquiry={enquiry} onDeleted={async () => { setOpenId(null); await Promise.all([load(), onRefresh?.()]); }} />}

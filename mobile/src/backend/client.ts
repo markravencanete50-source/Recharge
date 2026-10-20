@@ -129,7 +129,7 @@ export function setViewOnly(message: string, person?: { userId: string; onEnded:
 // Whether this screen is a view (nothing is saved), and whose: a person's id, or null for a role preview.
 export const viewMode = () => ({ readOnly: viewOnly !== "", person: viewing });
 export async function workspaceRequest(path: string, body?: BusinessAction | Record<string, unknown> | FormData, options: { asSelf?: boolean } = {}) {
-  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|enquiry-files|chat-files|email-files|email-inbox|client-email|estimate-link|onboarding-settings|owner-account|profile|owner|oversight|checklists|privacy|documents|furnishing)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
+  if (!/^\/api\/mobile\/(workspace|reports|devices|property-details|journeys|operations|portfolio|controls|media|integrations|finance|teams|admin|chat|guest-inbox|training-files|lead-files|enquiry-files|chat-files|email-files|email-inbox|client-email|estimate-link|onboarding-settings|owner-account|profile|owner|oversight|checklists|privacy|documents|furnishing)(?:[/?]|$)/.test(path) || path.includes("..")) throw new Error("Unsupported workspace endpoint");
   // While a super admin views the app as someone else nothing is saved (this device's own
   // notification link aside), so trying the screens never changes the business's records.
   if (viewOnly && body !== undefined && !options.asSelf && !path.startsWith("/api/mobile/devices")) throw new WorkspaceApiError(viewOnly, 423);
@@ -302,6 +302,17 @@ export const agreementFileLink = async (templateId: string, propertyId?: string)
   .parse(await (await workspaceRequest('/api/mobile/onboarding-settings?' + new URLSearchParams(propertyId ? { templateId, propertyId } : { templateId }))).json()).data;
 // The owner's app account made when they pressed Proceed: send the sign-in email again (the team).
 export const resendOwnerAccountEmail = async (propertyId: string, requestId: string) => (await workspaceRequest('/api/mobile/owner-account', { action: 'resend', propertyId, requestId })).json();
+// The PriceLabs report kept with a lead (External Analysis): the team who work with enquiries upload, open and remove it.
+export async function uploadLeadFile(enquiryId: string, file: { uri: string; name: string; mimeType?: string; file?: File }) {
+  const form = new FormData();
+  form.append('enquiryId', enquiryId);
+  if (Platform.OS === 'web') form.append('file', file.file ?? new File([await (await fetch(file.uri)).blob()], file.name, { type: file.mimeType ?? 'application/octet-stream' }));
+  else form.append('file', { uri: file.uri, name: file.name, type: file.mimeType ?? 'application/octet-stream' } as unknown as Blob);
+  return z.object({ data: z.unknown() }).parse(await (await workspaceRequest('/api/mobile/lead-files', form)).json()).data;
+}
+export const removeLeadFile = async (enquiryId: string, fileId: string) => (await workspaceRequest('/api/mobile/lead-files', { action: 'remove', enquiryId, fileId })).json();
+export const leadFileLink = async (enquiryId: string, fileId: string) => z.object({ data: z.object({ url: z.string().url(), name: z.string(), mime: z.string() }) })
+  .parse(await (await workspaceRequest('/api/mobile/lead-files?' + new URLSearchParams({ enquiryId, fileId }))).json()).data;
 export const removeCourseFile = async (fileId: string) => (await workspaceRequest('/api/mobile/training-files', { action: 'remove', fileId })).json();
 export const courseFileLink = async (fileId: string) => z.object({ data: z.object({ url: z.string().url(), name: z.string(), mime: z.string() }) }).parse(await (await workspaceRequest('/api/mobile/training-files?fileId=' + encodeURIComponent(fileId))).json()).data;
 // Photos and videos landlords sent with the enquiry form, opened by a short link.

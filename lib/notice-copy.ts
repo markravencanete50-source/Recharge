@@ -140,9 +140,11 @@ const EXACT: Record<string, NoticeCopy> = {
   'team.responsibility_given': copy('A responsibility is yours', 'You have been made responsible for something, or its backup, in the responsibilities register.'),
   'team.rota_planned': copy('Your rota has changed', 'Management has planned or changed your shifts. Check the rota for your days.'),
   'team.shift_corrected': copy('Your timesheet was corrected', 'Management has corrected or added one of your shifts, with a note of why.'),
-  'enquiry.received': copy('A client enquiry is back', 'A landlord has filled in the property enquiry form. Their details are in Client enquiries, ready to value.'),
+  'enquiry.received': copy('A client enquiry is back', 'A landlord has filled in the property enquiry form. Their details are in Leads, ready to value.'),
   // The same people, when that form is a possible duplicate (migration 20261020800000).
-  'enquiry.duplicate': copy('An enquiry may be a duplicate', 'A returned enquiry form matches a property at the same address, an owner we already work with, or another enquiry. Check it in Client enquiries before valuing.'),
+  'enquiry.duplicate': copy('An enquiry may be a duplicate', 'A returned enquiry form matches a property at the same address, an owner we already work with, or another enquiry. Check it in Leads before valuing.'),
+  // A comment on a lead (migration 20261025300000): whoever sent or valued it and everyone who commented on it.
+  'enquiry.lead_comment': copy('New comment on a lead', 'Someone on the team has commented on a lead you are part of. Open Leads to read it.'),
   'feedback.received': copy('New team feedback', 'Someone on the team has sent feedback. Read it in Feedback, mark it seen or done, and reply if you like.'),
   'feedback.replied': copy('A reply to your feedback', 'A super admin has replied to feedback you sent. Open Feedback to read it.'),
   'team.emergency': copy('Emergency on shift', 'A team member has paused their shift for an emergency. Open Access control or Productivity to see who, and check in with them.'),

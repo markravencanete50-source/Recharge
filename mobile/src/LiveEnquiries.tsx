@@ -9,6 +9,7 @@ import { Initials } from "./LiveAccounts";
 import { PageHeading, SoftButton } from "./LivePages";
 import { Segmented } from "./Segmented";
 import { Sheet } from "./TeamFlows";
+import { LeadTicket } from "./LeadTicket";
 import { useCelebrate } from "./Celebrate";
 import { depth, ui, type Palette } from "./theme";
 import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
@@ -20,6 +21,7 @@ import {
 } from "../../lib/client-enquiry";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { repairLimitText } from "../../lib/journey-policy";
+import { LEADS_TITLE } from "../../lib/lead-estimate";
 
 // Client Enquiries: send the New Property Enquiry Form to a landlord (by email, or a link to send
 // yourself), see every answer when it comes back, and start valuing the property from it.
@@ -50,7 +52,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
   const open = data?.items.find(e => e.id === openId) ?? null;
   return (
     <View style={{ gap: 18 }}>
-      <PageHeading palette={p} title="Client enquiries" subtitle="Send landlords the New Property Enquiry Form, see their answers here, and value the property."
+      <PageHeading palette={p} title={LEADS_TITLE} subtitle="Send landlords the New Property Enquiry Form, see their answers here, then work each lead through to its estimate."
         action={<SoftButton palette={p} primary icon="plus" label="Send the form to a landlord" onPress={() => setSending(true)} />} />
       <StatGrid>
         <StatTile p={p} icon="inbox" tone="clients" label="To value" value={count("value")} attention={count("value") > 0} detail="Answered forms, ready to value" />
@@ -58,7 +60,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
         <StatTile p={p} icon="trending-up" tone="accounts" label="Valuing" value={(data?.items ?? []).filter(e => steps.get(e.id) === "valuing").length} detail="Estimate being prepared" />
         <StatTile p={p} icon="award" tone="cleans" label="Sent" value={(data?.items ?? []).filter(e => ["estimate", "won"].includes(steps.get(e.id)!)).length} detail="Estimates with the landlord" />
       </StatGrid>
-      <Segmented p={p} label="Enquiries" value={shown} onChange={setFilter} items={[
+      <Segmented p={p} label="Leads" value={shown} onChange={setFilter} items={[
         { key: "value", label: "To value", count: count("value"), alert: count("value") > 0 }, { key: "waiting", label: "Waiting", count: count("waiting") },
         { key: "progress", label: "In progress", count: count("progress") }, { key: "all", label: "All" },
       ]} />
@@ -160,7 +162,7 @@ function SendSheet({ p, visible, emailReady, onClose, onSent, resend }: { p: Pal
             <Feather name={result.failed ? "alert-triangle" : result.emailed ? "check" : "link"} size={28} color={result.failed ? p.danger : p.success} />
           </View>
           <Text style={{ color: p.text, fontSize: 18, fontWeight: "800", textAlign: "center" }}>{result.emailed ? `Sent to ${result.to}` : result.failed ? "The email didn't go" : "Your link is ready"}</Text>
-          <Text style={[ui.small, { color: p.muted, textAlign: "center" }]}>{result.emailed ? "Their answers will appear in Client enquiries, and their replies to the email arrive in Messages. The link works for 30 days." : result.failed ? "Recharge couldn't send it. Try again from this enquiry, or send the link yourself: copy it below, or open your email app with the message filled in." : "Send it from your own email: copy the link, or open your email app with the message filled in."}</Text>
+          <Text style={[ui.small, { color: p.muted, textAlign: "center" }]}>{result.emailed ? "Their answers will appear in Leads, and their replies to the email arrive in Messages. The link works for 30 days." : result.failed ? "Recharge couldn't send it. Try again from this enquiry, or send the link yourself: copy it below, or open your email app with the message filled in." : "Send it from your own email: copy the link, or open your email app with the message filled in."}</Text>
         </View>
         {/* Sent by Recharge: nothing to copy. Only the fallback (email not ready, or the send failed) shows the link. */}
         {!result.emailed && <>
@@ -215,7 +217,6 @@ function Group({ p, title, icon, children }: { p: Palette; title: string; icon: 
     {children}
   </View>;
 }
-const yes = (v?: string) => v === "yes" ? "Yes" : v === "no" ? "No" : undefined;
 
 // Everything the landlord sent, and what to do next.
 function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onOpenProperty, canDelete = false, onDeleted }: {
@@ -243,73 +244,50 @@ function EnquirySheet({ p, enquiry: e, step, emailReady, onClose, onChanged, onO
   if (e && mode === "close") return <CloseSheet p={p} enquiry={e} onClose={() => setMode("view")} onDone={async () => { setMode("view"); await onChanged(); }} />;
   if (e && mode === "delete") return <DeleteSheet p={p} enquiry={e} onClose={() => setMode("view")} onDone={async () => { setMode("view"); await onDeleted?.(); }} />;
   if (e && mode === "resend") return <SendSheet p={p} visible emailReady={emailReady} resend={e} onClose={() => setMode("view")} onSent={onChanged} />;
-  return (
-    <Sheet palette={p} visible={!!e} onClose={onClose} title={a?.fullName ?? e?.recipientName ?? ""} subtitle={e ? STEP_LABEL[step] + (e.submittedAt ? ` · answered ${ago(e.submittedAt)}` : ` · sent ${ago(e.sentAt)}`) : undefined} icon="building">
-      {e && <>
-        {!!e.duplicateReason && step !== "closed" && <Notice text={`${DUPLICATE_LABEL}. ${duplicateNote(e)}`} p={p} tone="bad" />}
-        {isOwnerEnquiry(e) && <Notice text={`${OWNER_ENQUIRY_LABEL}. ${OWNER_ENQUIRY_NOTE}`} p={p} />}
-        {isTeamEnquiry(e) && <Notice text={`${teamEnquiryTag(e)}. ${TEAM_ENQUIRY_NOTE}`} p={p} />}
-        {step === "received" && <Button label={valueButtonLabel(e)} icon="trending-up" primary p={p} onPress={() => setMode("value")} />}
-        {e.propertyId && step !== "closed" && <Button label={`Open ${e.propertyName ?? "the property"}`} icon="arrow-right" primary={step !== "received"} p={p} onPress={() => onOpenProperty(e.propertyId!)} />}
-        {e.propertyId && step === "received" && <Text style={[ui.small, { color: p.muted }]}>It is already in Properties as a new enquiry. Check the details, then publish the estimate from the property’s onboarding.</Text>}
-        {e.propertyId && e.status === "valuing" && <Text style={[ui.small, { color: p.muted }]}>Valuing since {e.valuedAt ? ago(e.valuedAt) : "–"}{e.valuedByName ? `, by ${e.valuedByName}` : ""}. Publish the estimate from the property’s onboarding.</Text>}
-        {!!e.ownerRepairLimit && <Text style={[ui.small, { color: p.text }]}>Repair limit chosen at Proceed: {repairLimitText(e.ownerRepairLimit.limitMinor)}. The limit in use is in Limit Changer.</Text>}
-        {e.status === "closed" && <Notice text={`Closed by ${e.closedByName ?? "the team"}: ${e.closeNote}`} p={p} />}
-        {a ? <>
-          <Group p={p} title="Contact information" icon="user">
-            <Line p={p} label="Full name" value={a.fullName} />
-            <Line p={p} label="Company" value={a.companyName} />
-            <Line p={p} label="Email" value={a.email} onPress={() => void Linking.openURL("mailto:" + a.email)} />
-            <Line p={p} label="Contact number" value={a.phone} onPress={() => void Linking.openURL("tel:" + (a.phone ?? "").replace(/[^\d+]/g, ""))} />
-            {/* Only on forms answered before these two questions were removed. */}
-            <Line p={p} label="Correspondence address" value={a.correspondenceAddress} />
-            <Line p={p} label="Existing client" value={yes(a.existingClient)} />
-          </Group>
-          <Group p={p} title="Property information" icon="home">
-            <Line p={p} label="Property address" value={a.propertyAddress} />
-            <Line p={p} label="Property type" value={a.propertyType} />
-            {/* An owner's enquiry from the app may leave WCs out. */}
-            <Line p={p} label="Rooms" value={[`${a.bedrooms} bedroom${a.bedrooms === 1 ? "" : "s"}`, typeof a.wcs === "number" ? `${a.wcs} WC${a.wcs === 1 ? "" : "s"}` : null, `${a.bathrooms} full bathroom${a.bathrooms === 1 ? "" : "s"}`].filter(Boolean).join(" · ")} />
-            <Line p={p} label="Parking" value={a.parking} />
-            <Line p={p} label="Garden" value={a.garden} />
-          </Group>
-          {(e.files.length > 0 || !!a.mediaLink) && <Group p={p} title={`Photos and videos${e.files.length ? ` · ${e.files.length}` : ""}`} icon="image">
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {e.files.map(f => (
-                <MotionPress key={f.id} {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel={"Open " + f.name} onPress={() => void openFile(f.id)}
-                  style={{ width: 132, padding: 10, gap: 6, borderRadius: 14, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
-                  <View style={{ height: 84, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: p.wash, overflow: "hidden" }}>
-                    {thumbs[f.id] ? <Image source={{ uri: thumbs[f.id] }} accessibilityIgnoresInvertColors style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : <Feather name={f.mime.startsWith("video/") ? "film" : "image"} size={22} color={p.primary} />}
-                  </View>
-                  <Text numberOfLines={1} style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{f.name}</Text>
-                  <Text style={{ color: p.muted, fontSize: 11 }}>{fileSize(f.bytes)}</Text>
-                </MotionPress>
-              ))}
+  if (!e) return null;
+  // The lead's ticket (lib/lead-estimate.ts): what the landlord told us, with TBC beside what is still to collect, sits in
+  // LeadTicket with the checklist and the thread; the notices, the photos and the enquiry's own buttons go above it.
+  const header = <>
+    {!!e.duplicateReason && step !== "closed" && <Notice text={`${DUPLICATE_LABEL}. ${duplicateNote(e)}`} p={p} tone="bad" />}
+    {isOwnerEnquiry(e) && <Notice text={`${OWNER_ENQUIRY_LABEL}. ${OWNER_ENQUIRY_NOTE}`} p={p} />}
+    {isTeamEnquiry(e) && <Notice text={`${teamEnquiryTag(e)}. ${TEAM_ENQUIRY_NOTE}`} p={p} />}
+    {step === "received" && <Button label={valueButtonLabel(e)} icon="trending-up" primary p={p} onPress={() => setMode("value")} />}
+    {e.propertyId && step !== "closed" && <Button label={`Open ${e.propertyName ?? "the property"}`} icon="arrow-right" primary={step !== "received"} p={p} onPress={() => onOpenProperty(e.propertyId!)} />}
+    {e.propertyId && step === "received" && <Text style={[ui.small, { color: p.muted }]}>It is already in Properties as a new enquiry. Check the details, then work through Estimate Delivery on the checklist.</Text>}
+    {e.propertyId && e.status === "valuing" && <Text style={[ui.small, { color: p.muted }]}>Valuing since {e.valuedAt ? ago(e.valuedAt) : "–"}{e.valuedByName ? `, by ${e.valuedByName}` : ""}. Work through Estimate Delivery on the checklist.</Text>}
+    {!!e.ownerRepairLimit && <Text style={[ui.small, { color: p.text }]}>Repair limit chosen at Proceed: {repairLimitText(e.ownerRepairLimit.limitMinor)}. The limit in use is in Limit Changer.</Text>}
+    {e.status === "closed" && <Notice text={`Closed by ${e.closedByName ?? "the team"}: ${e.closeNote}`} p={p} />}
+    {(e.files.length > 0 || !!a?.mediaLink) && <Group p={p} title={`Photos and videos${e.files.length ? ` · ${e.files.length}` : ""}`} icon="image">
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {e.files.map(f => (
+          <MotionPress key={f.id} {...(Platform.OS === "web" ? { dataSet: { hover: "lift" } } : {})} accessibilityRole="button" accessibilityLabel={"Open " + f.name} onPress={() => void openFile(f.id)}
+            style={{ width: 132, padding: 10, gap: 6, borderRadius: 14, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }}>
+            <View style={{ height: 84, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: p.wash, overflow: "hidden" }}>
+              {thumbs[f.id] ? <Image source={{ uri: thumbs[f.id] }} accessibilityIgnoresInvertColors style={{ width: "100%", height: "100%" }} resizeMode="cover" /> : <Feather name={f.mime.startsWith("video/") ? "film" : "image"} size={22} color={p.primary} />}
             </View>
-            {!!a.mediaLink && <Line p={p} label="Link they shared" value={a.mediaLink} onPress={() => void Linking.openURL(a.mediaLink!)} />}
-            {!!fileError && <Notice text={fileError} p={p} tone="bad" />}
-          </Group>}
-          <Group p={p} title="Services" icon="briefcase">
-            <Line p={p} label="Short-term let now" value={yes(a.shortLet)} />
-            <Line p={p} label="Furnishing quote" value={yes(a.furnishQuote)} />
-            <Line p={p} label="Compliance & licensing" value={yes(a.compliance)} />
-            <Line p={p} label="Start" value={a.startWhen} />
-            <Line p={p} label="Their enquiry" value={a.enquiryType} />
-            <Line p={p} label="Anything else" value={a.notes} />
-          </Group>
-        </> : <Group p={p} title="The email" icon="mail">
-          <Line p={p} label="To" value={`${e.recipientName} · ${e.recipientEmail}`} />
-          <Line p={p} label="Subject" value={e.subject} />
-          <Line p={p} label="How" value={e.delivery === "email" ? (e.emailStatus === "sent" ? "Sent by Recharge's email" : e.emailStatus === "failed" ? "The email failed: press Try again" : "Sending…") : "Link copied to send yourself"} />
-          <Line p={p} label="Sent" value={`${ago(e.sentAt)}${e.sentByName ? ` by ${e.sentByName}` : ""}`} />
-          <Line p={p} label="Opened" value={e.openedAt ? ago(e.openedAt) : "Not yet"} />
-          <Line p={p} label="Link works until" value={new Date(e.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} />
-        </Group>}
-        {["sent", "opened", "expired"].includes(step) && <Button label={e.emailStatus === "failed" ? "Try again" : "Send a new link"} icon="refresh-cw" primary={e.emailStatus === "failed"} p={p} onPress={() => setMode("resend")} />}
-        {!["valuing", "estimate", "won", "declined", "closed"].includes(step) && <Button label="Close this enquiry" icon="x" p={p} onPress={() => setMode("close")} />}
-        {canDelete && <DeleteLink p={p} onPress={() => setMode("delete")} />}
-      </>}
-    </Sheet>
+            <Text numberOfLines={1} style={{ color: p.text, fontSize: 12, fontWeight: "700" }}>{f.name}</Text>
+            <Text style={{ color: p.muted, fontSize: 11 }}>{fileSize(f.bytes)}</Text>
+          </MotionPress>
+        ))}
+      </View>
+      {!!a?.mediaLink && <Line p={p} label="Link they shared" value={a.mediaLink} onPress={() => void Linking.openURL(a.mediaLink!)} />}
+      {!!fileError && <Notice text={fileError} p={p} tone="bad" />}
+    </Group>}
+    {!a && <Group p={p} title="The email" icon="mail">
+      <Line p={p} label="To" value={`${e.recipientName} · ${e.recipientEmail}`} />
+      <Line p={p} label="Subject" value={e.subject} />
+      <Line p={p} label="How" value={e.delivery === "email" ? (e.emailStatus === "sent" ? "Sent by Recharge's email" : e.emailStatus === "failed" ? "The email failed: press Try again" : "Sending…") : "Link copied to send yourself"} />
+      <Line p={p} label="Sent" value={`${ago(e.sentAt)}${e.sentByName ? ` by ${e.sentByName}` : ""}`} />
+      <Line p={p} label="Opened" value={e.openedAt ? ago(e.openedAt) : "Not yet"} />
+      <Line p={p} label="Link works until" value={new Date(e.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} />
+    </Group>}
+    {["sent", "opened", "expired"].includes(step) && <Button label={e.emailStatus === "failed" ? "Try again" : "Send a new link"} icon="refresh-cw" primary={e.emailStatus === "failed"} p={p} onPress={() => setMode("resend")} />}
+    {!["valuing", "estimate", "won", "declined", "closed"].includes(step) && <Button label="Close this enquiry" icon="x" p={p} onPress={() => setMode("close")} />}
+    {canDelete && <DeleteLink p={p} onPress={() => setMode("delete")} />}
+  </>;
+  return (
+    <LeadTicket p={p} enquiry={e} header={header} subtitle={STEP_LABEL[step] + (e.submittedAt ? ` · answered ${ago(e.submittedAt)}` : ` · sent ${ago(e.sentAt)}`)}
+      onClose={onClose} onChanged={onChanged} onOpenProperty={onOpenProperty} onValue={step === "received" ? () => setMode("value") : undefined} />
   );
 }
 
