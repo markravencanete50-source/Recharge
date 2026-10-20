@@ -32,6 +32,12 @@ const RESTOCK = tool('restock', 'Restock requests', 'Ask for supplies', 'box', {
 // Training for every team role; admins land where courses and their files are added.
 const TRAINING = tool('training', 'Training', 'Courses for your role', 'star', { kind: 'tab', tab: 'help', anchor: sectionAnchor('Training') });
 const TRAINING_ADMIN = tool('training', 'Training', 'Courses and course files', 'star', work('management', { sub: 'training' }));
+// The Calendar page opened on one team's work (the sub names the team: lib/workspace-map.ts deepLinkFor and
+// mobile/src/LiveCalendar.tsx). Each role gets the calendars of the teams it can filter by (calendarTeamsFor).
+const calendar = (team: 'stays' | 'ready' | 'cleans'): HomeToolTarget => ({ kind: 'work', view: 'calendar', sub: team });
+const CALENDAR_READY = tool('calendar-ready', 'Maintenance calendar', 'Repairs, visits and inspections by day', 'calendar', calendar('ready'));
+const CALENDAR_STAYS = tool('calendar-stays', 'Booking calendar', 'Stays, arrivals and departures by day', 'calendar', calendar('stays'));
+const CALENDAR_CLEANS = tool('calendar-cleans', 'Housekeeping calendar', 'Cleans and changeovers by day', 'calendar', calendar('cleans'));
 
 const BY_ROLE: Record<string, Candidate[]> = {
   admin: [
@@ -128,11 +134,48 @@ const PANEL_ONLY: Record<string, Candidate[]> = {
     tool('limits', 'Limit Changer', 'Repair spending limits by owner', 'coins', work('management', { sub: 'limits' })),
     // Furnishing Studio: catalogue, client quotes and shopping lists (Client relations; Stays team and management only).
     tool('studio', 'Furnishing Studio', 'Catalogue, client quotes, shopping lists', 'sofa', work('clients', { sub: 'furnishing' })),
+    // Alex's menu (20 October 2026): admins open everything the team's menus hold, each in its own place.
+    tool('rota', 'Rota', 'Who works the early and late shift', 'calendar', work('management', { sub: 'rota' })),
+    tool('dailytasks', 'Daily tasks', 'Tasks added to each department\'s to-do list', 'clipboard', work('management', { sub: 'dailytasks' })),
+    tool('aircover', 'AirCover claims', 'Add and close claims', 'shield', work('stays', { sub: 'aircover' })),
+    tool('licensing', 'Licensing', 'Licences and renewals', 'signature', work('clients', { sub: 'licensing' })),
+    tool('inspections', 'Inspections', 'New properties to inspect', 'search', work('all')),
+    tool('onboarding', 'Property onboarding', 'Where each new property stands', 'key', work('clients', { sub: 'onboarding' })),
+    tool('bookings', 'Direct bookings', 'Follow up long stays', 'calendar', work('stays', { sub: 'bookings' })),
+    tool('pricing', 'Pricing', 'Empty nights this week', 'tag', work('clients', { sub: 'pricing' })),
+    // The Guests and stays report in Reports (mobile/src/LiveWorkspace.tsx adminReports).
+    tool('booking-performance', 'Guests and stays', 'Who stays, for how long, how far ahead they book', 'chart', { kind: 'tab', tab: 'analytics', anchor: 'section-guests-and-stays' }),
+    tool('reviews', 'Guest reviews', 'Reviews to log and answer', 'star', work('clients', { sub: 'reviews' })),
+    tool('checks', 'Listing health', 'Listings live and reviewed', 'clipboard', work('clients', { sub: 'listings' })),
+    tool('purchases', 'Purchase orders', 'Orders and deliveries', 'cart', work('clients', { sub: 'purchases' })),
+    tool('order-fulfilment', 'Purchases to order', 'Approve and order', 'cart', work('accounts', { section: 'Purchases' })),
+    tool('review', 'To review', 'Submitted cleans', 'star', work('cleans', { section: 'Waiting for your review' })),
+    tool('cleaner-invoices', 'Cleaner invoices', 'Accepted cleans by cleaner', 'spray', work('accounts', { section: 'Cleaner invoices' })),
+    tool('receivable', 'Receivable invoices', 'Invoices to send and settle', 'receipt', work('accounts', { sub: 'receivable' })),
+    tool('expenses', 'Expenses', 'Evidence to approve', 'receipt', work('accounts', { sub: 'expenses' })),
+    tool('profit-loss', 'Profit and loss', 'Fees, cleaning margin and occupancy', 'pie', work('accounts', { sub: 'performance' })),
+    CALENDAR_READY, CALENDAR_STAYS, CALENDAR_CLEANS,
   ],
   stays: [
     tool('enquiries', 'Client enquiries', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }, ['property-onboarding']),
     tool('studio', 'Furnishing Studio', 'Catalogue, client quotes, shopping lists', 'sofa', work('clients', { sub: 'furnishing' })),
+    // Client relations' own sections (lib/relations-subs.ts holds the same tools for each).
+    tool('onboarding', 'Property onboarding', 'Where each new property stands', 'key', work('clients', { sub: 'onboarding' })),
+    tool('reviews', 'Guest reviews', 'Reviews to log and answer', 'star', work('clients', { sub: 'reviews' }), ['listing-health']),
+    tool('purchases', 'Purchase orders', 'Orders and deliveries', 'cart', work('clients', { sub: 'purchases' }), ['purchase-order', 'purchase-order-requests', 'purchase-order-accounts']),
+    CALENDAR_READY, CALENDAR_STAYS, CALENDAR_CLEANS,
   ],
+  cleans: [CALENDAR_CLEANS],
+  cleaning_manager: [CALENDAR_CLEANS, CALENDAR_STAYS],
+  ready: [CALENDAR_READY, CALENDAR_STAYS],
+  accounts: [
+    tool('receivable', 'Receivable invoices', 'Invoices to send and settle', 'receipt', work('accounts', { sub: 'receivable' })),
+    tool('profit-loss', 'Profit and loss', 'Fees, cleaning margin and occupancy', 'pie', work('accounts', { sub: 'performance' })),
+    tool('aircover', 'AirCover claims', 'Add and close claims', 'shield', work('accounts', { sub: 'aircover' }), ['aircover-reporting']),
+    CALENDAR_READY, CALENDAR_STAYS, CALENDAR_CLEANS,
+  ],
+  // The Statements part of the owner's Portfolio page (mobile/src/LiveClientReports.tsx).
+  client: [tool('statements', 'Statements', 'Your issued and paid statements', 'pie', { kind: 'tab', tab: 'analytics', anchor: sectionAnchor('Statements') })],
 };
 PANEL_ONLY.super_admin = PANEL_ONLY.admin;
 

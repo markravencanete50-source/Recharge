@@ -178,10 +178,13 @@ function WeekTimeline({ p, days, today, rows, onStay, onWork }: { p: Palette; da
   );
 }
 
-export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, onOpenView, properties = [] }: {
+export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, onOpenView, properties = [], focusTeam }: {
   palette: Palette; account: WorkspaceAccount; work: OperationView[]; desktop: boolean; onOpenWork: (item: OperationView) => void; onOpenView?: (view: WorkView, sub?: string) => void;
   // Optional: with the property list the Changeovers view shows each full address.
   properties?: PropertyView[];
+  // Optional: the team the Calendar opens on (the menu's Maintenance, Booking and Housekeeping calendars). The Team
+  // filter starts there and can be changed; a team the role cannot filter by opens on all teams.
+  focusTeam?: Team;
 }) {
   const { width } = useWindowDimensions();
   const roomy = width >= 700;
@@ -189,7 +192,7 @@ export function LiveCalendar({ palette: p, account, work, desktop, onOpenWork, o
   const today = london(new Date());
   const [mode, setMode] = useState<Mode>("month");
   const [month, setMonth] = useState(today.slice(0, 7)), [selected, setSelected] = useState(today);
-  const [team, setTeam] = useState<Team | "all">("all"), [person, setPerson] = useState<{ id: string; name: string } | null>(null), [propertyId, setPropertyId] = useState("");
+  const [team, setTeam] = useState<Team | "all">(() => focusTeam && calendarTeamsFor(account.role).includes(focusTeam) ? focusTeam : "all"), [person, setPerson] = useState<{ id: string; name: string } | null>(null), [propertyId, setPropertyId] = useState("");
   const [filter, setFilter] = useState<"property" | "person" | null>(null);
   const [schedule, setSchedule] = useState<CalendarSchedule | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [events, setEvents] = useState<TeamEvents | null>(null), [eventsMissing, setEventsMissing] = useState(false), [rota, setRota] = useState<RotaPlan | null>(null);
