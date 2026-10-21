@@ -5,7 +5,7 @@ import { createServer } from 'vite';
 
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 after(() => vite.close());
-const { GUEST_CHANNELS, OFFERED_CHANNELS, CHANNEL_LABEL, inboxActionSchema, guestThreadSchema } = await vite.ssrLoadModule('/lib/guest-inbox-policy.ts');
+const { GUEST_CHANNELS, OFFERED_CHANNELS, CHANNEL_LABEL, inboxActionSchema, guestThreadSchema, isGuestEmail, repliesByEmail } = await vite.ssrLoadModule('/lib/guest-inbox-policy.ts');
 const inbox = readFileSync('mobile/src/LiveGuestInbox.tsx', 'utf8');
 const chat = readFileSync('mobile/src/LiveChat.tsx', 'utf8');
 const policy = readFileSync('lib/guest-inbox-policy.ts', 'utf8');
@@ -14,11 +14,25 @@ test('WhatsApp is not offered, but stored WhatsApp threads still work', () => {
   assert.ok(!OFFERED_CHANNELS.includes('whatsapp'));
   assert.ok(GUEST_CHANNELS.includes('whatsapp'));
   assert.equal(CHANNEL_LABEL.whatsapp, 'WhatsApp');
-  assert.deepEqual(OFFERED_CHANNELS, GUEST_CHANNELS.filter(c => c !== 'whatsapp'));
+  assert.deepEqual(OFFERED_CHANNELS, GUEST_CHANNELS.filter(c => c !== 'whatsapp' && c !== 'website'));
   for (const c of ['airbnb', 'booking_com', 'vrbo', 'direct', 'email', 'other']) assert.ok(OFFERED_CHANNELS.includes(c), c);
   const id = '11111111-1111-4111-8111-111111111111';
   assert.ok(inboxActionSchema.safeParse({ action: 'logMessage', requestId: id, channel: 'whatsapp', guestName: 'Old guest', body: 'Hi' }).success);
   assert.ok(guestThreadSchema.safeParse({ id, source: 'manual', channel: 'whatsapp', guestName: null, propertyId: null, propertyName: null, reservationRef: null, checkIn: null, checkOut: null, status: 'open', lastMessageAt: null, preview: null, lastFrom: null, waitingSince: null, messages: 0 }).success);
+});
+
+test('website conversations carry a Website label and are answered by email; Website is never picked by hand', () => {
+  assert.ok(GUEST_CHANNELS.includes('website'));
+  assert.ok(!OFFERED_CHANNELS.includes('website'));
+  assert.equal(CHANNEL_LABEL.website, 'Website');
+  assert.equal(repliesByEmail({ source: 'website' }), true);
+  assert.equal(repliesByEmail({ source: 'email' }), true);
+  assert.equal(repliesByEmail({ source: 'hostaway' }), false);
+  // Shown under Guests (not Guest emails), with the Website label.
+  assert.equal(isGuestEmail({ source: 'website', channel: 'website' }), false);
+  const id = '11111111-1111-4111-8111-111111111111';
+  assert.ok(guestThreadSchema.safeParse({ id, source: 'website', channel: 'website', guestName: 'Web Guest', propertyId: null, propertyName: null, reservationRef: null, checkIn: '2026-11-10', checkOut: '2026-11-16', status: 'open', lastMessageAt: null, preview: null, lastFrom: 'guest', waitingSince: null, messages: 1 }).success);
+  assert.match(inbox, /website: \{ bg: "#[0-9A-F]{6}", fg: "#FFFFFF", letter: "Web" \}/);
 });
 
 test('the guest inbox builds its channel choices from OFFERED_CHANNELS', () => {

@@ -88,7 +88,7 @@ const personName = (n: NoticeDetail) => {
 // the channel and the stay's dates when known ("Guest message · Airbnb · 12 to 15 Nov"). Before 20261025500000 a notice kept no
 // name: it says "Guest".
 export const GUEST_CHANNEL_LABEL: Readonly<Record<string, string>> = {
-  airbnb: 'Airbnb', booking_com: 'Booking.com', vrbo: 'Vrbo', direct: 'Direct booking', whatsapp: 'WhatsApp', email: 'Email',
+  airbnb: 'Airbnb', booking_com: 'Booking.com', vrbo: 'Vrbo', direct: 'Direct booking', whatsapp: 'WhatsApp', email: 'Email', website: 'Website',
 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DAY = /^(\d{4})-(\d{2})-(\d{2})/;

@@ -17,6 +17,8 @@ interface Env {
   RESEND_WEBHOOK_SECRET?: string;
   EMAIL_REPLIES_ENABLED?: string;
   EMAIL_ALLOW_UNVERIFIED?: string;
+  // The key the company website's server sends with each guest message (lib/website-guest-messages-server.ts); at least 32 characters.
+  WEBSITE_MESSAGES_KEY?: string;
   SUPABASE_URL?: string;
   SUPABASE_PUBLISHABLE_KEY?: string;
   SUPABASE_SECRET_KEY?: string;

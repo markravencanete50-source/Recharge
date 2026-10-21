@@ -6,13 +6,14 @@ import { threadStayReasonSchema } from './stay-reason';
 // (HOSTAWAY_REPLIES_ENABLED), delivers replies written here. Messages from elsewhere, such as email,
 // are logged by hand, and a reply can be recorded here, so reply times count either way.
 // GUEST_CHANNELS is everything a stored conversation may carry, so a WhatsApp thread logged earlier still
-// opens and keeps its label. OFFERED_CHANNELS is what a person can pick in the app: WhatsApp is not offered.
+// opens and keeps its label. OFFERED_CHANNELS is what a person can pick in the app: WhatsApp is not offered, nor Website (messages
+// sent from the company website arrive by themselves, 20261026200000, and are answered by email).
 // The database decides who sees each conversation.
 const uuid = z.string().uuid();
-export const GUEST_CHANNELS = ['airbnb', 'booking_com', 'vrbo', 'direct', 'whatsapp', 'email', 'other'] as const;
+export const GUEST_CHANNELS = ['airbnb', 'booking_com', 'vrbo', 'direct', 'whatsapp', 'email', 'website', 'other'] as const;
 export type GuestChannel = (typeof GUEST_CHANNELS)[number];
-export const OFFERED_CHANNELS = GUEST_CHANNELS.filter(channel => channel !== 'whatsapp');
-export const CHANNEL_LABEL: Record<GuestChannel, string> = { airbnb: 'Airbnb', booking_com: 'Booking.com', vrbo: 'Vrbo', direct: 'Direct', whatsapp: 'WhatsApp', email: 'Email', other: 'Other' };
+export const OFFERED_CHANNELS = GUEST_CHANNELS.filter(channel => channel !== 'whatsapp' && channel !== 'website');
+export const CHANNEL_LABEL: Record<GuestChannel, string> = { airbnb: 'Airbnb', booking_com: 'Booking.com', vrbo: 'Vrbo', direct: 'Direct', whatsapp: 'WhatsApp', email: 'Email', website: 'Website', other: 'Other' };
 export const INBOX_FILTERS = ['waiting', 'open', 'done', 'all'] as const;
 export const inboxReadSchema = z.discriminatedUnion('section', [
   z.object({ section: z.literal('list'), status: z.enum(INBOX_FILTERS).default('waiting') }).strict(),
@@ -50,9 +51,11 @@ export const guestThreadSchema = z.object({
 });
 export type GuestThread = z.infer<typeof guestThreadSchema>;
 const targets = z.object({ greenMinutes: z.number(), amberMinutes: z.number() });
-// canSend: replies written here are delivered to the guest through Hostaway; canSendEmail: through Resend, for email conversations (decided by the server, not the database).
+// canSend: replies written here are delivered to the guest through Hostaway; canSendEmail: through Resend, for email and website conversations (decided by the server, not the database).
 // An email conversation (guestrelations@, or a guest email logged by hand): Messages > Guest emails, never Guests.
 export const isGuestEmail = (t: { source: string; channel: string }) => t.source === 'email' || t.channel === 'email';
+// A conversation whose replies go to the guest by email from guestrelations@: one that began as an email, or one from the website.
+export const repliesByEmail = (t: { source: string }) => t.source === 'email' || t.source === 'website';
 export const inboxListSchema = z.object({ threads: z.array(guestThreadSchema), waiting: z.number(), targets, connected: z.boolean(), canSend: z.boolean().default(false), canSendEmail: z.boolean().default(false) });
 // files: attachments kept from an email (open them through /api/workspace/email-files).
 export const guestFileSchema = z.object({ id: uuid, filename: z.string(), mime: z.string(), bytes: z.number() });

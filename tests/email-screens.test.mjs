@@ -11,7 +11,7 @@ const chat = await read('mobile/src/LiveChat.tsx');
 const client = await read('mobile/src/backend/client.ts');
 
 test('Send in an email conversation names guestrelations@ and works only while email replies are switched on', () => {
-  assert.match(inbox, /const viaEmail = !!data\?\.canSendEmail && t\?\.source === "email"/);
+  assert.match(inbox, /const viaEmail = !!data\?\.canSendEmail && !!t && repliesByEmail\(t\)/);
   assert.match(inbox, /Send emails your reply to .* from guestrelations@rechargegroup\.co\.uk/);
   assert.match(inbox, /Emailed to the guest from guestrelations@rechargegroup\.co\.uk/);
   // Switched off: a clear line, and the reply can still be recorded.

@@ -98,12 +98,12 @@ export const REPAIR_STAGE_LABEL: Record<string, string> = { ...Object.fromEntrie
 export const repairStageName = (stage: string) => REPAIR_STAGE_LABEL[stage] ?? stage.replaceAll('_', ' ');
 export const departmentName = (department: string | null) => (!department ? 'Given to a person' : DEPARTMENT_LABEL[department] ?? department);
 const CHANNEL_LABEL: Record<string, string> = {
-  airbnb: 'Airbnb', booking_com: 'Booking.com', vrbo: 'Vrbo', direct: 'Direct booking', whatsapp: 'WhatsApp', email: 'Guest emails', other: 'Other guest messages',
+  airbnb: 'Airbnb', booking_com: 'Booking.com', vrbo: 'Vrbo', direct: 'Direct booking', whatsapp: 'WhatsApp', email: 'Guest emails', website: 'Website', other: 'Other guest messages',
   owner_chat: 'Owner app chat', client_email: 'Client emails',
 };
 export const channelName = (channel: string) => CHANNEL_LABEL[channel] ?? channel;
 // Guest channels first, then the owners' (the order the Messages page uses).
-const CHANNEL_ORDER = ['airbnb', 'booking_com', 'vrbo', 'direct', 'whatsapp', 'email', 'other', 'owner_chat', 'client_email'];
+const CHANNEL_ORDER = ['airbnb', 'booking_com', 'vrbo', 'direct', 'whatsapp', 'email', 'website', 'other', 'owner_chat', 'client_email'];
 export const channelOrder = (a: string, b: string) => (CHANNEL_ORDER.indexOf(a) + 1 || 99) - (CHANNEL_ORDER.indexOf(b) + 1 || 99) || a.localeCompare(b);
 
 // "45 min", "2h 05m", "3 days 4h": reply times can run to days.
