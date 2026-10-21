@@ -13,7 +13,7 @@ import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Tag, Loading } from "./LiveKit";
 import { Pills } from "./Pills";
 import { emailFileLink, readInbox, writeInbox } from "./backend/client";
-import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, isGuestEmail, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
+import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, isGuestEmail, repliesByEmail, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
 import { MESSAGE_STATUS_LABEL, byLatest, emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
 import { MessagesSplit, QuietLine, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { chatTime } from "../../lib/workspace-chat-policy";
@@ -36,7 +36,7 @@ import { clearGuestNotices, onGuestRead, takeGuestReads } from "./Notifications"
 // Channel colours, darkened or given dark letters where needed so each letter reads at 4.5:1.
 const CHANNEL_STYLE: Record<GuestChannel, { bg: string; fg: string; letter: string }> = {
   airbnb: { bg: "#D0353B", fg: "#FFFFFF", letter: "A" }, booking_com: { bg: "#003580", fg: "#FFFFFF", letter: "B." }, vrbo: { bg: "#245ABC", fg: "#FFFFFF", letter: "V" },
-  direct: { bg: "#1B3D37", fg: "#F1EADB", letter: "" }, whatsapp: { bg: "#25D366", fg: "#0B3D22", letter: "W" }, email: { bg: "#6B7280", fg: "#FFFFFF", letter: "@" }, other: { bg: "#9CA3AF", fg: "#152D28", letter: "•" },
+  direct: { bg: "#1B3D37", fg: "#F1EADB", letter: "" }, whatsapp: { bg: "#25D366", fg: "#0B3D22", letter: "W" }, email: { bg: "#6B7280", fg: "#FFFFFF", letter: "@" }, website: { bg: "#2F6F62", fg: "#FFFFFF", letter: "Web" }, other: { bg: "#9CA3AF", fg: "#152D28", letter: "•" },
 };
 const GRADE_TONE = { green: "good", amber: "wait", red: "bad" } as const;
 
@@ -165,8 +165,8 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
   }, [load]);
   const t = data?.thread;
   // Sending is on and this is a Hostaway conversation: Send delivers the reply to the guest. An email conversation is answered by
-  // email from guestrelations@rechargegroup.co.uk (canSendEmail); the rest is as before.
-  const viaEmail = !!data?.canSendEmail && t?.source === "email";
+  // email from guestrelations@rechargegroup.co.uk (canSendEmail), and so is a website conversation; the rest is as before.
+  const viaEmail = !!data?.canSendEmail && !!t && repliesByEmail(t);
   const viaHostaway = (!!data?.canSend && t?.source === "hostaway") || viaEmail;
   const [fileError, setFileError] = useState("");
   // An attachment opens through a fresh short link each time; nothing about it is kept in the page.
@@ -296,7 +296,7 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
           {t.source === "manual" && <Text style={[ui.small, { color: p.muted }]}>Replies aren’t sent to {CHANNEL_LABEL[t.channel]} from here. Saving one records when you replied, for reply times.</Text>}
           {viaEmail && <Text style={[ui.small, { color: p.muted }]}>Send emails your reply to {t.guestName ?? "the guest"} from guestrelations@rechargegroup.co.uk. Their reply comes back here by itself.</Text>}
           {viaHostaway && !viaEmail && <Text style={[ui.small, { color: p.muted }]}>Send delivers your reply to the guest through Hostaway on {CHANNEL_LABEL[t.channel]}. Their replies show up here by themselves.</Text>}
-          {t.source === "email" && !viaEmail && <Text style={[ui.small, { color: p.muted }]}>Emailing from here is switched off. Reply from your mail app (guestrelations@rechargegroup.co.uk); saving one here only records it for reply times.</Text>}
+          {repliesByEmail(t) && !viaEmail && <Text style={[ui.small, { color: p.muted }]}>Emailing from here is switched off. Reply from your mail app (guestrelations@rechargegroup.co.uk); saving one here only records it for reply times.</Text>}
           {t.source === "hostaway" && !viaHostaway && <Text style={[ui.small, { color: p.muted }]}>Send your reply in Hostaway (or on {CHANNEL_LABEL[t.channel]}): it shows up here by itself within a minute and the wait ends. Saving one here only records it; nothing is sent to the guest.</Text>}
         </> : null}
         {!!note && <Notice text={note} p={p} />}

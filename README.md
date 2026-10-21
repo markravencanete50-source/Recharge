@@ -35,6 +35,7 @@ The backend needs these Worker secrets: `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SE
 - photo uploads: the Cloudinary keys and `MEDIA_UPLOADS_ENABLED=true`;
 - Hostaway: `HOSTAWAY_ACCOUNT_ID` and `HOSTAWAY_API_KEY`;
 - email: Resend;
+- guest messages from the company website: `WEBSITE_MESSAGES_KEY` (see `docs/WEBSITE-MESSAGES.md`);
 - notifications: Expo push.
 
 Set them with `wrangler secret put`. Never commit them.
