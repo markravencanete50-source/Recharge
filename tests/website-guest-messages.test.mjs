@@ -50,7 +50,7 @@ const mocks = {
   'cloudflare:workers': `export const env=globalThis.__websiteMessages.env;`,
   'auth-security': `import crypto from 'node:crypto';const s=globalThis.__websiteMessages,d=globalThis.__websiteDb;
     export const securityHash=async(scope,value)=>crypto.createHmac('sha256','test-salt-test-salt-test-salt-test-salt').update(scope+'\\0'+value).digest('hex');
-    export const requestQuota=async(request,scope,maximum,seconds,identity)=>{const who=identity||request.headers.get('cf-connecting-ip');s.quotas.push({scope,maximum,seconds,who});
+    export const requestQuota=async(request,scope,maximum,seconds,identity)=>{if(!(maximum>=1&&maximum<=1000&&seconds>=1&&seconds<=86400))throw new Error('Invalid limit');const who=identity||request.headers.get('cf-connecting-ip');s.quotas.push({scope,maximum,seconds,who});
       const k=scope+'|'+who;s.counts[k]=(s.counts[k]||0)+1;return s.deny.has(scope)||s.counts[k]>maximum?{allowed:false,retryAfter:120}:{allowed:true,retryAfter:0};};
     export const securityRpc=async(name,args)=>{s.rpc.push({name,args});await d.asBackend();try{const r=await d.db.query('select public.'+name+'($1) result',[args.input]);return r.rows[0].result;}catch(e){throw new Error('Security database unavailable');}finally{await d.db.exec('reset role');}};`,
   'business-server': `export const businessResponse=(body,status=200)=>Response.json(body,{status});export const databaseFailure=error=>Response.json({error:error.message},{status:400});`,
@@ -108,6 +108,17 @@ const inboxClient = i => ({ rpc: async (name, args) => {
     return { data: (await db.query(sql, values)).rows[0].r, error: null };
   } catch (error) { return { data: null, error }; } finally { await db.exec('reset role'); }
 } });
+
+test('every quota the website routes ask for is one the real rate limiter accepts (1 to 1,000 per 1 second to 1 day)', async () => {
+  // The limiter here is a stand-in, so read the real bounds from the migration and the asks from the source.
+  const limiter = await fs.readFile('supabase/migrations/20261003162617_authentication_security.sql', 'utf8');
+  assert.match(limiter, /maximum not between 1 and 1000 or window_seconds not between 1 and 86400/);
+  const source = await fs.readFile('lib/website-guest-messages-server.ts', 'utf8');
+  const asks = [...source.matchAll(/requestQuota\(request, '([a-z-]+)', ([^,]+), (\d+)/g)];
+  assert.ok(asks.length >= 4);
+  for (const [, scope, maximum, seconds] of asks)
+    for (const n of maximum.match(/\d+/g).map(Number)) assert.ok(n >= 1 && n <= 1000 && Number(seconds) <= 86400, `${scope}: ${maximum} per ${seconds}s`);
+});
 
 test('the route is the POST handler, server to server, and the backend serves it', async () => {
   assert.match(routeFile, /export const POST = \(request: Request\) => websiteGuestMessageRoute\(request\)/);
@@ -237,7 +248,7 @@ test('quotas: ten messages an hour per guest email, and the website-wide ceiling
   const rpcBefore = state.rpc.length;
   assert.equal((await post(message({ email: 'calm2@example.org' }))).status, 429);
   assert.equal(state.rpc.length, rpcBefore);
-  assert.ok(state.quotas.some(q => q.scope === 'website-message-ip' && q.maximum === 1200 && q.seconds === 3600));
+  assert.ok(state.quotas.some(q => q.scope === 'website-message-ip' && q.maximum === 1000 && q.seconds === 3600));
 });
 
 test('a team reply is emailed to the guest with the home and dates in the subject, and the guest’s emailed answer joins the conversation', async () => {
