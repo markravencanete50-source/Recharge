@@ -120,6 +120,8 @@ test('from the guest chat: Report a repair is prefilled, and Fixed in chat sends
   assert.equal(rc.guestSendRoute({ canSend: true, canSendEmail: false, thread: { source: 'hostaway' } }), 'send');
   assert.equal(rc.guestSendRoute({ canSend: true, canSendEmail: false, thread: { source: 'manual' } }), 'none');
   assert.equal(rc.guestSendRoute({ canSend: false, canSendEmail: true, thread: { source: 'email' } }), 'send');
+  assert.equal(rc.guestSendRoute({ canSend: false, canSendEmail: true, thread: { source: 'website' } }), 'send');
+  assert.equal(rc.guestSendRoute({ canSend: true, canSendEmail: false, thread: { source: 'website' } }), 'none');
   assert.equal(rc.fixedInChatMessage('Reset the boiler'), 'Thanks for your patience. Reset the boiler. Let us know if anything else needs a look.');
 });
 
