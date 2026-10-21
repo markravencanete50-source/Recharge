@@ -5,11 +5,12 @@ import { hostawayReplyErrorMessage, sendHostawayConversationMessage } from './ho
 import { emailRepliesEnabled, resendErrorMessage, sendMailboxEmail } from './resend-email';
 import { z } from 'zod';
 import { hostawaySyncConfigured } from './hostaway-sync';
-import type { InboxAction } from './guest-inbox-policy';
+import { repliesInChat, type InboxAction } from './guest-inbox-policy';
 import type { RpcContext } from './workspace-rpc-route';
 
 // Replies written in the Guest inbox, delivered to the guest through Hostaway (Hostaway conversations) or through Resend as
-// guestrelations@rechargegroup.co.uk (email conversations). Hostaway works only while the Hostaway sync is on AND
+// guestrelations@rechargegroup.co.uk (email conversations), or shown in the guest's chat window on the company website (website chats,
+// always on: the chat is the delivery, see 20261027100000). Hostaway works only while the Hostaway sync is on AND
 // HOSTAWAY_REPLIES_ENABLED is `true`; email only while RESEND_API_KEY is set AND EMAIL_REPLIES_ENABLED is `true` (Worker secrets, off by default).
 // The database checks who may reply and records each Send once (by request id); the provider is called only after that, and the
 // outcome is written back through the service-role-only workspace_guest_reply_result / workspace_email_reply_result.
@@ -20,12 +21,23 @@ const emailSchema = z.object({ to: z.string().email(), subject: z.string().nulla
 type Started = { send: false; thread: unknown } | { send: true; conversationId: string; requestId: string; source?: string; email?: unknown };
 
 export async function sendGuestReply({ client }: RpcContext, input: Extract<InboxAction, { action: 'sendReply' }>) {
-  if (!repliesEnabled()) return businessResponse({ error: 'Sending replies from Recharge is switched off. Reply in Hostaway or your mail app for now.', mode: 'unconfigured' }, 503);
+  // Hostaway and email both switched off: nothing is recorded, unless this is a website chat (answered in the chat itself).
+  if (!repliesEnabled()) {
+    const view = await client.rpc('workspace_guest_inbox_read', { section: 'thread', target: input.threadId, status_filter: null });
+    const thread = (view.data as { thread?: { source: string; websiteChat?: boolean } } | null)?.thread;
+    if (!thread || !repliesInChat(thread)) return businessResponse({ error: 'Sending replies from Recharge is switched off. Reply in Hostaway or your mail app for now.', mode: 'unconfigured' }, 503);
+  }
   const started = await client.rpc('workspace_guest_inbox_action', { input });
   if (started.error) return databaseFailure(started.error);
   const state = started.data as Started;
   // This request was already sent or is still going out: nothing is posted again.
   if (!state.send) return businessResponse({ data: state.thread, ok: true });
+  if (state.source === 'website') {
+    try { await securityRpc('workspace_website_reply_result', { input: { requestId: input.requestId } }); }
+    catch { return businessResponse({ error: 'The reply could not be added to the chat just now. Please try again.' }, 503); }
+    const fresh = await client.rpc('workspace_guest_inbox_read', { section: 'thread', target: input.threadId, status_filter: null });
+    return businessResponse({ ok: true, data: (fresh.data as { thread?: unknown } | null)?.thread ?? null });
+  }
   const byEmail = state.source === 'email';
   const switchedOff = byEmail ? !emailRepliesEnabled() : !hostawayRepliesEnabled();
   let messageId: string | null = null, failure = '';

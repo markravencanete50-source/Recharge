@@ -13,7 +13,7 @@ import { ui, type Palette } from "./theme";
 import { Button, Field, message, Notice, Tag, Loading } from "./LiveKit";
 import { Pills } from "./Pills";
 import { emailFileLink, readInbox, writeInbox } from "./backend/client";
-import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, isGuestEmail, repliesByEmail, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
+import { CHANNEL_LABEL, OFFERED_CHANNELS, inboxListSchema, isGuestEmail, repliesByEmail, repliesInChat, inboxThreadSchema, waitGrade, waitLabel, type GuestChannel, type GuestThread } from "../../lib/guest-inbox-policy";
 import { MESSAGE_STATUS_LABEL, byLatest, emptyStatusMessage, guestFacts, guestStatus, matchesSearch, statusCounts, type MessageStatus } from "../../lib/inbox-filters";
 import { MessagesSplit, QuietLine, SearchBar, StatusFilter, ThreadHeader } from "./MessagesLayout";
 import { chatTime } from "../../lib/workspace-chat-policy";
@@ -165,9 +165,11 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
   }, [load]);
   const t = data?.thread;
   // Sending is on and this is a Hostaway conversation: Send delivers the reply to the guest. An email conversation is answered by
-  // email from guestrelations@rechargegroup.co.uk (canSendEmail), and so is a website conversation; the rest is as before.
+  // email from guestrelations@rechargegroup.co.uk (canSendEmail), and so is an older website conversation. A website chat is
+  // answered in the guest's chat window on the website, so Send is always there for it; the rest is as before.
   const viaEmail = !!data?.canSendEmail && !!t && repliesByEmail(t);
-  const viaHostaway = (!!data?.canSend && t?.source === "hostaway") || viaEmail;
+  const viaChat = !!t && repliesInChat(t);
+  const viaHostaway = (!!data?.canSend && t?.source === "hostaway") || viaEmail || viaChat;
   const [fileError, setFileError] = useState("");
   // An attachment opens through a fresh short link each time; nothing about it is kept in the page.
   async function openFile(id: string) {
@@ -202,7 +204,7 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
     if (!text || !t || busy) return;
     if (sendId.current?.text !== text) sendId.current = { text, id: Crypto.randomUUID() };
     // On a failure the text stays in the box and the error shows, so Send can be pressed again.
-    const sent = await run({ action: "sendReply", requestId: sendId.current.id, threadId, body: text }, "Reply sent", () => { setReply(""); setEnglish(null); setNote(viaEmail ? "Emailed to the guest from guestrelations@rechargegroup.co.uk." : `Sent to the guest through Hostaway on ${CHANNEL_LABEL[t.channel]}.`); });
+    const sent = await run({ action: "sendReply", requestId: sendId.current.id, threadId, body: text }, "Reply sent", () => { setReply(""); setEnglish(null); setNote(viaChat ? "Shown to the guest in their chat on the website." : viaEmail ? "Emailed to the guest from guestrelations@rechargegroup.co.uk." : `Sent to the guest through Hostaway on ${CHANNEL_LABEL[t.channel]}.`); });
     if (sent) sendId.current = null;
   }
   // The guest writes in another language (their newest translated message): a reply written in English can be put into
@@ -295,7 +297,8 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
           </View>}
           {t.source === "manual" && <Text style={[ui.small, { color: p.muted }]}>Replies aren’t sent to {CHANNEL_LABEL[t.channel]} from here. Saving one records when you replied, for reply times.</Text>}
           {viaEmail && <Text style={[ui.small, { color: p.muted }]}>Send emails your reply to {t.guestName ?? "the guest"} from guestrelations@rechargegroup.co.uk. Their reply comes back here by itself.</Text>}
-          {viaHostaway && !viaEmail && <Text style={[ui.small, { color: p.muted }]}>Send delivers your reply to the guest through Hostaway on {CHANNEL_LABEL[t.channel]}. Their replies show up here by themselves.</Text>}
+          {viaChat && <Text style={[ui.small, { color: p.muted }]}>Send shows your reply in {t.guestName ?? "the guest"}’s chat on the website, straight away. Their replies come back here by themselves. The guest sees the chat only while the page is open, so reply quickly.</Text>}
+          {viaHostaway && !viaEmail && !viaChat && <Text style={[ui.small, { color: p.muted }]}>Send delivers your reply to the guest through Hostaway on {CHANNEL_LABEL[t.channel]}. Their replies show up here by themselves.</Text>}
           {repliesByEmail(t) && !viaEmail && <Text style={[ui.small, { color: p.muted }]}>Emailing from here is switched off. Reply from your mail app (guestrelations@rechargegroup.co.uk); saving one here only records it for reply times.</Text>}
           {t.source === "hostaway" && !viaHostaway && <Text style={[ui.small, { color: p.muted }]}>Send your reply in Hostaway (or on {CHANNEL_LABEL[t.channel]}): it shows up here by itself within a minute and the wait ends. Saving one here only records it; nothing is sent to the guest.</Text>}
         </> : null}

@@ -48,6 +48,8 @@ export const guestThreadSchema = z.object({
   stayReason: threadStayReasonSchema.nullable().default(null),
   // The preview is shown in English, translated from this language (20261026100000).
   previewLanguage: z.string().optional(),
+  // A chat from the company website: Send shows the reply in the guest's chat window, never by email (20261027100000).
+  websiteChat: z.boolean().default(false),
 });
 export type GuestThread = z.infer<typeof guestThreadSchema>;
 const targets = z.object({ greenMinutes: z.number(), amberMinutes: z.number() });
@@ -55,7 +57,9 @@ const targets = z.object({ greenMinutes: z.number(), amberMinutes: z.number() })
 // An email conversation (guestrelations@, or a guest email logged by hand): Messages > Guest emails, never Guests.
 export const isGuestEmail = (t: { source: string; channel: string }) => t.source === 'email' || t.channel === 'email';
 // A conversation whose replies go to the guest by email from guestrelations@: one that began as an email, or one from the website.
-export const repliesByEmail = (t: { source: string }) => t.source === 'email' || t.source === 'website';
+export const repliesByEmail = (t: { source: string; websiteChat?: boolean }) => t.source === 'email' || (t.source === 'website' && !t.websiteChat);
+// A website chat is answered in the chat itself, so Send is always available for it.
+export const repliesInChat = (t: { source: string; websiteChat?: boolean }) => t.source === 'website' && !!t.websiteChat;
 export const inboxListSchema = z.object({ threads: z.array(guestThreadSchema), waiting: z.number(), targets, connected: z.boolean(), canSend: z.boolean().default(false), canSendEmail: z.boolean().default(false) });
 // files: attachments kept from an email (open them through /api/workspace/email-files).
 export const guestFileSchema = z.object({ id: uuid, filename: z.string(), mime: z.string(), bytes: z.number() });

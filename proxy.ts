@@ -5,6 +5,8 @@ import { authSecurityConfiguration, enquiryAllowedOrigins, requestQuota } from "
 import { isSameOrigin, listedOrigin, securityHeaders } from "@/lib/auth-security-policy";
 import { isNativeRequest } from "@/lib/native-request-policy";
 
+const websiteRoutes = ["/api/website/guest-messages", "/api/website/guest-chat"];
+
 export async function proxy(request: NextRequest) {
   // The public enquiry form may also be posted from the company website (ENQUIRY_ALLOWED_ORIGINS); the route checks the
   // origin again and answers with CORS headers. Refusals made here carry them too, so the website can show the error.
@@ -14,14 +16,16 @@ export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/api/")) {
     // Hostaway's servers call the webhook with Basic auth and no Origin header; the route checks the credentials itself.
     // Resend's servers call theirs with a signed body and no Origin header; that route verifies the signature before reading anything.
-    // The company website's server sends guest messages with its shared key; that route checks the key before reading anything.
-    const serverToServer = ["/api/hostaway/webhook", "/api/resend/webhook", "/api/website/guest-messages"].includes(request.nextUrl.pathname);
+    // The company website's server sends guest messages and reads chats back with its shared key; those routes check the key before reading anything.
+    const serverToServer = ["/api/hostaway/webhook", "/api/resend/webhook", ...websiteRoutes].includes(request.nextUrl.pathname);
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && !serverToServer && !website && !isSameOrigin(request, security?.origin) && !isNativeRequest(request)) return NextResponse.json({ error: "Invalid request origin" }, { status: 403, headers: securityHeaders });
     if (!security) return answer({ error: "Security connection is awaiting configuration" }, 503);
   }
   // The request quota and the session check below go out together, one wait instead of two on every API call; a request
   // over its quota (or with the quota check down) is still refused before anything else runs.
-  const quota = request.nextUrl.pathname.startsWith("/api/") ? requestQuota(request, "api-ip", 120, 60).then(decision => decision, () => null) : null;
+  // Every guest on the company website reaches the website routes from the website's few server addresses, so those routes keep
+  // their own quotas (per chat and per guest) instead of this per-address one.
+  const quota = request.nextUrl.pathname.startsWith("/api/") && !websiteRoutes.includes(request.nextUrl.pathname) ? requestQuota(request, "api-ip", 120, 60).then(decision => decision, () => null) : null;
   const refused = async () => {
     if (!quota) return null;
     const decision = await quota;
