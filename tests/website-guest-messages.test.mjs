@@ -99,12 +99,25 @@ const post = (body, { key = KEY, raw = false, method = 'POST', ip = '76.76.21.21
 }));
 const websiteThreads = async () => (await db.query("select * from private.workspace_guest_threads where source='website' order by created_at,thread_ref")).rows;
 const messagesOf = async t => (await db.query('select * from private.workspace_guest_messages where source=$1 and thread_ref=$2 order by sent_at,id', [t.source, t.thread_ref])).rows;
+// The Guest inbox's own database calls, made as one of the team.
+const inboxClient = i => ({ rpc: async (name, args) => {
+  await as(i);
+  try {
+    const sql = name === 'workspace_guest_inbox_read' ? 'select public.workspace_guest_inbox_read($1,$2,$3) r' : `select public.${name}($1) r`;
+    const values = name === 'workspace_guest_inbox_read' ? [args.section, args.target, args.status_filter] : [args.input];
+    return { data: (await db.query(sql, values)).rows[0].r, error: null };
+  } catch (error) { return { data: null, error }; } finally { await db.exec('reset role'); }
+} });
 
 test('the route is the POST handler, server to server, and the backend serves it', async () => {
   assert.match(routeFile, /export const POST = \(request: Request\) => websiteGuestMessageRoute\(request\)/);
   assert.match(await fs.readFile('worker/backend-route-policy.ts', 'utf8'), /"\/api\/website\/guest-messages"/);
   // No Origin header from the website's server: the proxy leaves the key check to the route.
-  assert.match(await fs.readFile('proxy.ts', 'utf8'), /"\/api\/website\/guest-messages"\]\.includes\(request\.nextUrl\.pathname\)/);
+  const proxyFile = await fs.readFile('proxy.ts', 'utf8');
+  assert.match(proxyFile, /const websiteRoutes = \["\/api\/website\/guest-messages", "\/api\/website\/guest-chat"\];/);
+  assert.match(proxyFile, /\.\.\.websiteRoutes\]\.includes\(request\.nextUrl\.pathname\)/);
+  // Every guest reaches these routes from the website's few server addresses: they keep their own quotas, not the per-address one.
+  assert.match(proxyFile, /startsWith\("\/api\/"\) && !websiteRoutes\.includes\(request\.nextUrl\.pathname\) \? requestQuota\(request, "api-ip"/);
 });
 
 test('a missing or wrong key is refused with 401 before anything is read or stored', async () => {
@@ -224,7 +237,7 @@ test('quotas: ten messages an hour per guest email, and the website-wide ceiling
   const rpcBefore = state.rpc.length;
   assert.equal((await post(message({ email: 'calm2@example.org' }))).status, 429);
   assert.equal(state.rpc.length, rpcBefore);
-  assert.ok(state.quotas.some(q => q.scope === 'website-message-ip' && q.maximum === 300 && q.seconds === 3600));
+  assert.ok(state.quotas.some(q => q.scope === 'website-message-ip' && q.maximum === 1200 && q.seconds === 3600));
 });
 
 test('a team reply is emailed to the guest with the home and dates in the subject, and the guest’s emailed answer joins the conversation', async () => {
@@ -276,7 +289,121 @@ test('a team reply is emailed to the guest with the home and dates in the subjec
 test('with email replies switched off, a website conversation is not sent', async () => {
   reset({ WEBSITE_MESSAGES_KEY: KEY });
   const t = (await websiteThreads()).find(x => x.property_id === HARBOUR);
-  const response = await replies.sendGuestReply({ client: { rpc: async () => { throw new Error('not reached'); } } }, { action: 'sendReply', requestId: crypto.randomUUID(), threadId: t.id, body: 'Hello' });
+  const before = (await db.query('select count(*) n from private.workspace_guest_reply_requests')).rows[0].n;
+  const response = await replies.sendGuestReply({ client: inboxClient(ANNA) }, { action: 'sendReply', requestId: crypto.randomUUID(), threadId: t.id, body: 'Hello' });
   assert.equal(response.status, 503);
   assert.deepEqual(state.resend, []);
+  assert.equal((await db.query('select count(*) n from private.workspace_guest_reply_requests')).rows[0].n, before);
+});
+
+// ---------------------------------------------------------------- live chat (20261027100000)
+const CHAT = 'chat_' + 'A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8';
+const OTHER_CHAT = 'chat_' + 'Z9y8X7w6V5u4T3s2R1q0P9o8N7m6L5k4J3i2';
+const chatRoute = await vite.ssrLoadModule('/lib/website-guest-messages-server.ts');
+const read = (chat, { key = KEY, method = 'POST', raw } = {}) => chatRoute.websiteGuestChatRoute(new Request('https://app.test/api/website/guest-chat', {
+  method, headers: { 'content-type': 'application/json', 'cf-connecting-ip': '76.76.21.21', ...(key === null ? {} : { 'x-recharge-website-key': key }) }, ...(method === 'POST' ? { body: raw ?? JSON.stringify({ chat }) } : {}),
+}));
+const chatThread = async () => (await websiteThreads()).find(t => t.thread_ref.startsWith('website-chat:') && t.guest_email === 'chloe.chat@example.org');
+
+test('a message with a chat key is its own conversation: the key is stored only as a hash, and an email alone never joins it', async () => {
+  const first = message({ email: 'Chloe.Chat@example.org', name: 'Chloe', chat: CHAT });
+  assert.equal((await post(first)).status, 200);
+  const t = await chatThread();
+  assert.ok(t, 'a chat conversation');
+  assert.match(t.thread_ref, /^website-chat:[0-9a-f]{64}$/);
+  assert.ok(!t.thread_ref.includes(CHAT) && !JSON.stringify(state.rpc).includes(CHAT), 'the raw chat key never reaches the database');
+  assert.deepEqual([t.property_id, t.status, t.channel], [HARBOUR, 'open', 'website']);
+  // Quotas for a chat: more messages per guest email, and a limit per chat.
+  assert.ok(state.quotas.some(q => q.scope === 'website-message-email' && q.maximum === 40));
+  assert.ok(state.quotas.some(q => q.scope === 'website-chat-message' && q.maximum === 30 && q.who === t.thread_ref.replace('website-chat:', 'chat:')));
+  // Same guest, same home, same chat: same conversation.
+  assert.equal((await post(message({ email: 'chloe.chat@example.org', name: 'Chloe', chat: CHAT, body: 'Is there a cot?', booking: null, phone: null, sentAt: new Date(Date.now() + 1000).toISOString() }))).status, 200);
+  assert.equal((await messagesOf(t)).length, 2);
+  // Same guest and home without the chat key, or in another chat: other conversations, so nobody reads a chat by knowing an email.
+  assert.equal((await post(message({ email: 'chloe.chat@example.org', name: 'Chloe', booking: null, phone: null, body: 'Plain message' }))).status, 200);
+  assert.equal((await post(message({ email: 'chloe.chat@example.org', name: 'Chloe', chat: OTHER_CHAT, booking: null, phone: null, body: 'Another tab' }))).status, 200);
+  const hers = (await websiteThreads()).filter(x => x.guest_email === 'chloe.chat@example.org');
+  assert.equal(hers.length, 3);
+  assert.equal(hers.filter(x => x.thread_ref.startsWith('website-chat:')).length, 2);
+  // A malformed chat key is refused like any other bad field.
+  for (const chat of ['short', 'x'.repeat(129), 'has spaces in it and is long enough to pass the length', '../../../../etc/passwd/../../../../etc/passwd'])
+    assert.equal((await post(message({ chat }))).status, 400, chat);
+});
+
+test('reading a chat back: the key is checked first, an unknown chat is empty, and the guest sees only their own words', async () => {
+  for (const key of [null, '', KEY.slice(0, -1) + 'Q']) assert.equal((await read(CHAT, { key })).status, 401);
+  assert.equal((await read(CHAT, { method: 'GET' })).status, 405);
+  for (const raw of ['{nope', JSON.stringify({ chat: 'short' }), JSON.stringify({ chat: CHAT, extra: 'x'.repeat(2000) })]) assert.equal((await read(null, { raw })).status, 400, raw);
+  reset({});
+  assert.equal((await read(CHAT)).status, 503);
+  reset();
+  assert.deepEqual(await (await read('chat_' + 'n'.repeat(40))).json(), { ok: true, found: false, messages: [] });
+  const body = await (await read(CHAT)).json();
+  assert.equal(body.found, true);
+  assert.deepEqual(body.messages.map(m => [m.from, m.body]), [['guest', 'Hi, I would like to book from 10 Nov to 16 Nov for 2 guests.'], ['guest', 'Is there a cot?']]);
+  assert.ok(body.messages.every(m => m.id && m.sentAt && !('name' in m)));
+  assert.ok(state.quotas.some(q => q.scope === 'website-chat-read' && q.maximum === 30 && q.seconds === 60));
+  // The other chat shows only its own message.
+  assert.deepEqual((await (await read(OTHER_CHAT)).json()).messages.map(m => m.body), ['Another tab']);
+  assert.equal(chatRoute.guestWords('Booking request: 1 Dec to 3 Dec 2026 · 2 guests\nPhone: 07700 900123\n\nHello'), 'Hello');
+  assert.equal(chatRoute.guestWords('Home: Crail · cottage-in-crail\nDogs welcome?'), 'Dogs welcome?');
+  assert.equal(chatRoute.guestWords('Phone: is the wifi fast?'), 'Phone: is the wifi fast?');
+});
+
+test('the inbox marks a chat, and Send puts the reply in the chat (never an email), even with email replies switched off', async () => {
+  reset({ WEBSITE_MESSAGES_KEY: KEY });
+  const t = await chatThread();
+  await as(ANNA);
+  const view = inboxThreadSchema.parse((await db.query("select public.workspace_guest_inbox_read('thread',$1,null) r", [t.id])).rows[0].r);
+  await db.exec('reset role');
+  assert.equal(view.thread.websiteChat, true);
+  const { guestSendRoute } = await vite.ssrLoadModule('/lib/repair-contractors.ts');
+  const { repliesByEmail, repliesInChat } = await vite.ssrLoadModule('/lib/guest-inbox-policy.ts');
+  assert.equal(guestSendRoute({ ...view, canSend: false, canSendEmail: false }), 'send');
+  assert.deepEqual([repliesInChat(view.thread), repliesByEmail(view.thread)], [true, false]);
+  const plain = (await websiteThreads()).find(x => x.guest_email === 'chloe.chat@example.org' && !x.thread_ref.startsWith('website-chat:'));
+  await as(ANNA);
+  const plainView = inboxThreadSchema.parse((await db.query("select public.workspace_guest_inbox_read('thread',$1,null) r", [plain.id])).rows[0].r);
+  await db.exec('reset role');
+  assert.deepEqual([plainView.thread.websiteChat, guestSendRoute({ ...plainView, canSend: false, canSendEmail: false })], [false, 'none']);
+
+  const requestId = crypto.randomUUID();
+  const response = await replies.sendGuestReply({ client: inboxClient(ANNA) }, { action: 'sendReply', requestId, threadId: t.id, body: 'Yes, we can add a cot.' });
+  assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+  assert.deepEqual(state.resend, []);
+  const reply = (await messagesOf(t)).at(-1);
+  assert.deepEqual([reply.direction, reply.delivery, reply.channel, reply.author_user_id, reply.body], ['team', 'sent', 'website', users[ANNA], 'Yes, we can add a cot.']);
+  // Pressing Send again with the same request: stored once.
+  assert.equal((await replies.sendGuestReply({ client: inboxClient(ANNA) }, { action: 'sendReply', requestId, threadId: t.id, body: 'Yes, we can add a cot.' })).status, 200);
+  assert.equal((await messagesOf(t)).filter(m => m.direction === 'team').length, 1);
+  await as(ANNA);
+  assert.equal(inboxThreadSchema.parse((await db.query("select public.workspace_guest_inbox_read('thread',$1,null) r", [t.id])).rows[0].r).thread.waitingSince, null);
+  await db.exec('reset role');
+  // The guest's chat window shows it, with the team member's first name.
+  const shown = (await (await read(CHAT)).json()).messages.at(-1);
+  assert.deepEqual([shown.from, shown.body, shown.name], ['team', 'Yes, we can add a cot.', 'Anna']);
+  // A non-chat website conversation with email switched off is still refused, and nothing is written.
+  const before = (await db.query('select count(*) n from private.workspace_guest_reply_requests')).rows[0].n;
+  assert.equal((await replies.sendGuestReply({ client: inboxClient(ANNA) }, { action: 'sendReply', requestId: crypto.randomUUID(), threadId: plain.id, body: 'Hello' })).status, 503);
+  assert.equal((await db.query('select count(*) n from private.workspace_guest_reply_requests')).rows[0].n, before);
+});
+
+test('a chat leaves out hidden messages and replies that did not go out; the chat functions are for the service role only', async () => {
+  const t = await chatThread();
+  const [firstGuest] = await messagesOf(t);
+  await db.query("update private.workspace_guest_messages set hidden_at=now() where id=$1", [firstGuest.id]);
+  await db.query("insert into private.workspace_guest_messages(source,external_id,thread_ref,property_id,channel,direction,sent_at,author_user_id,body,delivery) values('website','chat-out:failed-one',$1,$2,'website','team',now(),$3,'Not delivered','failed')", [t.thread_ref, HARBOUR, users[ANNA]]);
+  const bodies = (await (await read(CHAT)).json()).messages.map(m => m.body);
+  assert.deepEqual(bodies, ['Is there a cot?', 'Yes, we can add a cot.']);
+  await as(ANNA);
+  for (const fn of ['workspace_website_chat_read', 'workspace_website_reply_result'])
+    await assert.rejects(db.query(`select public.${fn}('{}'::jsonb)`), /permission denied/, fn);
+  await db.exec('reset role');
+  // The reply result refuses a conversation that is not a chat.
+  const plain = (await websiteThreads()).find(x => x.guest_email === 'chloe.chat@example.org' && !x.thread_ref.startsWith('website-chat:'));
+  const requestId = crypto.randomUUID();
+  await db.query('insert into private.workspace_guest_reply_requests(request_id,thread_id,user_id,body) values($1,$2,$3,$4)', [requestId, plain.id, users[ANNA], 'x']);
+  await asBackend();
+  await assert.rejects(db.query('select public.workspace_website_reply_result($1)', [{ requestId }]), /Not a website chat/);
+  await db.exec('reset role');
 });

@@ -73,7 +73,9 @@ test('with sending switched off, Send is refused with a clear message and Hostaw
     const response = await reply();
     assert.equal(response.status, 503, JSON.stringify(env));
     assert.match((await response.json()).error, /Sending replies from Recharge is switched off\. Reply in Hostaway/);
-    noWrites();
+    // Only a read, to see whether the conversation is a website chat (answered in the chat whatever the switches); nothing written.
+    assert.deepEqual(state.rpcCalls.map(c => c.name), ['workspace_guest_inbox_read']);
+    assert.deepEqual([state.hostaway, state.securityCalls], [[], []]);
   }
 });
 

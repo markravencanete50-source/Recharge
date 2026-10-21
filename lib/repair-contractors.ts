@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { poundsToMinor } from './repairs-live';
-import { repliesByEmail } from './guest-inbox-policy';
+import { repliesByEmail, repliesInChat } from './guest-inbox-policy';
 
 // Repairs with contractors (plan approved by Lee on 15 October 2026; database: migration 20261021200000).
 // A guest reports a problem, Stays try to fix it over chat, and if they can't they send it to ONE named contractor (a
@@ -155,8 +155,8 @@ export function matchStay<T extends { id: string; reference: string; checkIn: st
     ?? (checkIn ? stays.find(s => s.checkIn === checkIn) : undefined)?.id ?? '';
 }
 // How a reply reaches the guest from Recharge: through Hostaway, by email, or not at all (logged by hand).
-export function guestSendRoute(view: { canSend: boolean; canSendEmail: boolean; thread: { source: string } }): 'send' | 'none' {
-  return (view.canSend && view.thread.source === 'hostaway') || (view.canSendEmail && repliesByEmail(view.thread)) ? 'send' : 'none';
+export function guestSendRoute(view: { canSend: boolean; canSendEmail: boolean; thread: { source: string; websiteChat?: boolean } }): 'send' | 'none' {
+  return (view.canSend && view.thread.source === 'hostaway') || (view.canSendEmail && repliesByEmail(view.thread)) || repliesInChat(view.thread) ? 'send' : 'none';
 }
 // The guest chat is for the team who talk to guests: never a contractor (Ready never sees guest contact details).
 export const seesGuestChat = (role: string) => ['stays', 'admin', 'super_admin'].includes(role);

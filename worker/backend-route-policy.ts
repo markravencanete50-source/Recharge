@@ -32,8 +32,8 @@ const endpoints = new Set([
   "/enquiry", "/api/enquiry", "/api/enquiry/upload", "/api/workspace/enquiry-files", "/api/mobile/enquiry-files",
   // The estimate emailed with a private link: the client's page (no account) and the team's Resend / Copy link.
   "/estimate", "/api/estimate", "/api/workspace/estimate-link", "/api/mobile/estimate-link",
-  // Guest messages from the company website's server (shared key; 20261026200000).
-  "/api/website/guest-messages",
+  // Guest messages from the company website's server, and its chat window reading a chat back (shared key; 20261026200000, 20261027100000).
+  "/api/website/guest-messages", "/api/website/guest-chat",
   // The survey a guest opens from the email after a direct stay (no account; the link is for one stay).
   "/stay-survey", "/api/stay-survey",
   // Onboarding settings (the contract used as the agreement template) and the owner's account made on Proceed.
