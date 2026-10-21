@@ -146,6 +146,9 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
   // The guest message whose menu is open (Report message), as in Team chat.
   const [reporting, setReporting] = useState<Loaded["messages"][number] | null>(null);
   const [repairing, setRepairing] = useState(false);
+  // Translated guest messages the reader switched back to the original wording.
+  const [originals, setOriginals] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleOriginal = (id: string) => setOriginals(current => { const next = new Set(current); if (!next.delete(id)) next.add(id); return next; });
   const scroller = useRef<ScrollView>(null);
   const load = useCallback(async () => {
     try { setData(inboxThreadSchema.parse((await readInbox({ section: "thread", threadId })).data)); setError(""); }
@@ -231,7 +234,12 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
               <View key={m.id} style={{ alignSelf: team ? "flex-end" : "flex-start", maxWidth: "86%", gap: 3 }}>
                 {m.hidden ? <HiddenMessage p={p} /> : <View style={[ui.row, { gap: 4, alignItems: "flex-end" }]}>
                   <View style={{ flexShrink: 1, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, borderBottomRightRadius: team ? 6 : 18, borderBottomLeftRadius: team ? 18 : 6, backgroundColor: team ? p.primary : p.surface, borderWidth: team ? 0 : 1, borderColor: p.border }}>
-                    <Text selectable style={{ color: team ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20, fontStyle: m.body ? "normal" : "italic" }}>{m.body ?? "Replied on the platform"}</Text>
+                    <Text selectable style={{ color: team ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20, fontStyle: m.body ? "normal" : "italic" }}>{m.translation && !originals.has(m.id) ? m.translation.english : m.body ?? "Replied on the platform"}</Text>
+                    {/* A message in another language reads in English first; the original is one tap away (20261026000000). */}
+                    {!!m.translation && <MotionPress accessibilityRole="button" accessibilityLabel={originals.has(m.id) ? "Show the English translation" : `Show the original ${m.translation.language}`} onPress={() => toggleOriginal(m.id)} style={[ui.row, { gap: 4, marginTop: 6 }]}>
+                      <Feather name="globe" size={12} color={p.muted} />
+                      <Text style={[ui.small, { color: p.muted, fontSize: 11 }]}>{originals.has(m.id) ? `Original ${m.translation.language} · ` : `Translated from ${m.translation.language} · `}<Text style={[ui.small, { color: p.primary, fontSize: 11, fontWeight: "600" }]}>{originals.has(m.id) ? "Show English" : "Show original"}</Text></Text>
+                    </MotionPress>}
                   </View>
                   {!team && <MessageMenuButton p={p} onPress={() => setReporting(m)} />}
                 </View>}

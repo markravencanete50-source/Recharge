@@ -8,6 +8,10 @@ export const workspaceGuestInbox = rpcRoute({
     const result = await client.rpc('workspace_guest_inbox_read', input.section === 'list'
       ? { section: 'list', target: null, status_filter: input.status } : { section: 'thread', target: input.threadId, status_filter: null });
     if (result.error || !result.data || typeof result.data !== 'object') return result;
+    // Guest messages not written in English also come with their English translation (lib/guest-translation-server.ts).
+    const data = result.data as { messages?: unknown };
+    if (input.section === 'thread' && Array.isArray(data.messages))
+      data.messages = await import('./guest-translation-server').then(m => m.withTranslations(data.messages as { id: string; direction: string; body: string | null }[])).catch(() => data.messages);
     return { ...result, data: { ...result.data, canSend: await import('./guest-reply-server').then(m => m.hostawayRepliesEnabled()), canSendEmail: await import('./resend-email').then(m => m.emailRepliesEnabled()) } };
   },
   // Sending goes to Hostaway as well as the database, so the server carries it out (lib/guest-reply-server.ts).

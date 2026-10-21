@@ -5,6 +5,8 @@ if(source.main!=='index.js'||!source.compatibility_flags?.includes('nodejs_compa
 const config={name:'recharge-backend',main:'index.js',compatibility_date:source.compatibility_date,compatibility_flags:source.compatibility_flags,no_bundle:true,rules:source.rules,
  assets:{directory:'../client',binding:'ASSETS',run_worker_first:true},
  vars:{BACKEND_ONLY:'true',SUPABASE_URL:'https://brixfalrrmzqoioggvfx.supabase.co'},
+ // Workers AI, for guest messages translated into English (lib/guest-translation-server.ts). No key: it is billed to the Cloudflare account.
+ ai:{binding:'AI'},
  triggers:{crons:['* * * * *']},
  dev:{ip:'127.0.0.1',local_protocol:'http'},observability:{enabled:true,head_sampling_rate:1}};
 // Attach the app to its own address only when asked. The domain's DNS must already be on Cloudflare,
