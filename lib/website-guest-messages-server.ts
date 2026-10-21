@@ -74,8 +74,9 @@ export async function websiteGuestMessageRoute(request: Request) {
   if (expected.length < 32) return businessResponse({ error: 'Website messages are not set up yet' }, 503);
   if (!await sameSecret(request.headers.get(WEBSITE_KEY_HEADER) ?? '', expected)) return businessResponse({ error: 'Not authorised' }, 401);
   try {
-    // Every message comes from the website's servers, so this is a ceiling on the website as a whole.
-    const perAddress = await requestQuota(request, 'website-message-ip', 1200, 3600);
+    // Every message comes from the website's servers, so this is a ceiling on the website as a whole (1,000 is the most the
+    // rate limiter accepts: auth_server_rate_limit refuses anything higher).
+    const perAddress = await requestQuota(request, 'website-message-ip', 1000, 3600);
     if (!perAddress.allowed) return tooMany(perAddress.retryAfter);
     const parsed = websiteMessageSchema.safeParse(await boundedJson(request, 32_768));
     if (!parsed.success) return businessResponse({ error: parsed.error.issues[0]?.message || 'Invalid message', field: parsed.error.issues[0]?.path.join('.') || null }, 400);

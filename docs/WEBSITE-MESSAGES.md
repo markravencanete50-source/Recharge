@@ -17,7 +17,7 @@ from guestrelations@ as before.
   `home`, `phone` and `booking` may be null or missing; `name` (120), `email` and `body` (4,000) are required; dates are `YYYY-MM-DD`
   and check-out is after check-in. Anything else: `400` with the first problem in `error`.
   `chat` (optional) is the chat key the guest's browser made for this chat: 32 to 128 characters of `A-Z a-z 0-9 _ -`.
-- **Quotas:** 1,200 messages an hour from the website's servers (every message comes from Vercel, so this is a ceiling on the website
+- **Quotas:** 1,000 messages an hour from the website's servers (every message comes from Vercel, so this is a ceiling on the website
   as a whole), 10 an hour per guest email address (40 when the message is part of a chat), and 30 an hour per chat. Over any: `429`
   with `Retry-After`. These routes are not counted against the app's general per-address limit, since every guest reaches them from
   Vercel's few addresses.
