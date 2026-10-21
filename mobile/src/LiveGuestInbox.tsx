@@ -75,7 +75,10 @@ function ThreadRow({ p, t, targets, first, unread = false, active = false, onPre
           {!!t.lastMessageAt && <Text style={[ui.small, { color: p.muted }]}>{chatTime(t.lastMessageAt)}</Text>}
         </View>
         <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{where}</Text>
-        {!!t.preview && <Text numberOfLines={2} style={[ui.small, { color: p.text }]}>{t.lastFrom === "team" ? "You: " : ""}{t.preview}</Text>}
+        {!!t.preview && <View style={[ui.row, { gap: 4, alignItems: "flex-start" }]}>
+          {!!t.previewLanguage && <Feather name="globe" size={12} color={p.muted} style={{ marginTop: 3 }} accessibilityLabel={`Translated from ${t.previewLanguage}`} />}
+          <Text numberOfLines={2} style={[ui.small, { color: p.text, flex: 1 }]}>{t.lastFrom === "team" ? "You: " : ""}{t.preview}</Text>
+        </View>}
         <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
           {wait && <Tag label={`Waiting ${waitLabel(wait.minutes)}`} tone={GRADE_TONE[wait.grade]} p={p} />}
           {t.status === "done" && <Tag label="Done" tone="plain" p={p} />}
@@ -146,6 +149,9 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
   // The guest message whose menu is open (Report message), as in Team chat.
   const [reporting, setReporting] = useState<Loaded["messages"][number] | null>(null);
   const [repairing, setRepairing] = useState(false);
+  // Translated guest messages the reader switched back to the original wording.
+  const [originals, setOriginals] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleOriginal = (id: string) => setOriginals(current => { const next = new Set(current); if (!next.delete(id)) next.add(id); return next; });
   const scroller = useRef<ScrollView>(null);
   const load = useCallback(async () => {
     try { setData(inboxThreadSchema.parse((await readInbox({ section: "thread", threadId })).data)); setError(""); }
@@ -181,7 +187,7 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
     const text = outside ? "" : reply.trim();
     if (!outside && !text) { setError("Write the reply, or choose “I replied on the platform”."); return; }
     if (replyId.current?.text !== text) replyId.current = { text, id: Crypto.randomUUID() };
-    if (!(await run({ action: "reply", requestId: replyId.current.id, threadId, body: text }, "Reply recorded", () => setReply("")))) return;
+    if (!(await run({ action: "reply", requestId: replyId.current.id, threadId, body: text }, "Reply recorded", () => { setReply(""); setEnglish(null); }))) return;
     replyId.current = null;
     // Replies aren't sent from here: copy it so it can be pasted into the platform. A Hostaway conversation brings the real reply in itself.
     if (text && t && t.source === "manual" && Platform.OS === "web" && globalThis.navigator?.clipboard) {
@@ -196,9 +202,25 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
     if (!text || !t || busy) return;
     if (sendId.current?.text !== text) sendId.current = { text, id: Crypto.randomUUID() };
     // On a failure the text stays in the box and the error shows, so Send can be pressed again.
-    const sent = await run({ action: "sendReply", requestId: sendId.current.id, threadId, body: text }, "Reply sent", () => { setReply(""); setNote(viaEmail ? "Emailed to the guest from guestrelations@rechargegroup.co.uk." : `Sent to the guest through Hostaway on ${CHANNEL_LABEL[t.channel]}.`); });
+    const sent = await run({ action: "sendReply", requestId: sendId.current.id, threadId, body: text }, "Reply sent", () => { setReply(""); setEnglish(null); setNote(viaEmail ? "Emailed to the guest from guestrelations@rechargegroup.co.uk." : `Sent to the guest through Hostaway on ${CHANNEL_LABEL[t.channel]}.`); });
     if (sent) sendId.current = null;
   }
+  // The guest writes in another language (their newest translated message): a reply written in English can be put into
+  // that language before it is sent, and the English is kept on screen so the VA knows what it says (20261026100000).
+  const guestLanguage = [...(data?.messages ?? [])].reverse().find(m => m.direction === "guest" && m.translation)?.translation?.language ?? null;
+  const [english, setEnglish] = useState<string | null>(null);
+  async function translateReply() {
+    const text = reply.trim();
+    if (!text || !guestLanguage || busy) return;
+    setBusy(true); setError("");
+    try {
+      const result = await writeInbox({ action: "translateReply", requestId: Crypto.randomUUID(), threadId, body: text, language: guestLanguage });
+      const translated = String((result.data as { text?: string } | undefined)?.text ?? "");
+      if (!translated) throw new Error(String((result as { error?: string }).error ?? "The translation didn’t come back. Try again."));
+      setEnglish(text); setReply(translated);
+    } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  const backToEnglish = () => { if (english !== null) setReply(english); setEnglish(null); };
   const wait = t && t.status === "open" && data ? waitGrade(t.waitingSince, data.targets) : null;
   // Opened from a pop-up's Reply: the reply box is ready to type in once the conversation has loaded.
   const replyBox = useRef<TextInput>(null), replied = useRef(false), canReply = t?.status === "open";
@@ -231,7 +253,12 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
               <View key={m.id} style={{ alignSelf: team ? "flex-end" : "flex-start", maxWidth: "86%", gap: 3 }}>
                 {m.hidden ? <HiddenMessage p={p} /> : <View style={[ui.row, { gap: 4, alignItems: "flex-end" }]}>
                   <View style={{ flexShrink: 1, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, borderBottomRightRadius: team ? 6 : 18, borderBottomLeftRadius: team ? 18 : 6, backgroundColor: team ? p.primary : p.surface, borderWidth: team ? 0 : 1, borderColor: p.border }}>
-                    <Text selectable style={{ color: team ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20, fontStyle: m.body ? "normal" : "italic" }}>{m.body ?? "Replied on the platform"}</Text>
+                    <Text selectable style={{ color: team ? p.onPrimary : p.text, fontSize: 14, lineHeight: 20, fontStyle: m.body ? "normal" : "italic" }}>{m.translation && !originals.has(m.id) ? m.translation.english : m.body ?? "Replied on the platform"}</Text>
+                    {/* A message in another language reads in English first; the original is one tap away (20261026000000). */}
+                    {!!m.translation && <MotionPress accessibilityRole="button" accessibilityLabel={originals.has(m.id) ? "Show the English translation" : `Show the original ${m.translation.language}`} onPress={() => toggleOriginal(m.id)} style={[ui.row, { gap: 4, marginTop: 6 }]}>
+                      <Feather name="globe" size={12} color={p.muted} />
+                      <Text style={[ui.small, { color: p.muted, fontSize: 11 }]}>{originals.has(m.id) ? `Original ${m.translation.language} · ` : `Translated from ${m.translation.language} · `}<Text style={[ui.small, { color: p.primary, fontSize: 11, fontWeight: "600" }]}>{originals.has(m.id) ? "Show English" : "Show original"}</Text></Text>
+                    </MotionPress>}
                   </View>
                   {!team && <MessageMenuButton p={p} onPress={() => setReporting(m)} />}
                 </View>}
@@ -252,14 +279,20 @@ function GuestThreadPane({ p, threadId, properties, account, onBack, onChanged, 
           <View style={{ gap: 6 }}>
             <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Your reply</Text>
             <SavedReplies p={p} audience="guest" fill={{ name: t.guestName, property: t.propertyName }} onInsert={text => setReply(current => current.trim() ? current.trimEnd() + "\n\n" + text : text)} />
-            <TextInput ref={replyBox} value={reply} onChangeText={setReply} multiline placeholder={t.source === "manual" ? `Write it here, then send it on ${CHANNEL_LABEL[t.channel]}` : "Write your reply"} placeholderTextColor={p.muted} accessibilityLabel="Your reply"
+            <TextInput ref={replyBox} value={reply} onChangeText={text => { setReply(text); if (!text.trim()) setEnglish(null); }} multiline placeholder={t.source === "manual" ? `Write it here, then send it on ${CHANNEL_LABEL[t.channel]}` : "Write your reply"} placeholderTextColor={p.muted} accessibilityLabel="Your reply"
               style={{ minHeight: 88, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: p.controlBorder, color: p.text, backgroundColor: p.background, textAlignVertical: "top", fontFamily: "Montserrat_500Medium", fontSize: 14 }} />
           </View>
           <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
             {viaHostaway ? <Button label={busy ? "Sending…" : "Send"} icon="send" primary p={p} disabled={busy || !reply.trim()} onPress={() => void sendToGuest()} />
               : <Button label={busy ? "Saving…" : "Save reply"} icon="send" primary p={p} disabled={busy || !reply.trim()} onPress={() => void sendReply(false)} />}
             {!!wait && !viaHostaway && <Button label="I replied on the platform" icon="check" p={p} disabled={busy} onPress={() => void sendReply(true)} />}
+            {!!guestLanguage && english === null && <Button label={busy ? "Translating…" : `Translate to ${guestLanguage}`} icon="globe" p={p} disabled={busy || !reply.trim()} onPress={() => void translateReply()} />}
+            {english !== null && <Button label="Back to English" icon="rotate-ccw" p={p} disabled={busy} onPress={backToEnglish} />}
           </View>
+          {english !== null && <View style={{ gap: 4, padding: 12, borderRadius: 14, backgroundColor: p.background }}>
+            <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>{`Your reply in ${guestLanguage ?? "the guest’s language"} is in the box above. In English it says:`}</Text>
+            <Text selectable style={[ui.small, { color: p.text }]}>{english}</Text>
+          </View>}
           {t.source === "manual" && <Text style={[ui.small, { color: p.muted }]}>Replies aren’t sent to {CHANNEL_LABEL[t.channel]} from here. Saving one records when you replied, for reply times.</Text>}
           {viaEmail && <Text style={[ui.small, { color: p.muted }]}>Send emails your reply to {t.guestName ?? "the guest"} from guestrelations@rechargegroup.co.uk. Their reply comes back here by itself.</Text>}
           {viaHostaway && !viaEmail && <Text style={[ui.small, { color: p.muted }]}>Send delivers your reply to the guest through Hostaway on {CHANNEL_LABEL[t.channel]}. Their replies show up here by themselves.</Text>}

@@ -28,6 +28,8 @@ export const inboxActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('reply'), requestId: uuid, threadId: uuid, body: body.default(''), sentAt: when }).strict(),
   // A reply delivered to the guest through Hostaway (Hostaway conversations only, and only while sending is switched on).
   z.object({ action: z.literal('sendReply'), requestId: uuid, threadId: uuid, body: body.min(1, 'Write the reply') }).strict(),
+  // An English reply put into the guest's language before it is sent (handled by the server, nothing stored; 20261026100000).
+  z.object({ action: z.literal('translateReply'), requestId: uuid, threadId: uuid, body: body.min(1, 'Write the reply'), language: z.string().trim().regex(/^[A-Za-z][A-Za-z ()-]{0,39}$/, 'Choose a language') }).strict(),
   z.object({ action: z.literal('setStatus'), requestId: uuid, threadId: uuid, status: z.enum(['open', 'done']) }).strict(),
   z.object({ action: z.literal('editThread'), requestId: uuid, threadId: uuid, propertyId: uuid.nullable(), guestName: z.string().trim().min(1, 'Add the guest’s name').max(120), reservationRef: z.string().trim().max(100).default('') }).strict(),
 ]).superRefine((value, context) => {
@@ -43,6 +45,8 @@ export const guestThreadSchema = z.object({
   mine: z.boolean().default(false),
   // When the stay's reason was asked (Hostaway conversations only), and the answer once known (20261021800000).
   stayReason: threadStayReasonSchema.nullable().default(null),
+  // The preview is shown in English, translated from this language (20261026100000).
+  previewLanguage: z.string().optional(),
 });
 export type GuestThread = z.infer<typeof guestThreadSchema>;
 const targets = z.object({ greenMinutes: z.number(), amberMinutes: z.number() });
@@ -52,7 +56,9 @@ export const isGuestEmail = (t: { source: string; channel: string }) => t.source
 export const inboxListSchema = z.object({ threads: z.array(guestThreadSchema), waiting: z.number(), targets, connected: z.boolean(), canSend: z.boolean().default(false), canSendEmail: z.boolean().default(false) });
 // files: attachments kept from an email (open them through /api/workspace/email-files).
 export const guestFileSchema = z.object({ id: uuid, filename: z.string(), mime: z.string(), bytes: z.number() });
-export const guestMessageSchema = z.object({ id: uuid, direction: z.enum(['guest', 'team']), body: z.string().nullable(), hidden: z.boolean().default(false), sentAt: z.string(), delivery: z.string().nullable(), author: z.string().nullable(), files: z.array(guestFileSchema).default([]) });
+export const guestMessageSchema = z.object({ id: uuid, direction: z.enum(['guest', 'team']), body: z.string().nullable(), hidden: z.boolean().default(false), sentAt: z.string(), delivery: z.string().nullable(), author: z.string().nullable(), files: z.array(guestFileSchema).default([]),
+  // A guest message written in another language, in English, and the language it was written in (20261026000000).
+  translation: z.object({ language: z.string(), english: z.string() }).optional() });
 export const inboxThreadSchema = z.object({ thread: guestThreadSchema, targets, messages: z.array(guestMessageSchema), canSend: z.boolean().default(false), canSendEmail: z.boolean().default(false) });
 
 // How long a guest has been waiting, graded like reply times: green, amber, then red.
