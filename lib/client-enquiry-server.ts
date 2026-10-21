@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { authSecurityConfiguration, requestQuota, securityHash } from './auth-security';
-import { boundedJson, isSameOrigin } from './auth-security-policy';
+import { authSecurityConfiguration, enquiryAllowedOrigins, requestQuota, securityHash } from './auth-security';
+import { boundedJson, isSameOrigin, listedOrigin, securityHeaders } from './auth-security-policy';
 import { businessContext, businessResponse, databaseFailure, viewAsFailure } from './business-server';
 import { isNativeRequest } from './native-request-policy';
 import { boundedFormData } from './bounded-form';
@@ -95,8 +95,27 @@ const submitSchema = z.object({ token: z.string().regex(tokenPattern), answers: 
 // address, the upload limits as before, and a cap on new forms an hour across the site in the database.
 const startSchema = z.object({ action: z.literal('start') }).strict();
 const newToken = () => Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join('');
+// The company website posts the same form from its own pages (ENQUIRY_ALLOWED_ORIGINS, docs/WEBSITE-ENQUIRIES.md): the
+// same start and submit, quotas and checks, recorded the same way. Its answers, errors included, carry CORS headers for
+// that exact origin only (never "*"); any other origin is refused with none.
+const withEnquiryCors = (response: Response, site: string) => {
+  response.headers.set('Access-Control-Allow-Origin', site);
+  response.headers.append('Vary', 'Origin');
+  return response;
+};
 export async function enquirySubmitRoute(request: Request) {
-  if (!isSameOrigin(request, authSecurityConfiguration()?.origin)) return businessResponse({ error: 'Invalid request origin' }, 403);
+  const origin = authSecurityConfiguration()?.origin;
+  if (isSameOrigin(request, origin)) return submitEnquiry(request);
+  const site = listedOrigin(request, enquiryAllowedOrigins(), origin);
+  if (!site) return businessResponse({ error: 'Invalid request origin' }, 403);
+  return withEnquiryCors(await submitEnquiry(request), site);
+}
+export function enquiryPreflightRoute(request: Request) {
+  const site = listedOrigin(request, enquiryAllowedOrigins(), authSecurityConfiguration()?.origin);
+  if (!site) return new Response(null, { status: 403, headers: securityHeaders });
+  return withEnquiryCors(new Response(null, { status: 204, headers: { ...securityHeaders, 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'content-type', 'Access-Control-Max-Age': '600' } }), site);
+}
+async function submitEnquiry(request: Request) {
   try {
     const quota = await requestQuota(request, 'enquiry-submit', 20, 3600);
     if (!quota.allowed) return tooMany(quota.retryAfter);

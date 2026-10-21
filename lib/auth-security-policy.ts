@@ -29,6 +29,22 @@ export function isSameOrigin(request: Request, origin?: string): boolean {
   const expected = origin || new URL(request.url).origin;
   return new URL(request.url).origin === expected && request.headers.get("origin") === expected;
 }
+// Other sites allowed to post the public enquiry form (ENQUIRY_ALLOWED_ORIGINS: comma-separated, e.g. the company website).
+// Each entry must be a bare https origin (localhost may use http); anything else, "*" included, is dropped.
+export function originList(raw?: string): string[] {
+  return (raw ?? "").split(/[\s,]+/).filter(Boolean).flatMap(value => {
+    try {
+      const url = new URL(value);
+      const secure = url.protocol === "https:" || (url.protocol === "http:" && (url.hostname === "localhost" || url.hostname === "127.0.0.1"));
+      return secure && !url.username && !url.password && url.pathname === "/" && !url.search && !url.hash ? [url.origin] : [];
+    } catch { return []; }
+  });
+}
+// The request's Origin when it is exactly one of the listed sites (and the request came to this app's own address), else null.
+export function listedOrigin(request: Request, allowed: readonly string[], origin?: string): string | null {
+  const sent = request.headers.get("origin");
+  return sent && allowed.includes(sent) && new URL(request.url).origin === (origin || new URL(request.url).origin) ? sent : null;
+}
 export async function boundedJson(request: Pick<Request, "body" | "headers">, limit = 16_384): Promise<unknown> {
   if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") return null;
   const reader = request.body?.getReader(); if (!reader) return null;
