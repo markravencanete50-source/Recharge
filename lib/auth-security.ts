@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { env } from "cloudflare:workers";
 import { supabaseConfiguration, workspaceSupabase } from "@/lib/supabase-server";
-import { uuidSchema } from "@/lib/auth-security-policy";
+import { originList, uuidSchema } from "@/lib/auth-security-policy";
 import { z } from "zod";
 import { confirmedContact } from './registration-policy';
 export function authSecurityConfiguration() {
@@ -15,6 +15,11 @@ export function authSecurityConfiguration() {
     if (origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash || (origin.protocol !== "https:" && origin.hostname !== "127.0.0.1" && origin.hostname !== "localhost")) return null;
     return { ...config, key, salt, origin: origin.origin };
   } catch { return null; }
+}
+// The company website and any other site allowed to post the public enquiry form (lib/client-enquiry-server.ts).
+export function enquiryAllowedOrigins() {
+  const settings = env as unknown as Record<string, string | undefined>;
+  return originList(settings.ENQUIRY_ALLOWED_ORIGINS || process.env.ENQUIRY_ALLOWED_ORIGINS);
 }
 export async function securityHash(scope: string, value: string) {
   const config = authSecurityConfiguration(); if (!config) throw new Error("Security connection unavailable");
