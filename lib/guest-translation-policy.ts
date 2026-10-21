@@ -28,7 +28,11 @@ export const translatorAnswerSchema = z.object({
   language: z.string().trim().regex(/^[A-Za-z][A-Za-z ()-]{0,39}$/),
   english: z.string().max(12000),
 });
+// The translator's answer for a reply going out in the guest's language.
+export const replyAnswerSchema = z.object({ text: z.string().trim().min(1).max(5000) });
+export const LANGUAGE_NAME = /^[A-Za-z][A-Za-z ()-]{0,39}$/;
 export type StoredTranslation = { id: string; language: string; english: string | null };
+export const latestMessagesSchema = z.array(z.object({ threadId: z.string().uuid(), id: z.string().uuid(), direction: z.string(), body: z.string().nullable(), language: z.string().nullable(), english: z.string().nullable() }));
 export const storedTranslationsSchema = z.array(z.object({ id: z.string().uuid(), language: z.string(), english: z.string().nullable() }));
 // The message as shown: the English text when there is one, with the language it came from.
 export const isEnglishName = (language: string) => /^english\b/i.test(language.trim());

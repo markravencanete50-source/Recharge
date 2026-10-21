@@ -9,12 +9,16 @@ export const workspaceGuestInbox = rpcRoute({
       ? { section: 'list', target: null, status_filter: input.status } : { section: 'thread', target: input.threadId, status_filter: null });
     if (result.error || !result.data || typeof result.data !== 'object') return result;
     // Guest messages not written in English also come with their English translation (lib/guest-translation-server.ts).
-    const data = result.data as { messages?: unknown };
+    const data = result.data as { messages?: unknown; threads?: unknown };
     if (input.section === 'thread' && Array.isArray(data.messages))
       data.messages = await import('./guest-translation-server').then(m => m.withTranslations(data.messages as { id: string; direction: string; body: string | null }[])).catch(() => data.messages);
+    if (input.section === 'list' && Array.isArray(data.threads))
+      data.threads = await import('./guest-translation-server').then(m => m.withPreviewTranslations(data.threads as { id: string; preview: string | null }[])).catch(() => data.threads);
     return { ...result, data: { ...result.data, canSend: await import('./guest-reply-server').then(m => m.hostawayRepliesEnabled()), canSendEmail: await import('./resend-email').then(m => m.emailRepliesEnabled()) } };
   },
   // Sending goes to Hostaway as well as the database, so the server carries it out (lib/guest-reply-server.ts).
-  handle: (context, input) => input.action === 'sendReply' ? import('./guest-reply-server').then(m => m.sendGuestReply(context, input)) : null,
+  // Translating a reply into the guest's language is done by the server too (lib/guest-translation-server.ts).
+  handle: (context, input) => input.action === 'sendReply' ? import('./guest-reply-server').then(m => m.sendGuestReply(context, input))
+    : input.action === 'translateReply' ? import('./guest-translation-server').then(m => m.translateReply(context, input)) : null,
   action: 'workspace_guest_inbox_action',
 });

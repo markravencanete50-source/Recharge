@@ -28,6 +28,8 @@ export const inboxActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('reply'), requestId: uuid, threadId: uuid, body: body.default(''), sentAt: when }).strict(),
   // A reply delivered to the guest through Hostaway (Hostaway conversations only, and only while sending is switched on).
   z.object({ action: z.literal('sendReply'), requestId: uuid, threadId: uuid, body: body.min(1, 'Write the reply') }).strict(),
+  // An English reply put into the guest's language before it is sent (handled by the server, nothing stored; 20261026100000).
+  z.object({ action: z.literal('translateReply'), requestId: uuid, threadId: uuid, body: body.min(1, 'Write the reply'), language: z.string().trim().regex(/^[A-Za-z][A-Za-z ()-]{0,39}$/, 'Choose a language') }).strict(),
   z.object({ action: z.literal('setStatus'), requestId: uuid, threadId: uuid, status: z.enum(['open', 'done']) }).strict(),
   z.object({ action: z.literal('editThread'), requestId: uuid, threadId: uuid, propertyId: uuid.nullable(), guestName: z.string().trim().min(1, 'Add the guest’s name').max(120), reservationRef: z.string().trim().max(100).default('') }).strict(),
 ]).superRefine((value, context) => {
@@ -43,6 +45,8 @@ export const guestThreadSchema = z.object({
   mine: z.boolean().default(false),
   // When the stay's reason was asked (Hostaway conversations only), and the answer once known (20261021800000).
   stayReason: threadStayReasonSchema.nullable().default(null),
+  // The preview is shown in English, translated from this language (20261026100000).
+  previewLanguage: z.string().optional(),
 });
 export type GuestThread = z.infer<typeof guestThreadSchema>;
 const targets = z.object({ greenMinutes: z.number(), amberMinutes: z.number() });
