@@ -44,6 +44,11 @@ export const NEW_ENQUIRIES = 'New enquiries';
 // "43%" for a row's progress. A finished property is 100.
 export const percentOf = (progress: TrackerItem['progress']): number => progress && progress.total ? Math.round(100 * progress.done / progress.total) : 0;
 
+// A property's onboarding progress at a stage, counted exactly as its tracker row counts it ("3 of 7 steps"), for the
+// owner's onboarding ticket.
+export const journeyProgress = (stage: string) =>
+  progressOf(stepsFor((ONBOARDING_STAGES[stage] ?? ONBOARDING_STAGES.enquiry).reached, stage === 'live' || stage === 'archived', () => ({})));
+
 // The step list shared by an enquiry and a journey: finished steps up to `reached`, then the current one.
 function stepsFor(reached: number, closed: boolean, extra: (i: number) => Partial<TrackerStep>): TrackerStep[] {
   return ONBOARDING_STEPS.map((s, i) => ({ key: s.key, label: s.label, state: i < reached ? 'done' : i === reached && !closed ? 'current' : 'todo', ...extra(i) }));

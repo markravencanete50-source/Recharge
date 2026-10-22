@@ -8,6 +8,8 @@ import { CourseVideo } from "./LiveTraining";
 import { EstimateExplorer } from "./LiveEstimate";
 import { EstimateGuide } from "./LiveOnboardingGuide";
 import { WorkHistory } from "./WorkHistory";
+import { TrackerProgress } from "./Tracker";
+import { journeyProgress } from "../../lib/tracker-onboarding";
 import { readClientOnboarding, saveClientOnboarding } from "./backend/client";
 import { ui, type Palette } from "./theme";
 import { clientOnboardingSchema, decisionForms, DECISION_BUTTON, firstOpenStep, ownerChecklist, propertyFacts, TBC, type ClientOnboarding, type Decision, type FactRow, type SeenStep, type StepMark, type VideoStep } from "../../lib/client-onboarding";
@@ -89,6 +91,8 @@ export function OwnerOnboarding({ p, account, j, property, onForm, details }: { 
       </View>
       <View style={{ gap: 14, minWidth: 0, width: wide ? undefined : "100%", flex: wide ? 3 : undefined }}>
         <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Your checklist</Text>
+        {/* How far the whole onboarding has come, counted as on the onboarding tracker. */}
+        <TrackerProgress p={p} progress={journeyProgress(j.stage)} percent />
         {!!error && <Notice p={p} tone="bad" text={error} />}
         <View style={{ gap: 8 }}>{steps.map(step => {
           const expanded = shown === step.key;

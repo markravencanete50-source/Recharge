@@ -10,6 +10,7 @@ import { PersonAvatar } from "./ChatParts";
 import { TASK_PAGE_WIDTH, TASK_TWO_PANES_FROM } from "./TodoTask";
 import { leadFileLink, readTeams, removeLeadFile, uploadLeadFile, writeTeams } from "./backend/client";
 import { liveApi } from "./LivePages";
+import { TrackerProgress } from "./Tracker";
 import { ui, type Palette } from "./theme";
 import type { ClientEnquiry } from "../../lib/client-enquiry";
 import {
@@ -20,7 +21,7 @@ import {
 import { workflowValues, type WorkflowField } from "../../lib/workflow-forms";
 import { ownCostCategories, ownCostFields, ownCostsFrom } from "../../lib/own-costs";
 import { formatBps, formatDay, formatMoney } from "../../lib/format";
-import { timeAgo } from "../../lib/tracker";
+import { progressOf, timeAgo } from "../../lib/tracker";
 
 // A lead opened as a ticket (Alex's Estimate Delivery, migration 20261025300000), laid out like a to-do's task page: on a
 // computer, what the landlord has told us on the left (TBC beside anything not collected yet) and, on the right, the
@@ -81,6 +82,8 @@ export function LeadTicket({ p, enquiry: e, subtitle, header, onClose, onChanged
       <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>Onboarding checklist</Text>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!read && !error && <Loading p={p} rows={4} />}
+      {/* How far this lead has come: the ticked steps of the checklist below. */}
+      {read && <TrackerProgress p={p} progress={progressOf(leadChecklist(read))} percent />}
       {read && <View style={{ gap: 2 }}>
         {leadChecklist(read).map(c => (
           <View key={c.key}>

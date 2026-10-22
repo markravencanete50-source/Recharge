@@ -8,7 +8,7 @@ import { createServer } from 'vite';
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 after(() => vite.close());
 const mod = await vite.ssrLoadModule('/lib/tracker-onboarding.ts');
-const { ONBOARDING_STEPS, ONBOARDING_STAGES, onboardingTrackerItem, onboardingTrackerItems, enquiryTrackerItem, sortOnboarding, onboardingSection, groupBySection, percentOf, NEW_ENQUIRIES } = mod;
+const { ONBOARDING_STEPS, ONBOARDING_STAGES, onboardingTrackerItem, onboardingTrackerItems, enquiryTrackerItem, sortOnboarding, onboardingSection, groupBySection, percentOf, NEW_ENQUIRIES, journeyProgress } = mod;
 const { ONBOARDING_PHASES } = await vite.ssrLoadModule('/lib/workspace-view.ts');
 const { withFlags } = await vite.ssrLoadModule('/lib/management-flags.ts');
 
@@ -252,4 +252,13 @@ test('the onboarding, licensing and purchase screens take SectionProps, draw a t
 test('none of the new files holds an em dash', () => {
   for (const path of ['lib/tracker-onboarding.ts', 'mobile/src/OnboardingTracker.tsx', 'mobile/src/LicensingList.tsx', 'mobile/src/PurchaseOrdersList.tsx', 'mobile/src/Tracker.tsx', 'tests/tracker-onboarding.test.mjs'])
     assert.ok(!source(path).includes(String.fromCharCode(0x2014)), path);
+});
+
+// The owner's onboarding ticket shows the same progress as the property's tracker row, at every stage.
+test('journeyProgress counts exactly as the tracker row does', () => {
+  for (const stage of Object.keys(ONBOARDING_STAGES)) assert.deepEqual(journeyProgress(stage), onboardingTrackerItem(journey(stage), ctx()).progress, stage);
+  assert.equal(percentOf(journeyProgress('live')), 100);
+  assert.equal(percentOf(journeyProgress('enquiry')), 0);
+  // An unknown stage reads as a new enquiry rather than failing.
+  assert.deepEqual(journeyProgress('something-new'), journeyProgress('enquiry'));
 });
