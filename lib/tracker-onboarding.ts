@@ -45,7 +45,7 @@ export const NEW_ENQUIRIES = 'New enquiries';
 export const percentOf = (progress: TrackerItem['progress']): number => progress && progress.total ? Math.round(100 * progress.done / progress.total) : 0;
 
 // A property's onboarding progress at a stage, counted exactly as its tracker row counts it ("3 of 7 steps"), for the
-// owner's onboarding ticket.
+// lead ticket and the owner's onboarding ticket.
 export const journeyProgress = (stage: string) =>
   progressOf(stepsFor((ONBOARDING_STAGES[stage] ?? ONBOARDING_STAGES.enquiry).reached, stage === 'live' || stage === 'archived', () => ({})));
 

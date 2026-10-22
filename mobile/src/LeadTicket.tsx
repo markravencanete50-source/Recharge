@@ -21,7 +21,8 @@ import {
 import { workflowValues, type WorkflowField } from "../../lib/workflow-forms";
 import { ownCostCategories, ownCostFields, ownCostsFrom } from "../../lib/own-costs";
 import { formatBps, formatDay, formatMoney } from "../../lib/format";
-import { progressOf, timeAgo } from "../../lib/tracker";
+import { timeAgo } from "../../lib/tracker";
+import { journeyProgress } from "../../lib/tracker-onboarding";
 
 // A lead opened as a ticket (Alex's Estimate Delivery, migration 20261025300000), laid out like a to-do's task page: on a
 // computer, what the landlord has told us on the left (TBC beside anything not collected yet) and, on the right, the
@@ -82,8 +83,8 @@ export function LeadTicket({ p, enquiry: e, subtitle, header, onClose, onChanged
       <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>Onboarding checklist</Text>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!read && !error && <Loading p={p} rows={4} />}
-      {/* How far this lead has come: the ticked steps of the checklist below. */}
-      {read && <TrackerProgress p={p} progress={progressOf(leadChecklist(read))} percent />}
+      {/* How far this lead has come, counted exactly as its row on the onboarding tracker (a lead with no property yet is at the start). */}
+      {read && <TrackerProgress p={p} progress={journeyProgress(read.journey?.stage ?? "enquiry")} percent />}
       {read && <View style={{ gap: 2 }}>
         {leadChecklist(read).map(c => (
           <View key={c.key}>

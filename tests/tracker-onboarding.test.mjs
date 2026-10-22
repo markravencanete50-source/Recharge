@@ -259,6 +259,8 @@ test('journeyProgress counts exactly as the tracker row does', () => {
   for (const stage of Object.keys(ONBOARDING_STAGES)) assert.deepEqual(journeyProgress(stage), onboardingTrackerItem(journey(stage), ctx()).progress, stage);
   assert.equal(percentOf(journeyProgress('live')), 100);
   assert.equal(percentOf(journeyProgress('enquiry')), 0);
+  // A lead with no property yet is at the start, as its enquiry row is.
+  assert.deepEqual(journeyProgress('enquiry'), enquiryTrackerItem(enquiry('received', { submittedAt: '2026-10-11T10:00:00Z', answers: ANSWERS }), ctx()).progress);
   // An unknown stage reads as a new enquiry rather than failing.
   assert.deepEqual(journeyProgress('something-new'), journeyProgress('enquiry'));
 });
