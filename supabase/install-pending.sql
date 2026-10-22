@@ -32,3 +32,5 @@
 -- 20261025800000 operations_read_kind: installed by Lee 2026-10-20, verified
 
 -- 20261025900000 operations_read_fast: installed by Lee 2026-10-20, verified
+
+-- 20261026000000 guest_translations, 20261026100000 guest_translations_more: installed by Lee 2026-10-22, verified
