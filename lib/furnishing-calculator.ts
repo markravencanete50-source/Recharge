@@ -12,6 +12,15 @@ export type Line = { item: string; rule: string; quantity: number };
 export type Category = { id: string; label: string; title: string; lines: Line[] };
 export type FurnishingList = { beds: number; categories: Category[]; total: number };
 
+// "Other": anything the fixed rules do not cover. The person adds their own items; they join the list and its total.
+export type Extra = { id: string; item: string; quantity: number; note: string };
+export const OTHER_ID = 'other';
+export const EXTRA_LIMITS = { items: 50, name: 80, note: 120, quantity: 999 };
+export const cleanExtras = (extras: Extra[]): Extra[] => extras
+  .map(e => ({ id: String(e.id), item: String(e.item ?? '').trim().slice(0, EXTRA_LIMITS.name), note: String(e.note ?? '').trim().slice(0, EXTRA_LIMITS.note),
+    quantity: Math.min(EXTRA_LIMITS.quantity, Math.max(1, Math.floor(Number(e.quantity)) || 1)) }))
+  .filter(e => e.item).slice(0, EXTRA_LIMITS.items);
+
 // Each input: its group, label, help text, starting value and allowed range.
 export const INPUTS: { key: Count; group: 'rooms' | 'sleeping'; label: string; help: string; start: number; min: number; max: number }[] = [
   { key: 'bedrooms', group: 'rooms', label: 'Bedrooms', help: 'Total sleeping rooms', start: 1, min: 0, max: 12 },
@@ -106,11 +115,13 @@ const RULES: { id: string; label: string; title: string; items: Rule[] }[] = [
   ] },
 ];
 
-export function calculateFurnishing(input: Layout): FurnishingList {
+export function calculateFurnishing(input: Layout, extras: Extra[] = []): FurnishingList {
   const layout = { ...input, ...Object.fromEntries(INPUTS.map(i => [i.key, clampInput(i.key, input[i.key])])) } as Layout;
   const beds = layout.singleBeds + layout.doubleBeds + layout.zipLinkBeds + layout.sofaBeds;
   const categories = RULES.map(c => ({ id: c.id, label: c.label, title: c.title,
     lines: c.items.map(([item, rule, quantity]) => ({ item, rule, quantity: quantity(layout, beds) })).filter(l => l.quantity > 0) })).filter(c => c.lines.length);
+  const own = cleanExtras(extras);
+  if (own.length) categories.push({ id: OTHER_ID, label: 'Other', title: 'Other items', lines: own.map(e => ({ item: e.item, rule: e.note || 'Added by you', quantity: e.quantity })) });
   return { beds, categories, total: categories.reduce((sum, c) => sum + c.lines.reduce((s, l) => s + l.quantity, 0), 0) };
 }
 
