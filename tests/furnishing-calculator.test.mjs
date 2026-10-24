@@ -5,7 +5,7 @@ import { createServer } from 'vite';
 // The in-app furnishing calculator: category quantities from the property layout, with the rule
 // behind each number.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
-const { calculateFurnishing, furnishingCsv, furnishingText, DEFAULT_LAYOUT, INPUTS, clampInput } = await vite.ssrLoadModule('/lib/furnishing-calculator.ts');
+const { calculateFurnishing, furnishingCsv, furnishingText, DEFAULT_LAYOUT, INPUTS, clampInput, cleanExtras, EXTRA_LIMITS } = await vite.ssrLoadModule('/lib/furnishing-calculator.ts');
 after(() => vite.close());
 const line = (list, category, item) => list.categories.find(c => c.id === category)?.lines.find(l => l.item === item);
 
@@ -38,4 +38,18 @@ test('the list copies as text and downloads as a spreadsheet with the address an
   const csv = furnishingCsv(layout, list);
   assert.match(csv, /"1 Quay Street, Leith"/);
   assert.equal(csv.trim().split('\r\n').length, 8 + list.categories.reduce((s, c) => s + c.lines.length, 0));
+});
+
+test('other items join the list, the total, the copied text and the spreadsheet, and are cleaned', () => {
+  const base = calculateFurnishing(DEFAULT_LAYOUT);
+  assert.equal(base.categories.some(c => c.id === 'other'), false);
+  const extras = [{ id: 'a', item: '  Baby cot ', quantity: 2, note: 'Ground floor, "quiet" room' }, { id: 'b', item: '   ', quantity: 5, note: '' }, { id: 'c', item: 'Hot tub cover', quantity: -4, note: '' }];
+  const list = calculateFurnishing(DEFAULT_LAYOUT, extras);
+  const other = list.categories.find(c => c.id === 'other');
+  assert.deepEqual(other.lines.map(l => [l.item, l.quantity, l.rule]), [['Baby cot', 2, 'Ground floor, "quiet" room'], ['Hot tub cover', 1, 'Added by you']]);
+  assert.equal(list.total, base.total + 3);
+  assert.match(furnishingText(DEFAULT_LAYOUT, list), /Other items\n2 × Baby cot\n1 × Hot tub cover/);
+  assert.match(furnishingCsv(DEFAULT_LAYOUT, list), /Other items,Baby cot,2,"Ground floor, ""quiet"" room"/);
+  assert.equal(cleanExtras(Array.from({ length: 80 }, (_, i) => ({ id: String(i), item: 'x'.repeat(200), quantity: 99999, note: '' }))).length, EXTRA_LIMITS.items);
+  assert.equal(cleanExtras([{ id: '1', item: 'x'.repeat(200), quantity: 99999, note: '' }])[0].quantity, EXTRA_LIMITS.quantity);
 });
