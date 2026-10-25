@@ -53,3 +53,35 @@ test('other items join the list, the total, the copied text and the spreadsheet,
   assert.equal(cleanExtras(Array.from({ length: 80 }, (_, i) => ({ id: String(i), item: 'x'.repeat(200), quantity: 99999, note: '' }))).length, EXTRA_LIMITS.items);
   assert.equal(cleanExtras([{ id: '1', item: 'x'.repeat(200), quantity: 99999, note: '' }])[0].quantity, EXTRA_LIMITS.quantity);
 });
+
+test('the list downloads as a structured PDF: valid file, every line, page numbers, tidy text', async () => {
+  const { furnishingPdf, furnishingFileName, wrapText } = await vite.ssrLoadModule('/lib/furnishing-pdf.ts');
+  const layout = { ...DEFAULT_LAYOUT, address: 'Flat 4 (top), 21 Queen’s Road', bedrooms: 3, guests: 6, windows: 9 };
+  const list = calculateFurnishing(layout, [{ id: 'x', item: 'Baby cot', quantity: 2, note: 'Grey — owner asked' }]);
+  const bytes = furnishingPdf(layout, list, { generatedOn: new Date(2026, 9, 25) });
+  assert.ok(bytes instanceof Uint8Array);
+  assert.ok(bytes.every(b => b < 128), 'the file is plain ASCII, so it survives every download path');
+  const pdf = Buffer.from(bytes).toString('latin1');
+  assert.match(pdf, /^%PDF-1\.4\n/);
+  assert.match(pdf, /%%EOF\n$/);
+  // Every cross-reference offset points at its object.
+  const xrefAt = Number(pdf.match(/startxref\n(\d+)/)[1]);
+  assert.ok(pdf.startsWith('xref', xrefAt));
+  const offsets = [...pdf.slice(xrefAt).matchAll(/^(\d{10}) 00000 n $/gm)].map(m => Number(m[1]));
+  offsets.forEach((o, i) => assert.ok(pdf.startsWith(`${i + 1} 0 obj`, o), `object ${i + 1}`));
+  // Stream lengths match.
+  for (const m of pdf.matchAll(/<< \/Length (\d+) >>\nstream\n/g)) assert.equal(pdf.slice(m.index + m[0].length + Number(m[1]), m.index + m[0].length + Number(m[1]) + 10), '\nendstream');
+  const pages = Number(pdf.match(/\/Type \/Pages \/Kids \[[^\]]*\] \/Count (\d+)/)[1]);
+  assert.ok(pages >= 2);
+  assert.match(pdf, new RegExp(`\\(Page ${pages} of ${pages}\\)`));
+  assert.match(pdf, /\(Flat 4 \\\(top\\\), 21 Queen\\222s Road\)/, 'brackets escaped, curly quote in WinAnsi');
+  assert.match(pdf, /\(25 October 2026\)|Prepared 25 October 2026/);
+  for (const c of list.categories) for (const l of c.lines) if (/^[\x20-\x7e]+$/.test(l.item)) assert.ok(pdf.includes(`(${l.item.split(' ')[0]}`), l.item);
+  assert.match(pdf, /\(Cafeti\\350re\)/, 'accented letters print, not as question marks');
+  assert.match(pdf, /\(Other items\)/);
+  assert.match(pdf, /\(Total required units\)/);
+  assert.match(pdf, new RegExp(`\\(${list.total}\\) Tj`));
+  assert.equal(furnishingFileName(layout, 'pdf'), 'Recharge-furnishing-list-flat-4-top-21-queen-s-road.pdf');
+  assert.equal(furnishingFileName(DEFAULT_LAYOUT, 'csv'), 'Recharge-furnishing-list.csv');
+  assert.deepEqual(wrapText('a '.repeat(3) + 'x'.repeat(200), 100, 10).every(Boolean), true);
+});
