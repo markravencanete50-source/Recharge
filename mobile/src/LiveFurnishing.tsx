@@ -9,6 +9,7 @@ import { Button, Notice, StatGrid, StatTile } from "./LiveKit";
 import { exportReport } from "./exportReport";
 import { formatCount } from "../../lib/format";
 import { calculateFurnishing, clampInput, cleanExtras, DEFAULT_LAYOUT, EXTRA_LIMITS, furnishingCsv, furnishingText, INPUTS, OTHER_ID, type Count, type Extra, type Layout } from "../../lib/furnishing-calculator";
+import { furnishingFileName, furnishingPdf } from "../../lib/furnishing-pdf";
 import { pillBox, pillInk } from "./Pills";
 
 // The furnishing calculator, inside the app: enter the property layout and the full quantity list
@@ -113,9 +114,15 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
       else { await Share.share({ message: text }); setNotice(""); }
     } catch { setNotice("The list could not be copied. Download it instead."); }
   }
-  async function download() {
-    try { await exportReport(furnishingCsv(layout, list), "Recharge-furnishing-list.csv"); setNotice(Platform.OS === "web" ? "Download started." : "List ready to save or share."); }
-    catch { setNotice("The list could not be downloaded just now."); }
+  // On a computer the file downloads; on a phone it opens the share sheet (Save to Files, Drive, WhatsApp, email).
+  async function download(kind: "pdf" | "csv") {
+    const label = kind === "pdf" ? "PDF" : "Spreadsheet";
+    try {
+      const result = kind === "pdf"
+        ? await exportReport(furnishingPdf(layout, list), furnishingFileName(layout, "pdf"), { mime: "application/pdf", uti: "com.adobe.pdf" }, { share: true })
+        : await exportReport(furnishingCsv(layout, list), furnishingFileName(layout, "csv"), undefined, { share: true });
+      setNotice(result === "downloaded" ? `${label} downloaded. Check your Downloads folder.` : result === "cancelled" ? "" : `${label} ready to save or share.`);
+    } catch { setNotice(`The ${label.toLowerCase()} could not be downloaded just now. Try again, or copy the list instead.`); }
   }
 
   const group = (g: "rooms" | "sleeping") => INPUTS.filter(i => i.group === g).map(i => <Stepper key={i.key} p={p} label={i.label} help={i.help} value={layout[i.key]} min={i.min} max={i.max} onChange={v => set(i.key, v)} />);
@@ -190,7 +197,8 @@ export function FurnishingCalculator({ palette: p }: { palette: Palette }) {
         </View></SwapIn>}
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
           <Button label={Platform.OS === "web" ? "Copy list" : "Share list"} icon={Platform.OS === "web" ? "copy" : "share"} p={p} onPress={() => void copy()} />
-          <Button label="Download spreadsheet" icon="download" p={p} onPress={() => void download()} />
+          <Button label="Download PDF" icon="file-text" p={p} onPress={() => void download("pdf")} />
+          <Button label="Download spreadsheet" icon="download" p={p} onPress={() => void download("csv")} />
         </View>
         {!!notice && <Notice text={notice} p={p} />}
       </>}
