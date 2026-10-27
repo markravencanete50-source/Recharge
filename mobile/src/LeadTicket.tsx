@@ -23,6 +23,7 @@ import { ownCostCategories, ownCostFields, ownCostsFrom } from "../../lib/own-co
 import { formatBps, formatDay, formatMoney } from "../../lib/format";
 import { timeAgo } from "../../lib/tracker";
 import { journeyProgress } from "../../lib/tracker-onboarding";
+import { FollowUpPanel } from "./AgreementFollowUps";
 
 // A lead opened as a ticket (Alex's Estimate Delivery, migration 20261025300000), laid out like a to-do's task page: on a
 // computer, what the landlord has told us on the left (TBC beside anything not collected yet) and, on the right, the
@@ -100,6 +101,8 @@ export function LeadTicket({ p, enquiry: e, subtitle, header, onClose, onChanged
           </View>
         ))}
       </View>}
+      {/* From the agreement on: the follow-up sequence (20261027200000), when one has started for the property. */}
+      {read?.journey && ["agreement", "archived", "form", "invoice"].includes(read.journey.stage) && <FollowUpPanel key={read.journey.propertyId + read.journey.stage} p={p} propertyId={read.journey.propertyId} onChanged={load} />}
       {read && <Thread p={p} read={read} onChanged={changed} />}
     </View>
   );

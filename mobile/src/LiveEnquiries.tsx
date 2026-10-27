@@ -10,6 +10,7 @@ import { PageHeading, SoftButton } from "./LivePages";
 import { Segmented } from "./Segmented";
 import { Sheet } from "./TeamFlows";
 import { LeadTicket } from "./LeadTicket";
+import { FollowUpSettingsSheet } from "./AgreementFollowUps";
 import { useCelebrate } from "./Celebrate";
 import { depth, ui, type Palette } from "./theme";
 import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
@@ -38,6 +39,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter | null>(null);
   const [sending, setSending] = useState(false);
+  const [followUps, setFollowUps] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const load = useCallback(async () => {
     try { setData(clientEnquiriesSchema.parse((await readTeams({ section: "clientEnquiries" })).data)); setError(""); } catch (e) { setError(message(e)); }
@@ -53,7 +55,10 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
   return (
     <View style={{ gap: 18 }}>
       <PageHeading palette={p} title={LEADS_TITLE} subtitle="Send landlords the New Property Enquiry Form, see their answers here, then work each lead through to its estimate."
-        action={<SoftButton palette={p} primary icon="plus" label="Send the form to a landlord" onPress={() => setSending(true)} />} />
+        action={<View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+          <SoftButton palette={p} icon="edit-3" label="Agreement follow-ups" onPress={() => setFollowUps(true)} />
+          <SoftButton palette={p} primary icon="plus" label="Send the form to a landlord" onPress={() => setSending(true)} />
+        </View>} />
       <StatGrid>
         <StatTile p={p} icon="inbox" tone="clients" label="To value" value={count("value")} attention={count("value") > 0} detail="Answered forms, ready to value" />
         <StatTile p={p} icon="clock" tone="stays" label="Waiting" value={count("waiting")} detail="Form sent, waiting for them" />
@@ -70,6 +75,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
       <View style={{ gap: 10 }}>
         {items.map((e, i) => <Entrance key={e.id} delay={Math.min(i, 10) * motionTokens.stagger}><EnquiryRow p={p} enquiry={e} step={steps.get(e.id)!} onPress={() => setOpenId(e.id)} /></Entrance>)}
       </View>
+      <FollowUpSettingsSheet p={p} visible={followUps} onClose={() => setFollowUps(false)} />
       <SendSheet p={p} visible={sending} emailReady={!!data?.emailReady} onClose={() => setSending(false)} onSent={load} />
       <EnquirySheet key={open?.id ?? "none"} p={p} enquiry={open} step={open ? steps.get(open.id)! : "sent"} emailReady={!!data?.emailReady} onClose={() => setOpenId(null)} onChanged={load}
         canDelete={!!open && canDeleteEnquiry(account.role, open)} onDeleted={async () => { setOpenId(null); await Promise.all([load(), onRefresh?.()]); }}
