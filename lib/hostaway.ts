@@ -261,6 +261,30 @@ export async function fetchHostawayListing(id: string): Promise<unknown> {
 
 // Raw guest reviews for the ratings sync (mapped in lib/hostaway-reviews-policy.ts): the newest pages, then the sweep from
 // `sweepOffset` (where the last run stopped), REVIEW_PAGES requests at most. See sweepReviews.
+// Listings made from onboarding (lib/hostaway-listing.ts): create one, or update the one Recharge made before. Hostaway
+// fetches the photos from their links, so these get longer than the usual 10 seconds.
+export async function createHostawayListing(body: JsonObject): Promise<string> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  const created = asObject(await hostawayRequest<unknown>("/listings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, true, 45_000));
+  const id = firstString(created.id, created.listingMapId);
+  if (!id) throw new HostawayApiError("Hostaway did not return a listing ID", 502);
+  return id;
+}
+export async function updateHostawayListing(id: string, body: JsonObject): Promise<void> {
+  if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
+  if (!/^[A-Za-z0-9._:-]{1,100}$/.test(id)) throw new HostawayApiError("Invalid Hostaway listing", 400);
+  await hostawayRequest<unknown>(`/listings/${encodeURIComponent(id)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, true, 45_000);
+}
+export function hostawayListingErrorMessage(error: unknown) {
+  if (error instanceof HostawayApiError) {
+    if (error.step === "sign-in" || error.status === 401) return "Hostaway refused the connection. Check the Hostaway Account ID and API key.";
+    if (error.status === 403) return "The Hostaway API key is not allowed to create listings.";
+    if (error.status >= 400 && error.status < 500) return `Hostaway did not accept the listing: ${error.message}`.slice(0, 900);
+  }
+  if (error instanceof Error && error.name === "TimeoutError") return "Hostaway took too long to answer. Check Hostaway before approving again, in case the listing was made.";
+  return "Hostaway could not be reached just now. Try again in a few minutes.";
+}
+
 export async function fetchHostawayReviews(sweepOffset: number): Promise<ReviewSweep> {
   if (!isHostawayConfigured()) throw new HostawayApiError("Hostaway credentials are missing", 401);
   return sweepReviews(async (offset) => {
@@ -279,6 +303,7 @@ async function hostawayRequest<T>(
   path: string,
   init: RequestInit = {},
   retry = true,
+  timeoutMs = 10_000,
 ): Promise<T> {
   const token = await accessToken();
   const headers = new Headers(init.headers);
@@ -288,12 +313,12 @@ async function hostawayRequest<T>(
     ...init,
     headers,
     redirect: 'manual',
-    signal: AbortSignal.timeout(10_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (response.status === 403 && retry) {
     cachedToken = null;
-    return hostawayRequest<T>(path, init, false);
+    return hostawayRequest<T>(path, init, false, timeoutMs);
   }
 
   const payload = await response.json().catch(() => null);
