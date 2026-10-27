@@ -208,6 +208,23 @@ end $fn$;
 drop trigger if exists workspace_onboarding_fee_moved on private.workspace_hub_items;
 create trigger workspace_onboarding_fee_moved after update of status on private.workspace_hub_items for each row execute function private.workspace_onboarding_fee_moved();
 
+-- Settled another way (an onboarding invoice linked and paid, or recorded as handled outside the app): the fee ticket in
+-- Receivable is closed as paid, which settles the fee and releases the tasks as above.
+create or replace function private.workspace_onboarding_fee_elsewhere() returns trigger language plpgsql security definer set search_path='' as $fn$
+declare f private.workspace_onboarding_fees;begin
+ select * into f from private.workspace_onboarding_fees where property_id=new.property_id;
+ if f.property_id is null or f.settled_at is not null then return new;end if;
+ if (old.invoice_outside_at is null and new.invoice_outside_at is not null)
+   or (old.stage in ('form','invoice') and new.stage in ('inspection_to_book','inspection_booked','inspection_complete','live')) then
+  update private.workspace_hub_items set status='paid',settled_minor=coalesce(amount_minor,settled_minor),
+   outcome_note=left(coalesce(nullif(outcome_note,'')||' ','')||'Settled through the onboarding invoice.',2000),decided_by=coalesce(decided_by,auth.uid()),decided_at=coalesce(decided_at,now()),
+   version=version+1,updated_at=now() where id=f.item_id and status<>'paid';
+ end if;
+ return new;
+end $fn$;
+drop trigger if exists workspace_onboarding_fee_elsewhere on private.workspace_journeys;
+create trigger workspace_onboarding_fee_elsewhere after update of stage,invoice_outside_at on private.workspace_journeys for each row execute function private.workspace_onboarding_fee_elsewhere();
+
 -- Reminders, every 15 minutes (the backend): a sent fee not yet settled reminds the owner every 48 hours (the setting), in
 -- their conversation and by email. At most 50 a run.
 create or replace function private.workspace_onboarding_fee_sweep(at_time timestamptz default now()) returns jsonb language plpgsql security definer set search_path='' as $fn$
@@ -291,7 +308,7 @@ create or replace function public.workspace_onboarding_fee_sweep() returns jsonb
 revoke all on function private.workspace_handover_now(uuid,text,text,text,jsonb),private.workspace_handover(uuid,text,text,text,jsonb) from public,anon,authenticated;
 revoke all on function private.workspace_fee_money(bigint),
  private.workspace_owner_message(uuid,text,text,bigint,boolean,timestamptz),private.workspace_fee_tell_accounts(uuid,text,timestamptz),
- private.workspace_onboarding_fee_open(),private.workspace_onboarding_fee_settle(uuid,timestamptz),private.workspace_onboarding_fee_moved(),
+ private.workspace_onboarding_fee_open(),private.workspace_onboarding_fee_settle(uuid,timestamptz),private.workspace_onboarding_fee_moved(),private.workspace_onboarding_fee_elsewhere(),
  private.workspace_onboarding_fee_sweep(timestamptz),public.workspace_onboarding_fee_sweep(),
  private.workspace_onboarding_fee_settings_view(),private.workspace_onboarding_fee_view(uuid),
  private.workspace_onboarding_fee_read(uuid),public.workspace_onboarding_fee_read(uuid),

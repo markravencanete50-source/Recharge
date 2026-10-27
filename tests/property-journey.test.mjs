@@ -59,7 +59,7 @@ test('owner decline archives the shared property and enquiry in both views',asyn
  assert.equal((await db.query('select status from public.workspace_properties where id=$1',[archived.propertyId])).rows[0].status,'archived');
  await as(0);assert.equal((await read(archived.propertyId))[0].stage,'archived');assert.equal((await db.query('select status from public.workspace_work_items where id=$1',[archived.workId])).rows[0].status,'declined');
 });
-test('agreement consent freezes published revision, creates invoice task exactly once, owner submits private form',async()=>{
+test('agreement consent freezes published revision, opens the onboarding fee once, owner submits private form',async()=>{
  await as(1);await assert.rejects(action({action:'signAgreement',propertyId:journey.propertyId,version:journey.version,agreementRevision:0,signedName:'Owner',consent:true}),/consent/);
  await as(0);journey=await action({action:'publishAgreement',propertyId:journey.propertyId,version:journey.version,agreement:'Test-only agreement supplied by the parties. Not a production contract.'});
  await assert.rejects(action({action:'signAgreement',propertyId:journey.propertyId,version:journey.version,agreementRevision:1,signedName:'Staff',consent:true}),/Owner consent/);
@@ -67,7 +67,13 @@ test('agreement consent freezes published revision, creates invoice task exactly
  const form={businessName:'Example Owner',bankAccountName:'Example Owner',bankAccountNumber:'12345678',bankSortCode:'12-34-56',accessDate:(await db.query('select current_date::text d')).rows[0].d,accessInfo:'Private access instructions',utilitiesConnected:true,prepaymentMeters:false,broadbandConnected:true,hasGarden:true,mailPreference:'photograph',warrantyDetails:'Warranty contact',repairLimitMinor:10000,fullRepairPermission:false,furnishingChoice:'recharge',licensingRequired:true};
  journey=await action({action:'submitForm',propertyId:journey.propertyId,version:journey.version,form});assert.equal(journey.stage,'invoice');assert.equal(journey.form.bankAccountNumber,undefined);assert.equal(journey.form.accessInfo,undefined);
  await as(0);const tasks=(await db.query('select module_id from public.workspace_work_items where property_id=$1',[journey.propertyId])).rows.map(r=>r.module_id);
- for(const tool of ['onboarding-invoices','licensing','routine-bin-garden-board','property-furnishing-board','clean-property-onboarding'])assert.equal(tasks.filter(m=>m===tool).length,1,tool);
+ // Business Plan v1.0 (20261027300000): signing opens the onboarding fee in Receivable instead of an invoice task, and the
+ // package's tasks wait for the fee to be settled.
+ for(const tool of ['onboarding-invoices','licensing','routine-bin-garden-board','property-furnishing-board','clean-property-onboarding'])assert.equal(tasks.filter(m=>m===tool).length,0,tool);
+ await db.exec('reset role');
+ assert.equal((await db.query("select count(*)::int n from private.workspace_onboarding_fees f join private.workspace_hub_items i on i.id=f.item_id where f.property_id=$1 and i.kind='invoice' and i.status='to_send'",[journey.propertyId])).rows[0].n,1);
+ assert.deepEqual((await db.query('select feature from private.workspace_onboarding_held_tasks where property_id=$1 and released_at is null order by feature',[journey.propertyId])).rows.map(r=>r.feature),['clean-property-onboarding','licensing','property-furnishing-board','routine-bin-garden-board']);
+ await as(0);
  await assert.rejects(db.query('select * from private.workspace_journeys'),/permission denied/);
  // A garden also gets a monthly garden-and-bins routine for Ready.
  await db.exec('reset role');assert.equal((await db.query("select count(*)::int n from private.workspace_routine_plans where property_id=$1 and module_id='routine-bin-garden-board' and title='Garden and bins' and frequency='monthly' and active",[journey.propertyId])).rows[0].n,1);
@@ -78,6 +84,11 @@ test('unpaid invoice blocks inspection; real settlement advances both owner and 
  const id=(await db.query('select public.workspace_create_invoice($1::jsonb) id',[JSON.stringify({requestId:crypto.randomUUID(),propertyId:journey.propertyId,moduleId:'onboarding-invoices',recipientId:users[1],reference:'TEST-ONBOARD-1',amountMinor:47500,currency:'GBP'})])).rows[0].id;
  journey=await action({action:'linkInvoice',propertyId:journey.propertyId,version:journey.version,invoiceId:id});
  await db.query("select public.workspace_set_invoice_status($1,1,'paid')",[id]);journey=(await read(journey.propertyId))[0];assert.equal(journey.stage,'inspection_to_book');
+ // Paid through the onboarding invoice: the fee ticket closes and the held tasks are released, each once.
+ {const tasks=(await db.query('select module_id from public.workspace_work_items where property_id=$1',[journey.propertyId])).rows.map(r=>r.module_id);
+  for(const tool of ['licensing','routine-bin-garden-board','property-furnishing-board','clean-property-onboarding'])assert.equal(tasks.filter(m=>m===tool).length,1,tool);
+  assert.equal(tasks.filter(m=>m==='onboarding-invoices').length,0);
+  await db.exec('reset role');assert.equal((await db.query("select i.status from private.workspace_onboarding_fees f join private.workspace_hub_items i on i.id=f.item_id where f.property_id=$1",[journey.propertyId])).rows[0].status,'paid');await as(0);}
  await db.exec('reset role');const inspection=await db.query("select w.id,w.version,d.data from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where w.property_id=$1 and d.kind='inspection'",[journey.propertyId]);
  assert.equal(inspection.rows.length,1);assert.equal(inspection.rows[0].data.phase,'ready_to_book');
  await assert.rejects(db.query("update public.workspace_work_items set status='completed' where id=$1",[inspection.rows[0].id]),/inspection report/);
