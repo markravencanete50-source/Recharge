@@ -237,17 +237,17 @@ export function ClientPropertyProgress({ palette: p, properties, onOpen, title =
 // action (round 6, E's review: the full-width mint block was the loudest thing on the page in dark mode).
 export function EnquiryCard({ palette: p, onStart, team = false }: { palette: Palette; onStart: () => void; team?: boolean }) {
   return (
-    <MotionPress {...hover} accessibilityRole="button" accessibilityLabel="Start a new property enquiry" onPress={onStart} style={[ui.row, { gap: 14, padding: 18, borderRadius: 24, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }]}>
+    <MotionPress {...hover} accessibilityRole="button" accessibilityLabel={team ? "Start a new property enquiry" : "New property"} onPress={onStart} style={[ui.row, { gap: 14, padding: 18, borderRadius: 24, backgroundColor: p.surface, borderWidth: 1, borderColor: p.border }]}>
       <View style={{ width: 52, height: 52, borderRadius: 18, backgroundColor: p.wash, borderWidth: 1, borderColor: p.washBorder, alignItems: "center", justifyContent: "center" }}>
         <DimensionalIcon name="house" size={42} color={p.primary} />
       </View>
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>{team ? "New property enquiry" : "Have another property?"}</Text>
-        <Text style={{ color: p.muted, fontSize: 13 }}>{team ? "Someone wants an estimate? Add their details and the property." : "Start a new enquiry in under a minute."}</Text>
+        <Text style={{ color: p.muted, fontSize: 13 }}>{team ? "Someone wants an estimate? Add their details and the property." : "Get a free estimate for it in under a minute."}</Text>
       </View>
       <View style={[ui.row, { gap: 6, minHeight: 40, paddingHorizontal: 14, borderRadius: 999, backgroundColor: p.primary }]}>
         <Feather name="plus" size={16} color={p.onPrimary} />
-        <Text style={{ color: p.onPrimary, fontSize: 14, fontWeight: "700" }}>Add</Text>
+        <Text style={{ color: p.onPrimary, fontSize: 14, fontWeight: "700" }}>{team ? "Add" : "New property"}</Text>
       </View>
     </MotionPress>
   );

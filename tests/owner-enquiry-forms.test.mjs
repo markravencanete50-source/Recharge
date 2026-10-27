@@ -73,6 +73,12 @@ test("the owner's sheet: photos and videos, when to start, the link for big vide
   const form = newEnquiryForm(false), team = newEnquiryForm(true);
   const names = form.fields.map(f => f.name);
   assert.ok(names.includes('uploads') && names.includes('startWhen') && names.includes('photoLink'));
+  // New property (Business Plan v1.0): the stage they're at, required, with the website form's choices.
+  const stage = form.fields.find(f => f.name === 'enquiryType');
+  assert.equal(stage.label, 'Stage you\u2019re at'); assert.equal(stage.required, true);
+  assert.equal(stage.options.length, 7);
+  assert.equal(form.title, 'New property');
+  assert.ok(!team.fields.some(f => f.name === 'enquiryType'), 'the team form is unchanged');
   // The team's form asks when they would like to start too (20261022400000), but takes no uploads.
   assert.ok(!team.fields.some(f => f.name === 'uploads'), 'no uploads on the team form');
   assert.equal(team.fields.find(f => f.name === 'startWhen').label, 'When would they like to get started?');
@@ -80,12 +86,13 @@ test("the owner's sheet: photos and videos, when to start, the link for big vide
   assert.deepEqual(form.done, OWNER_ENQUIRY_DONE);
   assert.ok(!/email/i.test(OWNER_ENQUIRY_DONE.title + OWNER_ENQUIRY_DONE.message), 'no email is promised: none is sent');
   assert.match(form.fields.find(f => f.name === 'photoLink').help, /long video/);
-  const raw = { address: '1 Shore Road, Leith, Edinburgh EH6 6RG', name: 'Shore Road', region: '', propertyType: 'Flat', bedrooms: '2', wcs: '', bathrooms: '1', parking: '', garden: '', photoLink: '', notes: '', startWhen: '' };
+  const raw = { address: '1 Shore Road, Leith, Edinburgh EH6 6RG', name: 'Shore Road', region: '', propertyType: 'Flat', bedrooms: '2', wcs: '', bathrooms: '1', parking: '', garden: '', photoLink: '', notes: '', startWhen: '', enquiryType: 'Something else' };
   const body = form.build(workflowValues(form.fields, raw), id(1));
   assert.ok(!('startWhen' in body) && !('uploads' in body), 'an empty choice and the files are not sent');
   assert.ok(journeyActionSchema.safeParse({ requestId: id(1), ...body }).success);
   const chosen = form.build(workflowValues(form.fields, { ...raw, startWhen: 'As soon as possible' }), id(1));
   assert.equal(chosen.startWhen, 'As soon as possible');
+  assert.equal(chosen.enquiryType, 'Something else');
   assert.deepEqual(workflowIssues(form, { ...raw, address: '', bedrooms: 'two' }).map(i => [i.field, i.message]), [['address', 'Enter full property address'], ['bedrooms', 'Bedrooms must be a whole number, like 2']]);
 });
 

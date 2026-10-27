@@ -4,7 +4,7 @@ import { INSPECTION_CHECKS } from './onboarding-content';
 import { SCOTTISH_REGIONS } from './regions';
 import { workspaceDateKey } from './analytics';
 import { DECLINE_REASON_MESSAGE, HTTPS_LINK_MESSAGE, MAX_COMPARABLES, declineReasonMissing, REPAIR_LIMIT_CHOICES, REPAIR_LIMIT_DEFAULT, REPAIR_LIMIT_HELP, REPAIR_LIMIT_QUESTION, estimateRateIssues, isHttpsLink, repairLimitFrom, type FieldIssue } from './journey-policy';
-import { START_WHEN } from './client-enquiry';
+import { ENQUIRY_TYPES, STAGE_LABEL, START_WHEN } from './client-enquiry';
 import { ownCostFields, ownCostsFrom } from './own-costs';
 import { agreementTemplateForms } from './agreement-template';
 import { defaultRedoBy } from './cleans-live';
@@ -108,13 +108,16 @@ export function newEnquiryForm(team=false):WorkflowForm{
  // An owner adds photos and short videos as on the public form (same limits and storage), and says when they would like
  // to start, which sets Priority in Client enquiries as a form answer does.
  const startWhen:WorkflowField={...field('startWhen',team?'When would they like to get started?':'When would you like to get started?','select',false),defaultValue:'',options:[{value:'',label:'Choose one'},...START_WHEN.map(value=>({value,label:value}))]};
- const owner:WorkflowField[]=team?[]:[{...field('uploads','Photos and short videos','uploads',false),help:ENQUIRY_FILE_HELP},startWhen];
+ // An existing client's New property form (Business Plan v1.0) also asks the stage they're at, as the website form does
+ // (migration 20261027500000 records it).
+ const stage:WorkflowField={...field('enquiryType',STAGE_LABEL,'select'),defaultValue:'',help:'There is no wrong answer!',options:[{value:'',label:'Choose one'},...ENQUIRY_TYPES.map(value=>({value,label:value}))]};
+ const owner:WorkflowField[]=team?[]:[{...field('uploads','Photos and short videos','uploads',false),help:ENQUIRY_FILE_HELP},stage,startWhen];
  // The team asks when they would like to start too (migration 20261022400000): it sets Priority in Client enquiries, where
  // the team's enquiry is recorded.
  const fields=team?[...contact,...property.slice(0,-2),startWhen,...property.slice(-2)]:[...property.slice(0,-2),...owner,...property.slice(-2)];
- return {key:'enquiry',title:team?'Add a new property enquiry':'Add a property enquiry',description:team?'From the new property enquiry form: what we need to prepare the free performance estimate.':undefined,endpoint:'journeys',fields,build:v=>{
+ return {key:'enquiry',title:team?'Add a new property enquiry':'New property',description:team?'From the new property enquiry form: what we need to prepare the free performance estimate.':undefined,endpoint:'journeys',fields,build:v=>{
   const enquiry=Object.fromEntries(ENQUIRY_KEYS.filter(k=>v[k]!==undefined&&v[k]!=='').map(k=>[k,v[k]]));
-  const rest=Object.fromEntries(Object.entries(v).filter(([k])=>!(ENQUIRY_KEYS as readonly string[]).includes(k)&&!(k==='startWhen'&&!v[k])));
+  const rest=Object.fromEntries(Object.entries(v).filter(([k])=>!(ENQUIRY_KEYS as readonly string[]).includes(k)&&!((k==='startWhen'||k==='enquiryType')&&!v[k])));
   return {action:'createEnquiry',...rest,...(Object.keys(enquiry).length?{enquiry}:{})};
  },...(team?{}:{done:OWNER_ENQUIRY_DONE})};
 }
