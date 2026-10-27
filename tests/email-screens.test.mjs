@@ -67,5 +67,6 @@ test('Send the form sheet: honest placeholders, the email preview behind a toggl
   assert.match(sheet, /<PageHeading[^]*action=\{<View[^]*<SoftButton palette=\{p\} primary icon="plus" label="Send the form to a landlord" onPress=\{\(\) => setSending\(true\)\} \/>\s*<\/View>\} \/>/);
   // Beside it, a plain button opens the agreement follow-up steps (20261027200000).
   assert.match(sheet, /<SoftButton palette=\{p\} icon="edit-3" label="Agreement follow-ups" onPress=\{\(\) => setFollowUps\(true\)\} \/>/);
+  assert.match(sheet, /<SoftButton palette=\{p\} icon="edit-3" label="Onboarding fee" onPress=\{\(\) => setFeeSettings\(true\)\} \/>/);
   assert.doesNotMatch(sheet, /HeroWash|p\.hero\b|enquiries:hero/);
 });

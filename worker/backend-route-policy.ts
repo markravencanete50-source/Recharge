@@ -22,6 +22,8 @@ const endpoints = new Set([
   "/api/workspace/lead-files", "/api/mobile/lead-files",
   // Agreement follow-ups (20261027200000).
   "/api/workspace/agreement-follow-ups", "/api/mobile/agreement-follow-ups",
+  // The onboarding fee (20261027300000).
+  "/api/workspace/onboarding-fee", "/api/mobile/onboarding-fee",
   "/api/workspace/owner", "/api/mobile/owner",
   "/api/hostaway/webhook", "/api/resend/webhook", "/api/workspace/email-files", "/api/mobile/email-files", "/api/workspace/email-inbox", "/api/mobile/email-inbox", "/api/workspace/client-email", "/api/mobile/client-email", "/api/workspace/account", "/api/workspace/notifications",
   "/api/workspace/oversight", "/api/mobile/oversight",
