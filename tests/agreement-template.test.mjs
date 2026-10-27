@@ -288,7 +288,8 @@ test('wiring: the routes, the Management centre view for admins, and the journey
   const screen = await fs.readFile('mobile/src/OnboardingSettings.tsx', 'utf8');
   assert.doesNotMatch(screen, /#[0-9a-fA-F]{3,8}\b|fontWeight: "700"|—/);
   for (const name of T.AGREEMENT_PLACEHOLDERS) assert.ok(T.PLACEHOLDER_HELP[name], name);
-  const sql = await fs.readFile('supabase/migrations/20261020870000_agreement_template.sql', 'utf8');
+  // The latest list (the onboarding package's placeholders were added by 20261028100000).
+  const sql = await fs.readFile('supabase/migrations/20261028100000_onboarding_package.sql', 'utf8');
   assert.ok(sql.includes(`array[${T.AGREEMENT_PLACEHOLDERS.map(n => `'${n}'`).join(',')}]`), 'the database lists the same placeholders');
 });
 

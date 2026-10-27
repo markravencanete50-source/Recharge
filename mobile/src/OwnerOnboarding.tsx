@@ -8,6 +8,8 @@ import { CourseVideo } from "./LiveTraining";
 import { EstimateExplorer } from "./LiveEstimate";
 import { EstimateGuide } from "./LiveOnboardingGuide";
 import { WorkHistory } from "./WorkHistory";
+import { PackageBuilder } from "./OnboardingPackage";
+import { packageMark } from "../../lib/onboarding-package";
 import { TrackerProgress } from "./Tracker";
 import { journeyProgress } from "../../lib/tracker-onboarding";
 import { readClientOnboarding, saveClientOnboarding } from "./backend/client";
@@ -28,6 +30,8 @@ export function OwnerOnboarding({ p, account, j, property, onForm, details }: { 
   const [busy, setBusy] = useState(false);
   const [width, setWidth] = useState(0);
   const [open, setOpen] = useState<VideoStep | null | undefined>(undefined);
+  const pkgMark = packageMark(j.stage, j.package?.submittedAt ?? null);
+  const [pkgOpen, setPkgOpen] = useState(pkgMark === "todo");
   const request = useRequestId("seen:" + j.propertyId);
   const load = useCallback(async () => {
     try { setData(clientOnboardingSchema.parse((await readClientOnboarding(j.propertyId)).data)); setError(""); }
@@ -107,7 +111,23 @@ export function OwnerOnboarding({ p, account, j, property, onForm, details }: { 
             </MotionPress>
             {expanded && <View style={{ paddingHorizontal: 14, paddingBottom: 16 }}>{body(step.key)}</View>}
           </View>;
-        })}</View>
+        })}
+          {/* The onboarding package (migration 20261028100000): opens once they go ahead, before the agreement. */}
+          <View style={{ borderWidth: 1, borderColor: p.border, borderRadius: 16, overflow: "hidden" }}>
+            <MotionPress accessibilityRole="button" accessibilityState={{ expanded: pkgOpen }} accessibilityLabel={"Your onboarding package, " + PACKAGE_LABEL[pkgMark]} onPress={() => setPkgOpen(o => !o)} style={[ui.row, { gap: 12, minHeight: 52, paddingHorizontal: 14 }]}>
+              <Mark p={p} mark={pkgMark} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: p.text, fontWeight: "600" }}>Your onboarding package</Text>
+                <Text numberOfLines={pkgOpen ? undefined : 1} style={[ui.small, { color: p.muted }]}>{PACKAGE_LABEL[pkgMark]}</Text>
+              </View>
+              <Feather name={pkgOpen ? "chevron-up" : "chevron-down"} size={18} color={p.muted} />
+            </MotionPress>
+            {pkgOpen && <View style={{ paddingHorizontal: 14, paddingBottom: 16 }}>
+              {pkgMark === "waiting" ? <Text style={[ui.body, { color: p.muted }]}>Once you choose to go ahead with your estimate, you build your package here: what Recharge sets up for you, what you do yourself, and your payout details.</Text>
+                : <PackageBuilder p={p} propertyId={j.propertyId} />}
+            </View>}
+          </View>
+        </View>
         {details}
         <View style={{ gap: 8 }}>
           <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text }]}>Activity</Text>
@@ -118,6 +138,7 @@ export function OwnerOnboarding({ p, account, j, property, onForm, details }: { 
   );
 }
 
+const PACKAGE_LABEL: Record<"waiting" | "todo" | "done", string> = { waiting: "Opens once you go ahead", todo: "Choose what Recharge sets up for you", done: "Done" };
 const MARK_LABEL: Record<StepMark, string> = { done: "Done", arrived: "Your estimate is ready", reviewing: "Still reviewing", declined: "Not proceeding", waiting: "On its way", todo: "To read" };
 
 // Green tick (done), amber tick (the estimate has arrived), amber dot (still reviewing), red cross (not proceeding),

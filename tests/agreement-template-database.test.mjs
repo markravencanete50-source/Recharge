@@ -120,6 +120,7 @@ test('the team sees the filled-in agreement before publishing; it is kept exactl
   assert.match(T.agreementTemplateForms({ role: 'admin' }, j)[0].description, /Made from Management agreement 2026\.docx \(contract 1\)\./);
   assert.deepEqual(T.agreementTemplateForms({ role: 'client' }, j), [], 'owners never publish');
 
+  await db.exec('reset role'); await db.query("insert into private.workspace_onboarding_packages(property_id,answers,submitted_at) values($1,'{}',now()) on conflict(property_id) do update set submitted_at=coalesce(private.workspace_onboarding_packages.submitted_at,now())", [prop]);
   j = await journey(ADMIN, prop, { action: 'publishAgreement', templateId: draft.templateId });
   assert.equal(j.agreement, draft.text);
   assert.equal(j.agreementFormat, 'outline');
@@ -154,6 +155,7 @@ test('the team edits the contract\'s wording before publishing, and the owner si
   assert.equal(form.fields[0].defaultValue, draft.text, 'the form starts from the filled-in contract');
   assert.equal(form.build({ agreement: draft.text }, 'r').agreement, undefined, 'unchanged wording is filled in again by the database');
   assert.equal(form.build({ agreement: edited }, 'r').agreement, edited);
+  await db.exec('reset role'); await db.query("insert into private.workspace_onboarding_packages(property_id,answers,submitted_at) values($1,'{}',now()) on conflict(property_id) do update set submitted_at=coalesce(private.workspace_onboarding_packages.submitted_at,now())", [prop]);
   let j = await journey(STAYS, prop, form.build({ agreement: edited }, 'r'));
   assert.equal(j.agreement, edited);
   assert.equal(j.agreementFormat, 'outline');
@@ -165,6 +167,7 @@ test('the team edits the contract\'s wording before publishing, and the owner si
   const long = '# Terms\n\n' + Array.from({ length: 400 }, (_, i) => `${i + 1}. Clause ${i + 1} of the agreement, in full.`).join('\n');
   assert.ok(long.length > 10000);
   assert.equal(journeyActionSchema.safeParse({ action: 'publishAgreement', requestId: crypto.randomUUID(), propertyId: prop, version: 1, agreement: long, format: 'outline' }).success, true);
+  await db.exec('reset role'); await db.query("insert into private.workspace_onboarding_packages(property_id,answers,submitted_at) values($1,'{}',now()) on conflict(property_id) do update set submitted_at=coalesce(private.workspace_onboarding_packages.submitted_at,now())", [prop]);
   j = await journey(ADMIN, prop, { action: 'publishAgreement', agreement: long, format: 'outline' });
   assert.equal(j.agreementFormat, 'outline');
   assert.equal(j.agreement, long);
@@ -190,6 +193,7 @@ test('the team edits the contract\'s wording before publishing, and the owner si
 
   // Signing with the name alone still works.
   const plain = await atAgreement(OTHER);
+  await db.exec('reset role'); await db.query("insert into private.workspace_onboarding_packages(property_id,answers,submitted_at) values($1,'{}',now()) on conflict(property_id) do update set submitted_at=coalesce(private.workspace_onboarding_packages.submitted_at,now())", [plain]);
   const published = await journey(ADMIN, plain, { action: 'publishAgreement', agreement: 'Our own wording for this property, agreed by phone.' });
   const signed = await journey(OTHER, plain, { action: 'signAgreement', agreementRevision: published.agreementRevision, signedName: 'Other Owner', consent: true });
   assert.equal(signed.signatureImage, null);
@@ -220,9 +224,11 @@ test('no placeholders, or a PDF: the owner\'s, the property\'s and Recharge\'s d
   assert.deepEqual(pdf.template.placeholders, []);
   j = await view(ADMIN, prop);
   assert.equal(j.agreementDraft.text, [...details, '## The agreement', 'The agreement is the attached document, Signed contract.pdf. Read it with this page; both together are the agreement.'].join('\n\n'));
+  await db.exec('reset role'); await db.query("insert into private.workspace_onboarding_packages(property_id,answers,submitted_at) values($1,'{}',now()) on conflict(property_id) do update set submitted_at=coalesce(private.workspace_onboarding_packages.submitted_at,now())", [prop]);
   j = await journey(ADMIN, prop, { action: 'publishAgreement', templateId: j.agreementDraft.templateId });
   assert.equal(j.agreementTemplate.kind, 'pdf');
   // A typed agreement still works, and is plain text again.
+  await db.exec('reset role'); await db.query("insert into private.workspace_onboarding_packages(property_id,answers,submitted_at) values($1,'{}',now()) on conflict(property_id) do update set submitted_at=coalesce(private.workspace_onboarding_packages.submitted_at,now())", [prop]);
   j = await journey(ADMIN, prop, { action: 'publishAgreement', agreement: 'Our own wording for this property, agreed by phone.' });
   assert.equal(j.agreementFormat, 'text');
   assert.equal(j.agreementTemplate, null);
@@ -232,6 +238,7 @@ test('no placeholders, or a PDF: the owner\'s, the property\'s and Recharge\'s d
 test('contract files: admins open any; an owner only the one their own agreement was made from', async () => {
   const pdf = (await settings()).template;
   const mine = await atAgreement(OWNER), theirs = await atAgreement(OTHER);
+  for (const p of [mine, theirs]) { await db.exec('reset role'); await db.query("insert into private.workspace_onboarding_packages(property_id,answers,submitted_at) values($1,'{}',now()) on conflict(property_id) do update set submitted_at=coalesce(private.workspace_onboarding_packages.submitted_at,now())", [p]); }
   for (const prop of [mine, theirs]) await journey(ADMIN, prop, { action: 'publishAgreement', templateId: pdf.id });
   const ownView = await view(OWNER, mine);
   assert.equal(ownView.agreementDraft, null, 'owners never see the team\'s preview');

@@ -25,7 +25,9 @@ export type WorkflowForm={key:string;title:string;description?:string;endpoint:'
  checks?:(values:Record<string,unknown>)=>FieldIssue[];done?:{title:string;message:string}};
 export type JourneyView={propertyId:string;clientId:string|null;workId:string;stage:string;version:number;agreement:string;agreementRevision:number;signedName:string|null;signedAt?:string|null;signedRevision?:number|null;inspectionOn?:string|null;inspectionReport:string|null;invoiceId:string|null;estimate:Record<string,unknown>|null;form:Record<string,unknown>|null;followUpOn?:string|null;feedback?:string;questions?:{id:string;question:string;askedAt:string;askedByOwner:boolean;answer:string|null;answeredAt:string|null}[];inspectionChecks?:{checks?:Record<string,boolean>;issues?:string};propertyType?:string|null;bathrooms?:number|null;enquiry?:EnquiryDetails;ownerAccount?:boolean;invoiceOutsideAt?:string|null;invoiceOutsideNote?:string;estimateDelivery?:import('./estimate-link').EstimateDelivery|null;
  // The owner's repair limit chosen at Proceed (item 7, migration 20261022300000).
- ownerRepairLimit?:{limitMinor:number;chosenAt?:string;via?:string}|null};
+ ownerRepairLimit?:{limitMinor:number;chosenAt?:string;via?:string}|null;
+ // The onboarding package (migration 20261028100000): when it went in, and the set-up form keys it already answers.
+ package?:{submittedAt:string|null;formKeys:string[];answers:Record<string,unknown>}|null};
 export type EnquiryDetails={contactName?:string;companyName?:string;email?:string;phone?:string;existingClient?:boolean;wcs?:number;parking?:string;garden?:string;photoLink?:string;notes?:string};
 export type OperationView={workId:string;propertyId:string;moduleId:string;title:string;kind:string;status:string;version:number;assigneeId:string|null;dueOn?:string|null;dueTime?:string|null;endTime?:string|null;createdAt?:string;updatedAt?:string;updatedBy?:string|null;updatedEvent?:string|null;lastActivityAt?:string|null;data:Record<string,unknown>};
 const field=(name:string,label:string,type:WorkflowField['type']='text',required=true):WorkflowField=>({name,label,type,required});
@@ -160,6 +162,15 @@ export const decisionChecks=(v:Record<string,unknown>):FieldIssue[]=>{
  return 'error' in limit?[{field:limit.field,message:limit.error}]:[];
 };
 export const estimateChecks=(v:Record<string,unknown>):FieldIssue[]=>[...estimateRateIssues(v),...comparableIssues(v)];
+// After an onboarding package (migration 20261028100000) the set-up form asks only what the package did not: the database
+// takes the rest from the package. A planned date is asked only when the package says it is needed.
+function setupFields(j:JourneyView,fields:WorkflowField[]):WorkflowField[]{
+ const pkg=j.package;
+ if(!pkg?.submittedAt)return fields;
+ const known=new Set(pkg.formKeys),a=pkg.answers;
+ const notNeeded=new Set([a.utilitiesConnected===true?'utilityInstallDate':'',a.prepaymentMeters===false?'creditSwitchDate':'',a.broadbandInstalled===true?'broadbandInstallDate':''].filter(Boolean));
+ return fields.filter(f=>!known.has(f.name)&&!notNeeded.has(f.name));
+}
 export function journeyForms(a:WorkspaceAccount,j:JourneyView,today=workspaceDateKey(Date.now())):WorkflowForm[]{
  if(!admin(a)&&!a.modules.includes('property-onboarding')&&!(a.role==='ready'&&a.modules.includes('new-property-inspection-board')))return [];
  const forms:WorkflowForm[]=[],team=admin(a)||a.role==='stays',noOwner=j.ownerAccount===false||!j.clientId;
@@ -182,12 +193,12 @@ export function journeyForms(a:WorkspaceAccount,j:JourneyView,today=workspaceDat
  // Typed, or uploaded from a Word document and edited (field type 'document'); kept in the outline format (20261024100000).
  if(team&&j.stage==='agreement')add('publishAgreement','Publish the management agreement',[{...field('agreement','Agreement supplied by Recharge','document'),help:'Upload the approved contract as a Word document, or paste it, then change any words. Lines starting # are headings and - bullet points. The app does not generate legal terms.'}],v=>({agreement:v.agreement,format:'outline'}));
  if(owner&&j.stage==='agreement'&&j.agreementRevision>0)add('signAgreement',noOwner?'Record the signed agreement':'Accept the published agreement',noOwner?[field('signedName','Owner\'s full name as signed'),{...field('signatureImage','The owner\'s signature (optional)','signature',false),help:'When the owner is with you, they can sign here on your phone or tablet.'},{...field('consent','The owner has signed the management agreement shown above','checkbox'),help:'Keep the signed copy with the property\'s files.'}]:[field('signedName','Your full name'),{...field('signatureImage','Your signature','signature',false),help:'Draw it as you would on paper. It is kept with the signed agreement, beside your name.'},{...field('consent','I have read and agree to the management agreement shown above','checkbox'),help:'Your acceptance is saved with this exact agreement revision.'}],v=>({...v,agreementRevision:j.agreementRevision}));
- if(owner&&j.stage==='form')add('submitForm',noOwner?'Enter the property onboarding form':'Complete property setup',[
+ if(owner&&j.stage==='form')add('submitForm',noOwner?'Enter the property onboarding form':'Complete property setup',setupFields(j,[
   field('businessName','Business or owner name'),{...field('bankAccountName','Bank account holder'),help:'Payout details: the account the owner wants payouts paid into.'},field('bankAccountNumber','UK account number, 8 digits'),field('bankSortCode','UK sort code'),{...field('accessDate','First access date','date'),help:'From when we can access the property for the first inspection.'},{...field('accessInfo','Access instructions','textarea'),help:'Is there a keybox? Where it is and its codes, or how we get keys. Kept private.'},
   {...field('gasElectricMeters','Gas and electric','textarea',false),help:'Connected? What meters (prepayment, smart)?'},{...field('operatingStatus','Current operating status','textarea',false),help:'Any current bookings, and their dates, so we can plan.'},
   field('utilitiesConnected','Utilities are connected','checkbox',false),{...field('utilityInstallDate','Planned utility connection','date',false),help:'Required if utilities are not connected.'},field('prepaymentMeters','The property has prepayment meters','checkbox',false),field('creditSwitchDate','Planned switch to credit meter','date',false),
   field('broadbandConnected','Broadband is connected','checkbox',false),field('broadbandInstallDate','Planned broadband installation','date',false),field('hasGarden','The property has a garden','checkbox',false),select('mailPreference','Mailbox permission',['photograph','open_and_photograph','leave_safely']),field('warrantyDetails','Warranty details','textarea',false),field('preferredRepairContact','Preferred repair contact','textarea',false),field('repairLimitMinor','Automatic repair budget per request, GBP','money'),field('fullRepairPermission','Authorise repairs without a budget limit','checkbox',false),select('furnishingChoice','Furnishing',['self','recharge']),field('licensingRequired','Licensing support is required','checkbox',false)
- ],v=>({form:v}));
+ ]),v=>({form:v}));
  if(admin(a)&&noOwner&&!!j.signedAt&&!j.invoiceOutsideAt&&['form','invoice'].includes(j.stage))add('recordInvoiceOutside','Record the onboarding invoice (handled outside the app)',[{...field('note','Invoice reference and status','text'),help:'For example: "Xero INV-0123, paid 10 Oct". With no owner account the invoice is raised and paid outside the app.'}]);
  if(admin(a)&&!noOwner&&!j.invoiceId&&['form','invoice'].includes(j.stage)){
   forms.push({key:'createOnboardingInvoice',title:'Record the issued onboarding invoice',description:'This records the invoice. Sending it requires your email provider or manual delivery.',endpoint:'workspace',fields:[field('reference','Invoice reference'),field('amountMinor','Invoice amount, GBP','money')],build:(v,requestId)=>({action:'createInvoice',input:{...v,requestId,propertyId:j.propertyId,moduleId:'onboarding-invoices',recipientId:j.clientId,currency:'GBP'}})});

@@ -38,13 +38,14 @@ export function repairLimitFrom(choice:string,other:string):{minor:number}|{fiel
  const minor=Number(text.replace(/,/g,''))*100;
  return repairLimit.safeParse(minor).success?{minor}:{field:'repairLimitOther',error:REPAIR_LIMIT_MESSAGE};
 }
-export const onboardingFormSchema=z.object({
+const onboardingFormObject=z.object({
  businessName:text(200).min(2),bankAccountName:text(200).min(2),bankAccountNumber:z.string().regex(/^\d{8}$/),bankSortCode:z.string().regex(/^\d{2}-?\d{2}-?\d{2}$/),
  accessDate:date,accessInfo:text(10000).min(2),utilitiesConnected:z.boolean(),utilityInstallDate:date.nullable().optional(),prepaymentMeters:z.boolean(),creditSwitchDate:date.nullable().optional(),
  broadbandConnected:z.boolean(),broadbandInstallDate:date.nullable().optional(),hasGarden:z.boolean(),mailPreference:z.enum(['photograph','open_and_photograph','leave_safely']),
  warrantyDetails:text(5000).default(''),preferredRepairContact:text(2000).default(''),repairLimitMinor:money,fullRepairPermission:z.boolean(),furnishingChoice:z.enum(['self','recharge']),licensingRequired:z.boolean(),
  gasElectricMeters:text(2000).optional(),operatingStatus:text(2000).optional(),
-}).strict().superRefine((v,c)=>{
+}).strict();
+export const onboardingFormSchema=onboardingFormObject.superRefine((v,c)=>{
  for(const [needed,key] of [[!v.utilitiesConnected,'utilityInstallDate'],[v.prepaymentMeters,'creditSwitchDate'],[!v.broadbandConnected,'broadbandInstallDate']] as const)
   if(needed&&!v[key])c.addIssue({code:'custom',path:[key],message:'Provide the planned date'});
 });
@@ -64,7 +65,8 @@ export const journeyActionSchema=z.discriminatedUnion('action',[
  // The agreement typed in, or made from the contract in use (templateId, migration 20261020870000; the database fills it in).
  z.object({action:z.literal('publishAgreement'),...base,agreement:text(200000).min(20).optional(),templateId:id.optional(),format:z.enum(['text','outline']).optional()}).strict(),
  z.object({action:z.literal('signAgreement'),...base,agreementRevision:z.number().int().positive(),signedName:text(200).min(2),signatureImage:z.string().max(MAX_SIGNATURE_LENGTH).regex(SIGNATURE_PATTERN,'Draw your signature again').optional(),consent:z.literal(true)}).strict(),
- z.object({action:z.literal('submitForm'),...base,form:onboardingFormSchema}).strict(),
+ // After an onboarding package the form carries only what the package did not answer (migration 20261028100000 fills the rest).
+ z.object({action:z.literal('submitForm'),...base,form:z.union([onboardingFormSchema,onboardingFormObject.partial()])}).strict(),
  z.object({action:z.literal('linkInvoice'),...base,invoiceId:id}).strict(),
  z.object({action:z.literal('recordInvoiceOutside'),...base,note:text(500).min(3)}).strict(),
  z.object({action:z.literal('bookInspection'),...base,inspectionOn:date}).strict(),
