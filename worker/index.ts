@@ -156,6 +156,11 @@ function startScheduledJobs(controller: { cron?: string; scheduledTime?: number 
   ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_agreement_followup_sweep', {})).catch(() => {
     console.error('Agreement follow-ups failed; the next run retries.');
   }));
+  // Onboarding fee reminders (20261027300000): a sent fee not yet settled reminds the owner in the app and by email every 48
+  // hours (an admin setting). At most 50 a run, each fee once per interval.
+  ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_onboarding_fee_sweep', {})).catch(() => {
+    console.error('Onboarding fee reminders failed; the next run retries.');
+  }));
   // Owners are reminded once an approval has waited 48 hours; client relations are told at 96.
   ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_chase_owner_approvals', {})).catch(() => {
     console.error('Owner approval reminders failed; the next run retries.');

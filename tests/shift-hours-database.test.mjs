@@ -73,15 +73,22 @@ test("Erika's open shift: the day counts 15h 21m, the next day 39m, flagged, not
 });
 
 test('a shift across midnight counts on each day; periods clip it', async () => {
-  await shift(JOHN, londonInstant(day(-3), '22:00'), londonInstant(day(-2), '02:10'));
+  const start = londonInstant(day(-3), '22:00'), midnight = londonInstant(day(-2), '00:00'), end = londonInstant(day(-2), '02:10');
+  await shift(JOHN, start, end);
+  // The minutes actually worked either side of London midnight: 120 and 130 on most nights, one hour more or less
+  // after midnight on the nights the clocks change (the end of October and of March).
+  const minutes = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 60000);
+  const before = minutes(start, midnight), afterMidnight = minutes(midnight, end);
+  assert.equal(before, 120);
+  assert.ok([70, 130, 190].includes(afterMidnight));
   await as(ADMIN);
   const john = timesheetSchema.parse(await read('timesheet', day(-6), day(0))).people.find(p => p.userId === users[JOHN]);
-  assert.deepEqual(john.days.filter(d => d.shifts.length).map(d => [d.day, d.minutes]), [[day(-3), 120], [day(-2), 130]]);
-  assert.equal(john.totalMinutes, 250);
+  assert.deepEqual(john.days.filter(d => d.shifts.length).map(d => [d.day, d.minutes]), [[day(-3), before], [day(-2), afterMidnight]]);
+  assert.equal(john.totalMinutes, before + afterMidnight);
   const second = timesheetSchema.parse(await read('timesheet', day(-2), day(-2))).people.find(p => p.userId === users[JOHN]);
-  assert.equal(second.totalMinutes, 130, 'a period starting after midnight counts only its part');
+  assert.equal(second.totalMinutes, afterMidnight, 'a period starting after midnight counts only its part');
   const prod = productivitySchema.parse(await read('productivity', day(-2), day(0))).people.find(p => p.userId === users[JOHN]);
-  assert.deepEqual([prod.minutes, prod.shifts, prod.days], [130, 1, 1]);
+  assert.deepEqual([prod.minutes, prod.shifts, prod.days], [afterMidnight, 1, 1]);
 });
 
 test('the person and management are told once when a shift goes past the limit', async () => {
