@@ -27,8 +27,10 @@ assert.ok(migrations.includes(MINE));
 for (const file of migrations) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
 const SIGS = ['private.workspace_journey_action(jsonb)', 'private.workspace_client_enquiry_view(private.workspace_client_enquiries)', 'private.workspace_owner_enquiry_record(uuid,jsonb)', 'private.workspace_owner_enquiry_files(jsonb)', 'public.workspace_owner_enquiry_files(jsonb)'];
 const definitions = () => Promise.all(SIGS.map(async s => (await db.query('select pg_get_functiondef($1::regprocedure) d', [s])).rows[0].d));
+// Run again with the migrations after it (a later one patches a function this one defines).
+const rerun = async () => { for (const file of migrations.filter(f => f >= MINE)) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8')); };
 const firstRun = await definitions();
-await db.exec(await fs.readFile('supabase/migrations/' + MINE, 'utf8'));
+await rerun();
 const secondRun = await definitions();
 
 const roles = ['super_admin', 'admin', 'stays', 'client', 'client', 'cleans'];
@@ -64,7 +66,7 @@ after(async () => { await db.close(); await vite.close(); });
 let streets = 0;
 async function ownerEnquiry(i = OWNER, over = {}) {
   const form = newEnquiryForm(false), n = ++streets;
-  const raw = { address: `${n} Owner Lane, Leith, Edinburgh EH6 ${n}AB`, name: `Owner Lane ${n}`, region: '', propertyType: 'Flat', bedrooms: '2', wcs: '1', bathrooms: '1', parking: 'Driveway', garden: '', photoLink: '', notes: 'Keys with the neighbour', startWhen: '', ...over };
+  const raw = { address: `${n} Owner Lane, Leith, Edinburgh EH6 ${n}AB`, name: `Owner Lane ${n}`, region: '', propertyType: 'Flat', bedrooms: '2', wcs: '1', bathrooms: '1', parking: 'Driveway', garden: '', photoLink: '', notes: 'Keys with the neighbour', startWhen: '', enquiryType: "I'm ready to get started", ...over };
   const body = form.build(workflowValues(form.fields, raw), crypto.randomUUID());
   return journey(i, body);
 }
@@ -96,6 +98,7 @@ test("an owner's enquiry lands in Client enquiries as an answered form, from an 
   assert.equal(e.answers.fullName, 'Jamie Owner'); assert.equal(e.answers.email, 'oe3@example.com');
   assert.equal(e.answers.propertyType, 'Flat'); assert.equal(e.answers.bedrooms, 2); assert.equal(e.answers.bathrooms, 1); assert.equal(e.answers.wcs, 1);
   assert.equal(e.answers.parking, 'Driveway'); assert.equal(e.answers.notes, 'Keys with the neighbour'); assert.equal(e.answers.startWhen, 'As soon as possible');
+  assert.equal(e.answers.enquiryType, "I'm ready to get started", 'the stage they are at, as on the website form (20261027500000)');
   assert.equal(e.duplicateReason, null, 'not a duplicate of anything');
   // Forms the team sends stay as they were.
   assert.ok((await read()).items.filter(x => !isOwnerEnquiry(x)).every(x => x.source === 'form' && x.ownerId === null));
@@ -109,6 +112,7 @@ test("an owner's enquiry lands in Client enquiries as an answered form, from an 
 test('a start time that is not one of the choices is refused, and nothing is made', async () => {
   const before = (await sql('select count(*)::int n from public.workspace_properties'))[0].n;
   await assert.rejects(rawJourney(OWNER, { action: 'createEnquiry', name: 'Bad start', address: '9 Bad Start Road, Edinburgh', propertyType: 'Flat', bedrooms: 1, bathrooms: 1, startWhen: 'Tomorrow' }), /Choose when you would like to get started/);
+  await assert.rejects(rawJourney(OWNER, { action: 'createEnquiry', name: 'Bad stage', address: '9 Bad Stage Road, Edinburgh', propertyType: 'Flat', bedrooms: 1, bathrooms: 1, enquiryType: 'Buying a castle' }), /Choose the stage you're at/);
   assert.equal((await sql('select count(*)::int n from public.workspace_properties'))[0].n, before);
 });
 
@@ -223,7 +227,7 @@ test('item 7: the patched functions are the same after a second run, and the hel
   const defs = () => Promise.all(sigs.map(async s => (await sql('select pg_get_functiondef($1::regprocedure) d', [s]))[0].d));
   const before = await defs();
   await db.exec('reset role');
-  await db.exec(await fs.readFile('supabase/migrations/' + MINE, 'utf8'));
+  await rerun();
   assert.deepEqual(await defs(), before);
   assert.equal((await sql("select count(*)::int n from pg_trigger where tgname='workspace_journeys_owner_repair_limit'"))[0].n, 1, 'one trigger');
   for (const fn of sigs.slice(2)) for (const role of ['anon', 'authenticated', 'service_role']) assert.equal((await sql("select has_function_privilege($1,$2,'execute') ok", [role, fn]))[0].ok, false, fn + ' ' + role);
