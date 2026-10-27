@@ -151,6 +151,11 @@ function startScheduledJobs(controller: { cron?: string; scheduledTime?: number 
   ctx.waitUntil(import('../lib/stay-reason-server').then(module => module.runStaySurveys()).catch(() => {
     console.error('Stay surveys failed; the next run retries.');
   }));
+  // Agreement follow-ups (20261027200000): until the owner signs, the automatic messages and the personal follow-up notices,
+  // stopped by a reply and archived after the last step. The steps are an admin setting; at most 50 a run, each step once.
+  ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_agreement_followup_sweep', {})).catch(() => {
+    console.error('Agreement follow-ups failed; the next run retries.');
+  }));
   // Owners are reminded once an approval has waited 48 hours; client relations are told at 96.
   ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_chase_owner_approvals', {})).catch(() => {
     console.error('Owner approval reminders failed; the next run retries.');

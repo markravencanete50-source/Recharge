@@ -20,6 +20,8 @@ const endpoints = new Set([
   "/api/workspace/chat", "/api/mobile/chat", "/api/workspace/guest-inbox", "/api/mobile/guest-inbox", "/api/workspace/training-files", "/api/mobile/training-files",
   // The PriceLabs report kept with a lead (20261025300000).
   "/api/workspace/lead-files", "/api/mobile/lead-files",
+  // Agreement follow-ups (20261027200000).
+  "/api/workspace/agreement-follow-ups", "/api/mobile/agreement-follow-ups",
   "/api/workspace/owner", "/api/mobile/owner",
   "/api/hostaway/webhook", "/api/resend/webhook", "/api/workspace/email-files", "/api/mobile/email-files", "/api/workspace/email-inbox", "/api/mobile/email-inbox", "/api/workspace/client-email", "/api/mobile/client-email", "/api/workspace/account", "/api/workspace/notifications",
   "/api/workspace/oversight", "/api/mobile/oversight",

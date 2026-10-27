@@ -147,6 +147,9 @@ const EXACT: Record<string, NoticeCopy> = {
   'enquiry.duplicate': copy('An enquiry may be a duplicate', 'A returned enquiry form matches a property at the same address, an owner we already work with, or another enquiry. Check it in Leads before valuing.'),
   // A comment on a lead (migration 20261025300000): whoever sent or valued it and everyone who commented on it.
   'enquiry.lead_comment': copy('New comment on a lead', 'Someone on the team has commented on a lead you are part of. Open Leads to read it.'),
+  'enquiry.follow_up_due': copy('A personal follow-up is due', 'An owner has not signed their management agreement yet. Follow up personally in the app, by email, on WhatsApp and by phone, then tick each one on the lead.'),
+  'enquiry.follow_up_replied': copy('An owner replied about their agreement', 'An owner who has not signed yet has replied, so the automatic follow-ups have stopped. Follow up personally from the lead.'),
+  'enquiry.follow_up_archived': copy('An onboarding was archived', 'An owner did not answer any of the agreement follow-ups, so their onboarding was archived. It is in Leads if they come back.'),
   'feedback.received': copy('New team feedback', 'Someone on the team has sent feedback. Read it in Feedback, mark it seen or done, and reply if you like.'),
   'feedback.replied': copy('A reply to your feedback', 'A super admin has replied to feedback you sent. Open Feedback to read it.'),
   'team.shift_not_clocked_out': copy('Shift not clocked out', 'A shift has been open for more than 16 hours with no clock out. It counts up to 16 hours until a manager corrects it in Productivity.'),

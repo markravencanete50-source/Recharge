@@ -21,7 +21,7 @@ export default async function EnquiryPage({ searchParams }: { searchParams: Prom
   const form = await openEnquiryForm(token);
   if (form.state === "invalid") return shell("This link isn’t working", "The link may be incomplete or out of date. Please use the latest email from Recharge, or reply to it and we’ll send a new one.");
   if (form.state === "unavailable") return shell("We couldn’t open the form", "Something went wrong on our side. Please try again in a few minutes.");
-  if (form.state === "answered") return shell("Thank you, we have your details", "A member of the team will be in touch with your free performance estimate.");
+  if (form.state === "answered") return shell("Thank you, we have your details", "A member of the team will be in touch with your free performance estimate by email, usually within 48 hours.");
   if (form.state === "expired") return shell("This link has expired", "Reply to the email from Recharge and we’ll send you a new link.");
   if (form.state === "closed") return shell("This enquiry is closed", "If you’d still like a free performance estimate, reply to the email from Recharge.");
   return shell("New Property Enquiry Form", intro,

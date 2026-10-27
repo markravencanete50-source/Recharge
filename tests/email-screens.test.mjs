@@ -64,6 +64,8 @@ test('Send the form sheet: honest placeholders, the email preview behind a toggl
   assert.match(sheet, /name=\{showPreview \? "chevron-up" : "chevron-down"\}/);
   assert.match(sheet, /\{showPreview && <View style=\{\{ borderRadius: 18,/);
   // The banner is gone: a primary SoftButton in the page heading opens the same sheet, and the hero tokens are no longer used here.
-  assert.match(sheet, /<PageHeading[^]*action=\{<SoftButton palette=\{p\} primary icon="plus" label="Send the form to a landlord" onPress=\{\(\) => setSending\(true\)\} \/>\} \/>/);
+  assert.match(sheet, /<PageHeading[^]*action=\{<View[^]*<SoftButton palette=\{p\} primary icon="plus" label="Send the form to a landlord" onPress=\{\(\) => setSending\(true\)\} \/>\s*<\/View>\} \/>/);
+  // Beside it, a plain button opens the agreement follow-up steps (20261027200000).
+  assert.match(sheet, /<SoftButton palette=\{p\} icon="edit-3" label="Agreement follow-ups" onPress=\{\(\) => setFollowUps\(true\)\} \/>/);
   assert.doesNotMatch(sheet, /HeroWash|p\.hero\b|enquiries:hero/);
 });
