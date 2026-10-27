@@ -61,6 +61,7 @@ test('owner decline archives the shared property and enquiry in both views',asyn
 });
 test('agreement consent freezes published revision, opens the onboarding fee once, owner submits private form',async()=>{
  await as(1);await assert.rejects(action({action:'signAgreement',propertyId:journey.propertyId,version:journey.version,agreementRevision:0,signedName:'Owner',consent:true}),/consent/);
+ await db.exec('reset role'); await db.query("insert into private.workspace_onboarding_packages(property_id,answers,submitted_at) values($1,'{}',now()) on conflict(property_id) do update set submitted_at=coalesce(private.workspace_onboarding_packages.submitted_at,now())", [journey.propertyId]);
  await as(0);journey=await action({action:'publishAgreement',propertyId:journey.propertyId,version:journey.version,agreement:'Test-only agreement supplied by the parties. Not a production contract.'});
  await assert.rejects(action({action:'signAgreement',propertyId:journey.propertyId,version:journey.version,agreementRevision:1,signedName:'Staff',consent:true}),/Owner consent/);
  await as(1);const sign={action:'signAgreement',requestId:crypto.randomUUID(),propertyId:journey.propertyId,version:journey.version,agreementRevision:1,signedName:'Owner',consent:true};journey=await action(sign);assert.deepEqual(await action(sign),journey);

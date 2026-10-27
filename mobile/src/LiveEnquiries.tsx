@@ -12,6 +12,7 @@ import { Sheet } from "./TeamFlows";
 import { LeadTicket } from "./LeadTicket";
 import { FollowUpSettingsSheet } from "./AgreementFollowUps";
 import { FeeSettingsSheet } from "./OnboardingFee";
+import { PackageSettingsSheet } from "./OnboardingPackage";
 import { useCelebrate } from "./Celebrate";
 import { depth, ui, type Palette } from "./theme";
 import { enquiryFileLink, readTeams, writeTeams } from "./backend/client";
@@ -41,7 +42,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
   const [filter, setFilter] = useState<Filter | null>(null);
   const [sending, setSending] = useState(false);
   const [followUps, setFollowUps] = useState(false);
-  const [feeSettings, setFeeSettings] = useState(false);
+  const [feeSettings, setFeeSettings] = useState(false), [packageSettings, setPackageSettings] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const load = useCallback(async () => {
     try { setData(clientEnquiriesSchema.parse((await readTeams({ section: "clientEnquiries" })).data)); setError(""); } catch (e) { setError(message(e)); }
@@ -60,6 +61,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
         action={<View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           <SoftButton palette={p} icon="edit-3" label="Agreement follow-ups" onPress={() => setFollowUps(true)} />
           <SoftButton palette={p} icon="edit-3" label="Onboarding fee" onPress={() => setFeeSettings(true)} />
+          <SoftButton palette={p} icon="package" label="Onboarding package" onPress={() => setPackageSettings(true)} />
           <SoftButton palette={p} primary icon="plus" label="Send the form to a landlord" onPress={() => setSending(true)} />
         </View>} />
       <StatGrid>
@@ -80,6 +82,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
       </View>
       <FollowUpSettingsSheet p={p} visible={followUps} onClose={() => setFollowUps(false)} />
       <FeeSettingsSheet p={p} visible={feeSettings} onClose={() => setFeeSettings(false)} />
+      <PackageSettingsSheet p={p} visible={packageSettings} onClose={() => setPackageSettings(false)} />
       <SendSheet p={p} visible={sending} emailReady={!!data?.emailReady} onClose={() => setSending(false)} onSent={load} />
       <EnquirySheet key={open?.id ?? "none"} p={p} enquiry={open} step={open ? steps.get(open.id)! : "sent"} emailReady={!!data?.emailReady} onClose={() => setOpenId(null)} onChanged={load}
         canDelete={!!open && canDeleteEnquiry(account.role, open)} onDeleted={async () => { setOpenId(null); await Promise.all([load(), onRefresh?.()]); }}

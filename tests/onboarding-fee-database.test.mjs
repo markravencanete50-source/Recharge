@@ -70,6 +70,7 @@ async function sent(by = OWNER, name = 'Harbour Flat') {
   const prop = created.propertyId;
   await journey(ADMIN, prop, { action: 'publishEstimate', lowRateMinor: 9000, mediumRateMinor: 11000, highRateMinor: 14000, comparables: [], managementFeeBps: 1800, otaFeeBps: 1500 });
   await journey(by, prop, { action: 'decideEstimate', decision: 'proceed' });
+  await db.exec('reset role'); await db.query("insert into private.workspace_onboarding_packages(property_id,answers,submitted_at) values($1,'{}',now()) on conflict(property_id) do update set submitted_at=coalesce(private.workspace_onboarding_packages.submitted_at,now())", [prop]);
   await journey(ADMIN, prop, { action: 'publishAgreement', agreement: 'This management agreement is between Recharge and the owner.' });
   return prop;
 }

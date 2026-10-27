@@ -152,6 +152,7 @@ const EXACT: Record<string, NoticeCopy> = {
   'enquiry.follow_up_replied': copy('An owner replied about their agreement', 'An owner who has not signed yet has replied, so the automatic follow-ups have stopped. Follow up personally from the lead.'),
   'enquiry.fee_sent': copy('Onboarding fee invoice sent', 'Accounts have sent an owner their onboarding fee invoice. The owner has been told in the app; reminders go every 48 hours until it is settled.'),
   'enquiry.fee_settled': copy('Onboarding fee settled', 'An owner has paid their onboarding fee. The onboarding package tasks have been released onto their boards.'),
+  'enquiry.package_submitted': copy('Onboarding package ready', 'An owner has built their onboarding package. Check it on their lead, then publish their management agreement: it is filled in from the package.'),
   'enquiry.follow_up_archived': copy('An onboarding was archived', 'An owner did not answer any of the agreement follow-ups, so their onboarding was archived. It is in Leads if they come back.'),
   'feedback.received': copy('New team feedback', 'Someone on the team has sent feedback. Read it in Feedback, mark it seen or done, and reply if you like.'),
   'feedback.replied': copy('A reply to your feedback', 'A super admin has replied to feedback you sent. Open Feedback to read it.'),

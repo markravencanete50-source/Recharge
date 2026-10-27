@@ -8,7 +8,9 @@ export const MAX_AGREEMENT_BYTES = 5 * 1024 * 1024;
 export const MAX_AGREEMENT_CHARACTERS = 200000;
 export const PDF_WORDING_MESSAGE = "A PDF can't be edited word by word. Upload the Word version (.docx) to edit its wording, or add the PDF as the contract in Onboarding settings.";
 // The placeholders a Word contract can use, in this order (the database's private.workspace_agreement_placeholders()).
-export const AGREEMENT_PLACEHOLDERS = ['Owner name', 'Owner email', 'Company name', 'Property name', 'Property address', 'Management fee', 'Start date'] as const;
+// The last eight come from the owner's onboarding package (migration 20261028100000); they are empty until it is in.
+export const AGREEMENT_PLACEHOLDERS = ['Owner name', 'Owner email', 'Company name', 'Property name', 'Property address', 'Management fee', 'Start date',
+  'Operator name', 'Payout account name', 'Payout sort code', 'Payout account ending', 'Repair limit', 'Preferred repair contact', 'Onboarding package', 'Onboarding fee'] as const;
 export const PLACEHOLDER_HELP: Record<(typeof AGREEMENT_PLACEHOLDERS)[number], string> = {
   'Owner name': "The owner's name from their account, or from the enquiry",
   'Owner email': "The owner's email address",
@@ -17,6 +19,14 @@ export const PLACEHOLDER_HELP: Record<(typeof AGREEMENT_PLACEHOLDERS)[number], s
   'Property address': "The property's address",
   'Management fee': 'The management fee on the estimate, for example 18%',
   'Start date': 'The day the agreement is published',
+  'Operator name': 'The person or business who owns or operates the property, from the onboarding package',
+  'Payout account name': 'The payout account holder, from the onboarding package',
+  'Payout sort code': 'The payout sort code, for example 12-34-56',
+  'Payout account ending': 'The last four digits of the payout account number (the full number is never shown)',
+  'Repair limit': 'The automatic repair limit, for example "£200.00 per repair" or "No limit"',
+  'Preferred repair contact': 'Who the owner prefers for repair work',
+  'Onboarding package': 'What is included and what the owner added, with prices',
+  'Onboarding fee': 'The onboarding fee: what is included plus the extras, for example "£535.00 + VAT"',
 };
 export const placeholderToken = (name: string) => `{{${name}}}`;
 export const DEFAULT_OWN_COST_CATEGORIES = ['Mortgage', 'Insurance', 'Utilities', 'Council tax', 'Other'] as const;

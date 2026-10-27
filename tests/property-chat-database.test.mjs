@@ -71,6 +71,7 @@ async function sent(by = OWNER, name = 'Harbour Flat') {
   const prop = created.propertyId;
   await journey(ADMIN, prop, { action: 'publishEstimate', lowRateMinor: 9000, mediumRateMinor: 11000, highRateMinor: 14000, comparables: [], managementFeeBps: 1800, otaFeeBps: 1500 });
   await journey(by, prop, { action: 'decideEstimate', decision: 'proceed' });
+  await db.exec('reset role'); await db.query("insert into private.workspace_onboarding_packages(property_id,answers,submitted_at) values($1,'{}',now()) on conflict(property_id) do update set submitted_at=coalesce(private.workspace_onboarding_packages.submitted_at,now())", [prop]);
   await journey(ADMIN, prop, { action: 'publishAgreement', agreement: 'This management agreement is between Recharge and the owner.' });
   return prop;
 }
@@ -158,7 +159,7 @@ test('the follow-ups and the fee messages go to the property chat, with each mil
   assert.ok(texts.some(t => /we have received the onboarding fee for Garden Cottage/.test(t)));
   assert.deepEqual(log.filter(m => m.kind === 'event').map(m => m.body), [
     'Your estimate has been sent. You can read it in the app.',
-    'Thank you for going ahead. We are preparing your management agreement.',
+    'Thank you for going ahead. Next: build your onboarding package.',
     'Your management agreement is ready to read and sign in the app.',
     'Agreement signed. Next: the property set-up form.',
     'Set-up form received. Next: the onboarding fee.',
