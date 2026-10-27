@@ -39,6 +39,8 @@ const LIST_EVERY = 15000, THREAD_EVERY = 3000, GUESTS_EVERY = 60000;
 type Tab = MessagesTab;
 const TAB_LABEL: Record<Tab, string> = { guests: "Guests", clients: "Clients", guestEmails: "Guest emails", clientEmails: "Client emails", team: "Team" };
 const tabOf = (c: Conversation): Tab => c.kind === "owner" ? "clients" : "team";
+// The owner's own side of an owner conversation: their general one ("Recharge") or a property's chat.
+const ownerSide = (c: Conversation) => c.kind === "owner" && (c.ownerView ?? c.title === "Recharge");
 
 function useVisiblePoll(run: () => void, every: number, active: boolean) {
   const latest = useRef(run);
@@ -259,7 +261,7 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
     input.current?.focus();
   }
   // The team's side of an owner conversation can be closed (the Clients tab's Closed); any new message reopens it.
-  const teamOwnerView = c?.kind === "owner" && c.title !== "Recharge";
+  const teamOwnerView = c?.kind === "owner" && !ownerSide(c);
   const [closing, setClosing] = useState(false);
   async function setClosed(closed: boolean) {
     if (closing) return;
@@ -279,7 +281,7 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
           <Text numberOfLines={1} style={{ color: p.text, fontWeight: "600", fontSize: 16 }}>{c?.title ?? "…"}</Text>
           {!!c && <Text numberOfLines={1} style={[ui.small, { color: presenceOf(c.peer?.seenAt) === "online" && c.kind === "direct" ? p.success : p.muted }]}>{subtitle}</Text>}
         </View>
-        {c && members && c.kind !== "direct" && !(c.kind === "owner" && c.title === "Recharge") && <MemberFaces p={p} members={members} compact={narrow} onPress={() => setPeople(true)} />}
+        {c && members && c.kind !== "direct" && !ownerSide(c) && <MemberFaces p={p} members={members} compact={narrow} onPress={() => setPeople(true)} />}
         {c && teamOwnerView && !readOnly && <MotionPress accessibilityRole="button" accessibilityLabel={c.closed ? "Reopen this conversation" : "Close this conversation"} disabled={closing} onPress={() => void setClosed(!c.closed)}
           style={[ui.row, { gap: 6, minHeight: 36, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: p.border }]}>
           <Feather name={c.closed ? "rotate-ccw" : "archive"} size={14} color={p.text} /><Text style={{ color: p.text, fontSize: 13 }}>{c.closed ? "Reopen" : "Close"}</Text>
@@ -291,7 +293,7 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
         <ScrollView ref={scroll} testID="chat-messages" style={[{ flex: 1 }, web({ overscrollBehavior: "contain" })]} contentContainerStyle={{ gap: 10, paddingVertical: 6 }} keyboardShouldPersistTaps="handled"
           onScroll={onScroll} scrollEventThrottle={48} onContentSizeChange={() => { if (atEnd.current) toEnd(); }} onLayout={() => { if (atEnd.current) toEnd(); }}>
           {!thread ? <Loading p={p} rows={2} /> : thread.messages.length ? thread.messages.map(m => <Bubble key={m.id} p={p} m={m} showName={c?.kind !== "direct"} readOnly={readOnly} reacting={reacting === m.id} onReacting={on => setReacting(on ? m.id : null)} onReact={e => void react(m.id, e)} onSafety={() => setSafety(m)} />)
-            : <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 24 }]}>{c?.kind === "owner" && c.title === "Recharge" ? "Ask us anything about your property." : c?.department ? (c.department === "all" ? "Everyone on the team can read and write here." : `Everyone in ${c.title} can read and write here. Admins can read it too.`) : "Say hello."}</Text>}
+            : <Text style={[ui.small, { color: p.muted, textAlign: "center", paddingVertical: 24 }]}>{c && ownerSide(c) ? "Ask us anything about your property." : c?.department ? (c.department === "all" ? "Everyone on the team can read and write here." : `Everyone in ${c.title} can read and write here. Admins can read it too.`) : "Say hello."}</Text>}
         </ScrollView>
         {unseen && <MotionPress accessibilityRole="button" accessibilityLabel="New messages. Go to the newest" onPress={() => { setUnseen(false); atEnd.current = true; toEnd(true); }}
           style={[ui.row, { position: "absolute", bottom: 10, alignSelf: "center", gap: 6, minHeight: 36, paddingHorizontal: 14, borderRadius: 999 }, primaryFill(p), depth.card]}>
@@ -299,7 +301,7 @@ function Thread({ p, id, onBack, onChanged, onOpen, onLeft, savedReplies = false
         </MotionPress>}
       </View>
       {!!problem && <Notice text={problem} p={p} tone="bad" />}
-      {savedReplies && c?.kind === "owner" && <SavedReplies p={p} audience="owner" fill={{ name: c.title, property: c.propertyName }} onInsert={reply => { setText(current => current.trim() ? current.trimEnd() + "\n\n" + reply : reply); fit(); }} />}
+      {savedReplies && c?.kind === "owner" && <SavedReplies p={p} audience="owner" fill={{ name: c.propertyId && c.subtitle ? c.subtitle : c.title, property: c.propertyName }} onInsert={reply => { setText(current => current.trim() ? current.trimEnd() + "\n\n" + reply : reply); fit(); }} />}
       <PendingFiles p={p} items={files.items} onRemove={files.remove} onRetry={files.retry} />
       {!voice.active && <MentionPicker p={p} options={options} members={members?.members ?? []} onPick={pickMention} />}
       <View style={[ui.row, { gap: 8, alignItems: "flex-end" }]}>
@@ -457,7 +459,7 @@ export function LiveChat({ palette: p, account, desktop, properties, onUnread, g
     });
   }, [loadList, owner, mode.readOnly]);
   // Viewing as an owner: open the conversation they already have with Recharge, if any (starting one would be a change).
-  const ownerThread = owner && mode.person ? list?.find(c => c.kind === "owner")?.id ?? null : null;
+  const ownerThread = owner && mode.person ? (list?.find(c => c.kind === "owner" && !c.propertyId) ?? list?.find(c => c.kind === "owner"))?.id ?? null : null;
   useEffect(() => { if (ownerThread && !open) queueMicrotask(() => setOpen(ownerThread)); }, [ownerThread, open]);
   // Every email to ownerrelations@: Client emails, for admins and client relations.
   const emailTeam = !owner && !mode.readOnly && ["admin", "super_admin", "stays"].includes(account.role);
