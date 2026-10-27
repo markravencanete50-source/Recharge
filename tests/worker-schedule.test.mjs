@@ -38,7 +38,7 @@ const at = (iso, cron = '* * * * *', environment = env) => run({ cron, scheduled
 const EVERY_MINUTE = ['runWebPush', 'runEmailOutbox', 'runHostawayMessages "schedule"'];
 const QUARTER = ['runHostawaySync "schedule"', 'securityRpc "workspace_open_pricing_gaps"', 'securityRpc "workspace_routine_auto"',
   'securityRpc "workspace_mid_stay_cleans"', 'securityRpc "workspace_clean_morning_notices"', 'runStayReasonQuestions',
-  'runStaySurveys', 'securityRpc "workspace_chase_owner_approvals"', 'securityRpc "workspace_roll_over_signoffs"',
+  'runStaySurveys', 'securityRpc "workspace_agreement_followup_sweep"', 'securityRpc "workspace_chase_owner_approvals"', 'securityRpc "workspace_roll_over_signoffs"',
   'securityRpc "workspace_weekly_report_notices"', 'securityRpc "workspace_privacy_retention"', 'dispatchNotifications'];
 const REVIEWS = 'runHostawayReviews "schedule"';
 const HOURLY = ['securityRpc "workspace_ensure_daily_todos"', 'securityRpc "workspace_clean_form_sweep"',
