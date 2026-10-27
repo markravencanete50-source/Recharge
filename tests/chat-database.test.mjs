@@ -45,7 +45,9 @@ test('team members message each other; nobody else sees it',async()=>{
  assert.deepEqual(await act({action:'send',requestId:request,conversationId:direct.id,body:'Can you take the 2pm clean?'}),first,'a retried send is not duplicated');
  await as(2);assert.equal((await read('list'))[0].unread,1);assert.equal(await read('unread'),1);
  assert.deepEqual((await read('messages',direct.id)).messages.map(m=>[m.body,m.mine,m.authorName]),[['Can you take the 2pm clean?',false,'Person 1']]);
- for(const i of [3,5]){await as(i);await assert.rejects(read('messages',direct.id),/not found/);assert.equal((await read('list')).length,0);}
+ for(const i of [3,5]){await as(i);await assert.rejects(read('messages',direct.id),/not found/);assert.ok(!(await read('list')).some(c=>c.id===direct.id));}
+ // The owner has only their property's chat (migration 20261027400000), named by its address.
+ await as(3);assert.deepEqual((await read('list')).map(c=>[c.kind,c.ownerView]),[['owner',true]]);
  await as(3);await assert.rejects(send(direct.id,'Hello'),/not found/);
 });
 

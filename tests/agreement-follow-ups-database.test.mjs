@@ -62,11 +62,12 @@ async function sent(by = OWNER, name = 'Harbour Flat') {
   return prop;
 }
 const sentAt = async prop => (await owner("select max(created_at) t from public.workspace_activity where property_id=$1 and event_type='journey.publishAgreement'", [prop]))[0].t;
-const ownerMessages = async (who = OWNER) => owner("select m.body,m.author_id from private.chat_messages m join private.chat_conversations c on c.id=m.conversation_id where c.kind='owner' and c.owner_id=$1 order by m.created_at", [users[who]]);
+const ownerMessages = async (who = OWNER) => owner("select m.body,m.author_id from private.chat_messages m join private.chat_conversations c on c.id=m.conversation_id where c.kind='owner' and c.owner_id=$1 and m.kind='text' order by m.created_at", [users[who]]);
 
 test('the migration runs twice and keeps one settings row with the plan\'s default steps', async () => {
   await db.exec('reset role');
-  await db.exec(await fs.readFile(MIGRATION, 'utf8'));
+  // Run twice, with the migrations after it run again too (a later one may replace a function this one defines).
+  for (const file of (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql') && 'supabase/migrations/' + f >= MIGRATION).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   const [{ n, steps, archive }] = await owner('select count(*)::int n,max(steps::text)::jsonb steps,max(archive_after_hours) archive from private.workspace_followup_settings');
   assert.equal(n, 1);
   assert.deepEqual(steps.map(s => [s.kind, s.afterHours]), F.DEFAULT_FOLLOW_UP_STEPS.map(s => [s.kind, s.afterHours]), 'the app shows the same defaults');

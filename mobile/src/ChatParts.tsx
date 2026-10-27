@@ -56,8 +56,10 @@ export function PersonAvatar({ p, name, userId, photo, colour, size = 44, online
 // The picture for a conversation: the other person's photo, a group's or channel's icon.
 export function ConversationAvatar({ p, c, size = 44 }: { p: Palette; c: Conversation; size?: number }) {
   // Department channels look like any group (no '#'): they are ordinary conversations in the Team tab.
-  const icon = c.department || c.kind === "group" ? "users" as const : c.kind === "owner" && !c.peer ? "home" as const : undefined;
-  return <PersonAvatar p={p} name={c.title} userId={c.peer?.userId} photo={c.peer?.photo} size={size} icon={icon} online={presenceOf(c.peer?.seenAt) === "online"} tint={c.kind === "owner" ? p.cautionWash : undefined} />;
+  // A property's chat (migration 20261027400000) is the house, not its owner.
+  const peer = c.kind === "owner" && c.propertyId ? null : c.peer;
+  const icon = c.department || c.kind === "group" ? "users" as const : c.kind === "owner" && !peer ? "home" as const : undefined;
+  return <PersonAvatar p={p} name={c.title} userId={peer?.userId} photo={peer?.photo} size={size} icon={icon} online={presenceOf(peer?.seenAt) === "online"} tint={c.kind === "owner" ? p.cautionWash : undefined} />;
 }
 
 // ---------------------------------------------------------------- photos and a video in a message

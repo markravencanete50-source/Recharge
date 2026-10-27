@@ -123,6 +123,8 @@ export const conversationSchema = z.object({
   // For the inbox chips: the reader's own conversation (a member, has written, or looks after the
   // owner's property) and the properties it is about.
   mine: z.boolean().optional(), propertyIds: z.array(uuid).default([]),
+  // An owner conversation seen by its owner (their general one, or a property's chat; migration 20261027400000).
+  ownerView: z.boolean().optional(),
   // An owner conversation the team has closed (the team's view only; migration 20261015320000).
   closed: z.boolean().default(false),
   // An unread message here mentions the reader, or everyone (migration 20261021400000): the list shows "@".

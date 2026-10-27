@@ -36,3 +36,5 @@
 -- 20261026000000 guest_translations, 20261026100000 guest_translations_more: installed by Lee 2026-10-22, verified
 -- 20261026200000 website_guest_messages, 20261027100000 website_live_chat, 20261027200000 agreement_follow_ups: installed by Lee 2026-10-27, verified
 
+-- 20261027300000 onboarding_fee: installed by Lee 2026-10-27, verified
+

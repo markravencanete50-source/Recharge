@@ -47,7 +47,7 @@ const fee = async prop => (await owner('select f.*,i.status,i.amount_minor,i.cli
 const item = async prop => (await owner('select i.id,i.version from private.workspace_onboarding_fees f join private.workspace_hub_items i on i.id=f.item_id where f.property_id=$1', [prop]))[0];
 const move = async (prop, status, extra = {}, i = ACCOUNTS) => { const it = await item(prop); await as(i); return rpc('workspace_teams_action', [{ action: 'moveHubItem', requestId: crypto.randomUUID(), id: it.id, version: it.version, status, ...extra }]); };
 const stageOf = async prop => (await owner('select stage from private.workspace_journeys where property_id=$1', [prop]))[0].stage;
-const messages = async (who = OWNER) => owner("select m.body from private.chat_messages m join private.chat_conversations c on c.id=m.conversation_id where c.kind='owner' and c.owner_id=$1 order by m.created_at,m.id", [users[who]]);
+const messages = async (who = OWNER) => owner("select m.body from private.chat_messages m join private.chat_conversations c on c.id=m.conversation_id where c.kind='owner' and c.owner_id=$1 and m.kind='text' order by m.created_at,m.id", [users[who]]);
 const mails = async (who = OWNER) => owner("select o.subject,o.body from private.workspace_email_outbox o where o.to_address=$1 order by o.created_at", [`fee${who}@example.com`]);
 const notified = async (i, event) => (await owner('select count(*)::int n from private.workspace_notification_outbox o join public.workspace_activity a on a.id=o.event_id where o.user_id=$1 and a.event_type=$2', [users[i], event]))[0].n;
 const SETUP = { businessName: 'Olive Owner', bankAccountName: 'O Owner', bankAccountNumber: '12345678', bankSortCode: '12-34-56', accessDate: '2026-10-01', accessInfo: 'Keybox by the door',
@@ -74,14 +74,15 @@ async function sent(by = OWNER, name = 'Harbour Flat') {
   return prop;
 }
 async function signed(who = OWNER, name = 'Harbour Flat') {
-  const prop = await sent(who, name);
+  let prop; try { prop = await sent(who, name); } catch (e) { console.log('WHERE', e.where); throw e; }
   await journey(who, prop, { action: 'signAgreement', agreementRevision: 1, signedName: names[who], consent: true });
   return prop;
 }
 
 test('the migration runs twice; one settings row; the defaults; who may read and change it', async () => {
   await db.exec('reset role');
-  await db.exec(await fs.readFile(MIGRATION, 'utf8'));
+  // Run twice, with the migrations after it run again too (a later one may replace a function this one defines).
+  for (const file of (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql') && 'supabase/migrations/' + f >= MIGRATION).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   const [{ n }] = await owner('select count(*)::int n from private.workspace_onboarding_fee_settings');
   assert.equal(n, 1);
   const v = await read(null);
