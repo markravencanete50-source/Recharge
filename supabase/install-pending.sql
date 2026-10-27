@@ -38,3 +38,5 @@
 
 -- 20261027300000 onboarding_fee: installed by Lee 2026-10-27, verified
 
+
+-- 20261027400000 property_chat: installed by Lee 2026-10-27, verified
