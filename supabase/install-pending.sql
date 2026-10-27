@@ -42,3 +42,5 @@
 -- 20261027400000 property_chat: installed by Lee 2026-10-27, verified
 
 -- 20261027500000 owner_enquiry_stage: installed by Lee 2026-10-27, verified
+
+-- 20261028100000 onboarding_package: installed by Lee 2026-10-27, verified
