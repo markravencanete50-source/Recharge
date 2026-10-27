@@ -176,4 +176,15 @@ test('an owner assigned to an existing property gets its chat', async () => {
   const conv = await chatOf(prop);
   assert.ok(conv);
   assert.equal((await owner('select count(*)::int n from private.chat_members where conversation_id=$1 and user_id=$2', [conv, users[OWNER]]))[0].n, 1);
+  // Deleted: what was written moves to the owner's general conversation; the chat goes.
+  await as(ADMIN);
+  await chatAct({ action: 'send', requestId: crypto.randomUUID(), conversationId: conv, body: 'The mill wheel needs a look.' });
+  await owner('delete from public.workspace_property_assignments where property_id=$1', [prop]);
+  await owner('delete from private.workspace_notification_outbox where event_id in (select id from public.workspace_activity where property_id=$1)', [prop]);
+  await owner('delete from public.workspace_activity where property_id=$1', [prop]);
+  await owner('delete from public.workspace_properties where id=$1', [prop]);
+  assert.equal(await chatOf(prop), undefined);
+  const [general] = await chats();
+  assert.equal(general.property_id, null);
+  assert.ok((await inChat(general.id)).some(m => m.body === 'The mill wheel needs a look.'));
 });

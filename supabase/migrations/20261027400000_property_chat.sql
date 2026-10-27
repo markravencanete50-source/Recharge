@@ -9,6 +9,7 @@
 --  * Messages from the team in a property chat are emailed to the owner (to their sign-in address, "Update on <address>"),
 --    unless the owner last wrote by email, which keeps replying in that email thread as before. An owner's email reply to a
 --    property chat email lands back in that property chat.
+--  * A deleted property's chat: what people wrote moves to the owner's general conversation; the milestone notes go.
 --  * The automatic messages (agreement follow-ups, onboarding fee) now go to the property chat.
 --  * Onboarding milestones are noted in the property chat as updates: estimate sent, going ahead, agreement ready to sign
 --    (and each new version), agreement signed, set-up form received, fee settled, inspection booked and done, live, closed.
@@ -55,6 +56,28 @@ create trigger workspace_property_chat_open after insert or update of client_id 
 drop trigger if exists workspace_property_chat_open on public.workspace_property_assignments;
 create trigger workspace_property_chat_open after insert on public.workspace_property_assignments for each row when (new.assignment='client')
  execute function private.workspace_property_chat_open();
+
+-- A property deleted (an enquiry withdrawn): its milestone notes go with it, and anything people wrote moves to the owner's
+-- general conversation (or the chat becomes it, when they have none: the foreign key clears property_id).
+create or replace function private.workspace_property_chat_close() returns trigger language plpgsql security definer set search_path='' as $fn$
+declare conv private.chat_conversations;gen uuid;begin
+ select * into conv from private.chat_conversations where kind='owner' and property_id=old.id;
+ if conv.id is null then return old;end if;
+ delete from private.chat_messages where conversation_id=conv.id and kind='event';
+ if not exists(select 1 from private.chat_messages where conversation_id=conv.id) then
+  delete from private.chat_conversations where id=conv.id;return old;
+ end if;
+ gen:=(select c.id from private.chat_conversations c where c.kind='owner' and c.owner_id=conv.owner_id and c.property_id is null);
+ if gen is null then return old;end if;
+ update private.chat_messages set conversation_id=gen where conversation_id=conv.id;
+ update private.chat_attachments set conversation_id=gen where conversation_id=conv.id;
+ update private.chat_reports set conversation_id=gen where conversation_id=conv.id;
+ update private.chat_conversations set last_message_at=greatest(last_message_at,conv.last_message_at) where id=gen;
+ delete from private.chat_conversations where id=conv.id;
+ return old;
+end $fn$;
+drop trigger if exists workspace_property_chat_close on public.workspace_properties;
+create trigger workspace_property_chat_close before delete on public.workspace_properties for each row execute function private.workspace_property_chat_close();
 
 -- 2. A message in a property's chat from the team (the agreement's sender, or a super admin): a notice to the owner, and the
 -- email (the reply queue below sends every team message in a property chat; `subject` names it).
@@ -197,7 +220,7 @@ begin
  end loop;
 end $patch$;
 
-revoke all on function private.workspace_property_label(uuid),private.workspace_property_chat(uuid),private.workspace_property_chat_open(),
+revoke all on function private.workspace_property_label(uuid),private.workspace_property_chat(uuid),private.workspace_property_chat_open(),private.workspace_property_chat_close(),
  private.workspace_property_chat_post(uuid,text,text,text,timestamptz),private.workspace_property_chat_milestone(),
  private.workspace_owner_message(uuid,text,text,bigint,boolean,timestamptz),private.workspace_followup_post(private.workspace_agreement_followups,timestamptz)
  from public,anon,authenticated,service_role;
