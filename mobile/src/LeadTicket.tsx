@@ -108,7 +108,7 @@ export function LeadTicket({ p, enquiry: e, subtitle, header, onClose, onChanged
       {read?.journey && ["agreement", "archived", "form", "invoice"].includes(read.journey.stage) && <FollowUpPanel key={read.journey.propertyId + read.journey.stage} p={p} propertyId={read.journey.propertyId} onChanged={load} />}
       {/* Once signed: the onboarding fee (20261027300000), when a ticket was opened for it. */}
       {read?.journey && !["enquiry", "estimate", "reviewing", "archived"].includes(read.journey.stage) && <PackagePanel key={read.journey.propertyId + read.journey.stage + "package"} p={p} propertyId={read.journey.propertyId} />}
-      {read?.journey && !["enquiry", "estimate", "reviewing", "agreement", "archived"].includes(read.journey.stage) && <ListingPanel key={read.journey.propertyId + "listing"} p={p} propertyId={read.journey.propertyId} />}
+      {read?.journey && ["inspection_complete", "live"].includes(read.journey.stage) && <ListingPanel key={read.journey.propertyId + "listing"} p={p} propertyId={read.journey.propertyId} />}
       {read?.journey && !["enquiry", "estimate", "reviewing", "agreement"].includes(read.journey.stage) && <FeePanel key={read.journey.propertyId + read.journey.stage} p={p} propertyId={read.journey.propertyId} />}
       {read && <Thread p={p} read={read} onChanged={changed} />}
     </View>
