@@ -26,8 +26,9 @@ const bucket = () => {
 };
 const EXTENSION: Record<(typeof LAUNCH_FILE_MIMES)[number], string> = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
-// Safety certificates (private "lead-files" bucket, under launch/): stored here, recorded by the database, which decides
-// who may add one (the team, or the owner for their own documents). GET signs a ten-minute link.
+// Safety certificates and furnishing photos (private "lead-files" bucket, under launch/): stored here, recorded by the
+// database, which decides who may add one (the team, the owner for their own documents, the installer for the furnishing).
+// GET signs a ten-minute link.
 export async function launchFilesRoute(request: Request, native = false) {
   if (request.method === 'POST' && (native ? !isNativeRequest(request) : !isSameOrigin(request, authSecurityConfiguration()?.origin))) return businessResponse({ error: 'Invalid request origin' }, 403);
   try {
@@ -51,8 +52,10 @@ export async function launchFilesRoute(request: Request, native = false) {
     const form = await boundedFormData(request, LAUNCH_FILE_BYTES + 65536);
     if (form === 'too-large') return businessResponse({ error: 'Certificates can be up to 15 MB each' }, 413);
     if (!form) return businessResponse({ error: 'Choose a certificate to upload' }, 400);
-    if ([...form.keys()].some(k => !['propertyId', 'step', 'file'].includes(k)) || [...form.keys()].some(k => form.getAll(k).length !== 1)) return businessResponse({ error: 'Unexpected upload fields' }, 400);
-    const propertyId = id.safeParse(form.get('propertyId')); const step = z.string().regex(/^compliance:[a-z0-9-]{1,40}$/).safeParse(form.get('step')); const file = form.get('file');
+    if ([...form.keys()].some(k => !['propertyId', 'step', 'lineId', 'file'].includes(k)) || [...form.keys()].some(k => form.getAll(k).length !== 1)) return businessResponse({ error: 'Unexpected upload fields' }, 400);
+    const propertyId = id.safeParse(form.get('propertyId')); const step = z.string().regex(/^(compliance:[a-z0-9-]{1,40}|setUp\.(received|install))$/).safeParse(form.get('step')); const file = form.get('file');
+    const lineId = form.has('lineId') ? id.safeParse(form.get('lineId')) : null;
+    if (lineId && !lineId.success) return businessResponse({ error: 'Choose the item' }, 400);
     if (!propertyId.success || !step.success || !(file instanceof Blob)) return businessResponse({ error: 'Choose a document and a certificate' }, 400);
     const bytes = new Uint8Array(await file.arrayBuffer());
     const name = (file instanceof File ? file.name : 'Certificate').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200) || 'Certificate';
@@ -62,7 +65,7 @@ export async function launchFilesRoute(request: Request, native = false) {
     const fileId = crypto.randomUUID(), path = `launch/${propertyId.data}/${fileId}.${EXTENSION[mime]}`;
     const stored = await storage.upload(path, bytes, { contentType: mime, upsert: false, cacheControl: 'private, max-age=0' });
     if (stored.error) return businessResponse({ error: 'The certificate could not be stored. Please try again.' }, 503);
-    const saved = await session.client.rpc('workspace_launch_action', { input: { action: 'addFile', requestId: crypto.randomUUID(), propertyId: propertyId.data, step: step.data, fileId, name, mime, bytes: bytes.length, path } });
+    const saved = await session.client.rpc('workspace_launch_action', { input: { action: 'addFile', requestId: crypto.randomUUID(), propertyId: propertyId.data, step: step.data, ...(lineId?.success ? { lineId: lineId.data } : {}), fileId, name, mime, bytes: bytes.length, path } });
     if (saved.error) { await storage.remove([path]).catch(() => undefined); return databaseFailure(saved.error); }
     return businessResponse({ ok: true, data: saved.data });
   } catch (error) { return viewAsFailure(error) ?? businessResponse({ error: 'Certificates are temporarily unavailable' }, 503); }

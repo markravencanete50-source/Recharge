@@ -63,9 +63,9 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
         action={<View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
           <SoftButton palette={p} icon="edit-3" label="Agreement follow-ups" onPress={() => setFollowUps(true)} />
           <SoftButton palette={p} icon="edit-3" label="Onboarding fee" onPress={() => setFeeSettings(true)} />
-          <SoftButton palette={p} icon="package" label="Onboarding package" onPress={() => setPackageSettings(true)} />
-          <SoftButton palette={p} icon="check-square" label="Launch preparation" onPress={() => setLaunchSettings(true)} />
-          <SoftButton palette={p} icon="home" label="Listings" onPress={() => setListingSettings(true)} />
+          <SoftButton palette={p} icon="edit-3" label="Onboarding package" onPress={() => setPackageSettings(true)} />
+          <SoftButton palette={p} icon="edit-3" label="Launch preparation" onPress={() => setLaunchSettings(true)} />
+          <SoftButton palette={p} icon="edit-3" label="Listings" onPress={() => setListingSettings(true)} />
           <SoftButton palette={p} primary icon="plus" label="Send the form to a landlord" onPress={() => setSending(true)} />
         </View>} />
       <StatGrid>
