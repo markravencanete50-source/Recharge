@@ -12,6 +12,7 @@ const vite = await createServer({ configFile: false, server: { middlewareMode: t
 const { journeyActionSchema } = await vite.ssrLoadModule('/lib/journey-policy.ts');
 const L = await vite.ssrLoadModule('/lib/launch-preparation.ts');
 const MIGRATION = 'supabase/migrations/20261029100000_launch_preparation.sql';
+const ROUND_TWO = 'supabase/migrations/20261029200000_launch_compliance_boards.sql';
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
 create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',email_confirmed_at timestamptz);
@@ -75,6 +76,13 @@ const read = async (prop, i = STAYS) => { await as(i); return L.launchReadSchema
 const act = async (input, i = STAYS) => { await as(i); return L.launchReadSchema.parse(await rpc('workspace_launch_action', [L.launchActionSchema.parse({ requestId: crypto.randomUUID(), ...input })])); };
 const stepOf = (v, key) => v.launch.steps.find(s => s.key === key);
 const tick = (prop, step, data, i = STAYS) => act({ action: 'tick', propertyId: prop, step, ...(data ? { data } : {}) }, i);
+// A certificate as the upload route records it once stored.
+async function certificate(prop, step, i = STAYS, over = {}) {
+  await as(i);
+  const fileId = crypto.randomUUID();
+  const out = await rpc('workspace_launch_action', [{ action: 'addFile', requestId: crypto.randomUUID(), propertyId: prop, step, fileId, name: 'Certificate.pdf', mime: 'application/pdf', bytes: 1200, path: `launch/${prop}/${fileId}.pdf`, ...over }]);
+  return { fileId, read: L.launchReadSchema.parse(out) };
+}
 async function preparedForReadiness(prop) {
   await tick(prop, 'setUp.inspection', { on: plus(2), access: 'Keybox by the front door' });
   await tick(prop, 'setUp.inventory');
@@ -82,7 +90,7 @@ async function preparedForReadiness(prop) {
   await tick(prop, 'setUp.condition', { ticks: v.settings.condition.map(c => c.key) });
   await tick(prop, 'setUp.order', { note: 'Ordered from the catalogue' });
   await tick(prop, 'setUp.install');
-  for (const s of (await read(prop)).launch.steps.filter(s => s.section === 'compliance')) await tick(prop, s.key, { expiresOn: plus(300) });
+  for (const s of (await read(prop)).launch.steps.filter(s => s.section === 'compliance')) { await certificate(prop, s.key); await tick(prop, s.key, { expiresOn: plus(300) }); }
   await tick(prop, 'licensing.licence', { required: true, number: 'EH-STL-001' });
   await act({ action: 'allocate', propertyId: prop, housekeeperId: users[KEEPER] });
 }
@@ -90,13 +98,16 @@ const allTicked = v => v.settings.condition.map(c => ({ key: c.key, ok: true, no
 
 test('the migration runs twice, stays locked down, and its starting statements match the app', async () => {
   const sql = await fs.readFile(MIGRATION, 'utf8');
-  await db.exec('reset role'); await db.exec(sql); await db.exec(sql);
-  assert.ok(!/—/.test(sql), 'no em dashes');
-  for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness']) {
+  const two = await fs.readFile(ROUND_TWO, 'utf8');
+  await db.exec('reset role'); await db.exec(sql); await db.exec(two); await db.exec(sql); await db.exec(two);
+  assert.ok(!/—/.test(sql + two), 'no em dashes');
+  for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
     for (const role of ['anon', 'authenticated', 'service_role']) assert.equal((await owner('select has_table_privilege($1,$2,$3) ok', [role, 'private.' + t, 'select']))[0].ok, false, role + ' ' + t);
   }
   assert.equal((await owner("select has_function_privilege('anon','public.workspace_launch_read(uuid)','execute') ok"))[0].ok, false);
+  assert.equal((await owner("select has_function_privilege('authenticated','public.workspace_launch_compliance_sweep()','execute') ok"))[0].ok, false);
+  assert.equal((await owner("select has_function_privilege('service_role','public.workspace_launch_compliance_sweep()','execute') ok"))[0].ok, true);
   const [d] = await owner('select private.workspace_launch_settings_default() s');
   assert.deepEqual(L.launchSettingsSchema.parse(d.s), L.DEFAULT_LAUNCH_SETTINGS);
   assert.equal(L.DEFAULT_LAUNCH_SETTINGS.condition.length, 16);
@@ -133,6 +144,8 @@ test('the checklist follows the package, and nothing opens before the onboarding
   await refused(tick(prop, 'licensing.licence', { required: true }, OWNER), /licence number/);
   await tick(prop, 'licensing.licence', { required: false }, OWNER);
   await refused(tick(prop, 'compliance:epc', { expiresOn: plus(-1) }, OWNER), /expired/);
+  await refused(tick(prop, 'compliance:epc', { expiresOn: plus(400) }, OWNER), /Upload the certificate first/);
+  await certificate(prop, 'compliance:epc', OWNER);
   v = await tick(prop, 'compliance:epc', { expiresOn: plus(400) }, OWNER);
   assert.equal(stepOf(v, 'compliance:epc').state, 'done');
   assert.equal(stepOf(v, 'compliance:epc').doneByName, 'Olive Owner');
@@ -217,5 +230,89 @@ test('admins edit the condition statements, the notes and whether the video is r
   assert.equal(v.settings.condition.length, 17);
   assert.equal(v.settingsUpdatedByName, 'Morag');
   await refused(act({ action: 'saveSettings', settings: { ...settings, condition: [] } }, ADMIN), /./);
+  await act({ action: 'saveSettings', settings: L.DEFAULT_LAUNCH_SETTINGS }, ADMIN);
+});
+
+test('safety certificates: the owner uploads their own, the team any; renewing replaces the expiry; removed files leave storage', async () => {
+  const prop = await signed('Certificate Flat');
+  await refused(certificate(prop, 'compliance:eicr', OWNER), /Recharge looks after this document/);
+  await refused(certificate(prop, 'compliance:epc', OWNER, { path: 'listings/elsewhere.pdf' }), /Invalid file/);
+  await refused(certificate(prop, 'compliance:epc', OWNER, { mime: 'text/html' }), /Invalid file/);
+  await refused(certificate(prop, 'setUp.inventory'), /safety document/);
+  const { fileId, read: v } = await certificate(prop, 'compliance:epc', OWNER);
+  assert.equal(stepOf(v, 'compliance:epc').files.length, 1);
+  assert.equal(stepOf(v, 'compliance:epc').files[0].name, 'Certificate.pdf');
+  // Opening it: anyone who sees the checklist; not a housekeeper elsewhere.
+  await as(OWNER);
+  assert.match((await rpc('workspace_launch_file', [prop, fileId])).path, new RegExp(`^launch/${prop}/`));
+  await as(KEEPER); await refused(rpc('workspace_launch_file', [prop, fileId]), /Property not found/);
+
+  await tick(prop, 'compliance:epc', { expiresOn: plus(100) }, OWNER);
+  let mine = await read(prop, OWNER);
+  assert.equal(stepOf(mine, 'compliance:epc').canTick, true, 'a done document can be renewed');
+  mine = await tick(prop, 'compliance:epc', { expiresOn: plus(500) }, OWNER);
+  assert.equal(stepOf(mine, 'compliance:epc').data.expiresOn, plus(500));
+
+  await act({ action: 'removeFile', propertyId: prop, step: 'compliance:epc', fileId }, OWNER);
+  assert.equal((await owner("select count(*)::int n from private.workspace_storage_removals where path like $1", [`launch/${prop}/%`]))[0].n, 1);
+  await refused(act({ action: 'removeFile', propertyId: prop, step: 'compliance:epc', fileId }, OWNER), /File not found/);
+
+  // Admins can let documents be ticked without the upload.
+  await act({ action: 'saveSettings', settings: { ...L.DEFAULT_LAUNCH_SETTINGS, requireComplianceFile: false } }, ADMIN);
+  await tick(prop, 'compliance:gas-safety', { expiresOn: plus(200) }, OWNER);
+  await act({ action: 'saveSettings', settings: L.DEFAULT_LAUNCH_SETTINGS }, ADMIN);
+});
+
+test('expiry reminders: the owner in the chat and a renewal ticket on the safety board, once; renewing completes it', async () => {
+  const prop = await signed('Reminder Flat');
+  await certificate(prop, 'compliance:eicr');
+  await tick(prop, 'compliance:eicr', { expiresOn: plus(60) });
+  await certificate(prop, 'compliance:epc', OWNER);
+  await tick(prop, 'compliance:epc', { expiresOn: plus(200) }, OWNER);
+  const sweep = async () => { await db.exec('reset role'); return (await db.query('select private.workspace_launch_compliance_sweep() r')).rows[0].r; };
+  const before = (await owner("select count(*)::int n from private.workspace_launch_reminders where property_id=$1", [prop]))[0].n;
+  await sweep();
+  const reminders = await owner('select step,work_id from private.workspace_launch_reminders where property_id=$1', [prop]);
+  assert.equal(reminders.length - before, 1, 'only the document within three months');
+  assert.equal(reminders[0].step, 'compliance:eicr');
+  await said(/EICR certificate expires on .*upload the new certificate/);
+  const [ticket] = await owner("select w.module_id,w.status,d.kind from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where w.id=$1", [reminders[0].work_id]);
+  assert.deepEqual(ticket, { module_id: 'safety-maintenance', status: 'waiting', kind: 'compliance_renewal' });
+  await sweep();
+  assert.equal((await owner('select count(*)::int n from private.workspace_launch_reminders where property_id=$1', [prop]))[0].n, 1, 'once');
+
+  await certificate(prop, 'compliance:eicr');
+  await tick(prop, 'compliance:eicr', { expiresOn: plus(800) });
+  assert.equal((await owner('select status from public.workspace_work_items where id=$1', [reminders[0].work_id]))[0].status, 'completed');
+});
+
+test("Recharge's parts are mirrored on their boards; ticking either completes both", async () => {
+  const answers = { ...ANSWERS, broadbandInstalled: false, broadbandRecharge: true };
+  const prop = await signed('Board Flat', { answers });
+  const tickets = async () => owner("select t.step,w.module_id,w.status,w.id from private.workspace_launch_tickets t join public.workspace_work_items w on w.id=t.work_id where t.property_id=$1 order by t.step", [prop]);
+  let list = await tickets();
+  assert.deepEqual(list.map(t => [t.step, t.module_id]), [['broadband.setUp', 'new-property-inspection-board'], ['compliance:eicr', 'safety-maintenance']],
+    "Recharge's open parts only; set-up and the owner's parts get none");
+  const v = await read(prop);
+  assert.equal(stepOf(v, 'compliance:eicr').ticketId, list[1].id);
+
+  // Completed on the board: the part is ticked.
+  const board = list[0].id;
+  await owner("update public.workspace_work_items set status='completed',completed_at=now() where id=$1", [board]);
+  assert.equal(stepOf(await read(prop), 'broadband.setUp').state, 'done');
+  // Reopened on the checklist: so is the ticket. Ticked on the checklist: the ticket completes.
+  await act({ action: 'reopen', propertyId: prop, step: 'broadband.setUp' });
+  assert.equal((await owner('select status from public.workspace_work_items where id=$1', [board]))[0].status, 'waiting');
+  await tick(prop, 'broadband.setUp');
+  assert.equal((await owner('select status from public.workspace_work_items where id=$1', [board]))[0].status, 'completed');
+  // A part with something to enter is finished in Launch Preparation.
+  await refused(owner("update public.workspace_work_items set status='completed' where id=$1", [list[1].id]), /Finish "EICR" in Launch Preparation/);
+
+  // Admins choose the boards; an unknown board is refused, and none means no ticket.
+  await refused(act({ action: 'saveSettings', settings: { ...L.DEFAULT_LAUNCH_SETTINGS, boards: { ...L.DEFAULT_LAUNCH_SETTINGS.boards, social: 'no-such-board' } } }, ADMIN), /Choose a board/);
+  const saved = await act({ action: 'saveSettings', settings: { ...L.DEFAULT_LAUNCH_SETTINGS, boards: { ...L.DEFAULT_LAUNCH_SETTINGS.boards, compliance: '' } } }, ADMIN);
+  assert.ok(saved.boardIds.includes('safety-maintenance'));
+  const other = await signed('Quiet Flat');
+  assert.equal((await owner('select count(*)::int n from private.workspace_launch_tickets where property_id=$1', [other]))[0].n, 0);
   await act({ action: 'saveSettings', settings: L.DEFAULT_LAUNCH_SETTINGS }, ADMIN);
 });

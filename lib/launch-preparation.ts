@@ -5,6 +5,8 @@ import { z } from 'zod';
 // the owner does; parts the package left out are greyed out. The readiness inspection opens once set-up, broadband,
 // utilities, safety compliance, licensing and the housekeeper are done; the housekeeper's form makes the property guest
 // ready. Admins edit the condition statements, the note under each part and whether the changeover video is required.
+// Round two (20261029200000): safety certificates with expiry reminders, and each of Recharge's parts mirrored as a ticket
+// on its section's task board (an admin setting).
 
 export const LAUNCH_SECTIONS = ['setUp', 'broadband', 'utilities', 'compliance', 'licensing', 'housekeeper', 'readiness', 'photography', 'garden', 'waste', 'guidebook', 'listing', 'pricing', 'social'] as const;
 export type LaunchSection = (typeof LAUNCH_SECTIONS)[number];
@@ -27,6 +29,11 @@ export const launchSettingsSchema = z.object({
     .refine(list => new Set(list.map(s => s.key)).size === list.length, 'Each statement needs its own key'),
   notes: z.record(z.enum(LAUNCH_SECTIONS), z.string().trim().max(1000, 'Up to 1,000 characters')),
   requireVideo: z.boolean(),
+  // Whether a safety document needs its certificate uploaded, and how many months before expiry the owner is reminded.
+  requireComplianceFile: z.boolean(),
+  reminderMonths: z.number().int().min(1).max(6),
+  // The task board each section's tickets go on (a module id), or '' for none.
+  boards: z.record(z.enum(LAUNCH_SECTIONS), z.string().max(80)),
 }).strict();
 export type LaunchSettings = z.infer<typeof launchSettingsSchema>;
 
@@ -60,7 +67,18 @@ export const DEFAULT_LAUNCH_SETTINGS: LaunchSettings = {
     social: "A coming soon post once the photos are in, and a second post once the property is live.",
   },
   requireVideo: true,
+  requireComplianceFile: true,
+  reminderMonths: 3,
+  boards: {
+    compliance: 'safety-maintenance', broadband: 'new-property-inspection-board', readiness: 'new-property-inspection-board',
+    guidebook: 'new-property-inspection-board', pricing: 'daily-pricing', social: 'listing-health', photography: 'listing-health', waste: 'routine-bin-garden-board',
+  },
 };
+// Sections whose parts can have a board ticket; the others already raise their own onboarding tickets.
+export const TICKET_SECTIONS: readonly LaunchSection[] = ['broadband', 'compliance', 'readiness', 'photography', 'waste', 'guidebook', 'pricing', 'social'];
+// Certificates: PDF or a photo, up to 15 MB, up to 10 for each document.
+export const LAUNCH_FILE_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] as const;
+export const LAUNCH_FILE_BYTES = 15 * 1024 * 1024;
 
 // A new statement's key, from its title ("Hot tub" is hot_tub), kept apart from the ones already there.
 export function statementKey(title: string, taken: readonly string[]): string {
@@ -76,6 +94,8 @@ export const launchActionSchema = z.discriminatedUnion('action', [
   // Tick a part by hand, with what it asks for (a date and access, the condition ticks, an expiry date, the licence).
   z.object({ action: z.literal('tick'), requestId: id, propertyId: id, step: z.string().max(80), data: z.record(z.unknown()).optional() }).strict(),
   z.object({ action: z.literal('reopen'), requestId: id, propertyId: id, step: z.string().max(80) }).strict(),
+  // Certificates are added through the upload route; removing one goes here.
+  z.object({ action: z.literal('removeFile'), requestId: id, propertyId: id, step: z.string().max(80), fileId: id }).strict(),
   z.object({ action: z.literal('allocate'), requestId: id, propertyId: id, housekeeperId: id }).strict(),
   z.object({ action: z.literal('bookReadiness'), requestId: id, propertyId: id, date }).strict(),
   z.object({
@@ -97,6 +117,8 @@ const stepSchema = z.object({
   manual: z.boolean(), state: z.enum(STEP_STATES), lockedBecause: z.string().nullable().default(null),
   data: z.record(z.unknown()).default({}), doneAt: z.string().nullable().default(null), doneByName: z.string().nullable().default(null),
   canTick: z.boolean().default(false), canReopen: z.boolean().default(false),
+  files: z.array(z.object({ id, name: z.string(), mime: z.string(), uploadedAt: z.string() })).default([]),
+  ticketId: id.nullable().default(null),
 });
 export type LaunchStep = z.infer<typeof stepSchema>;
 const person = z.object({ id, name: z.string() });
@@ -118,6 +140,7 @@ export type LaunchView = z.infer<typeof launchViewSchema>;
 export const launchReadSchema = z.object({
   settings: launchSettingsSchema, canEditSettings: z.boolean().default(false),
   settingsUpdatedAt: z.string().nullable().default(null), settingsUpdatedByName: z.string().nullable().default(null),
+  boardIds: z.array(z.string()).default([]),
   housekeepers: z.array(person).default([]),
   inspections: z.array(z.object({ propertyId: id, name: z.string(), address: z.string().nullable(), bookedOn: z.string() })).default([]),
   launch: launchViewSchema.nullable().default(null),

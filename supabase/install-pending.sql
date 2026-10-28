@@ -46,3 +46,5 @@
 -- 20261028100000 onboarding_package: installed by Lee 2026-10-27, verified
 
 -- 20261028200000 hostaway_listing: installed by Lee 2026-10-28, verified
+
+-- 20261029100000 launch_preparation: installed by Lee 2026-10-28, verified

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Switch, View } from "react-native";
+import { Linking, Switch, View } from "react-native";
+import * as DocumentPicker from "expo-document-picker";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
@@ -8,8 +9,10 @@ import { Sheet } from "./TeamFlows";
 import { DateField } from "./CalendarPicker";
 import { liveApi } from "./LivePages";
 import { ui, type Palette } from "./theme";
+import { launchFileLink, uploadLaunchFile } from "./backend/client";
+import { MODULES } from "../../lib/modules";
 import {
-  DEFAULT_LAUNCH_SETTINGS, LAUNCH_SECTIONS, LAUNCH_SECTION_TITLE, launchActionSchema, launchProgress, launchReadSchema, launchSettingsSchema, sectionMark, statementKey,
+  DEFAULT_LAUNCH_SETTINGS, LAUNCH_FILE_MIMES, LAUNCH_SECTIONS, TICKET_SECTIONS, LAUNCH_SECTION_TITLE, launchActionSchema, launchProgress, launchReadSchema, launchSettingsSchema, sectionMark, statementKey,
   type LaunchRead, type LaunchSettings, type LaunchStep, type LaunchView,
 } from "../../lib/launch-preparation";
 
@@ -17,10 +20,13 @@ import {
 // live. On the lead the team ticks Recharge's parts, allocates the housekeeper and books the readiness inspection; in the
 // owner's app the owner sees every part (Recharge's marked with a bolt, theirs with a person) and ticks their own; the
 // housekeeper fills in the readiness inspection form, which makes the property guest ready. Admins edit the condition
-// statements and notes from the Leads page.
+// statements, notes, reminders and boards from the Leads page. Safety documents carry their certificate (20261029200000)
+// and each of Recharge's parts is mirrored as a ticket on its board.
 const when = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
 const day = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" }).format(new Date(iso + "T12:00:00Z"));
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
+
+const boardName = (id: string) => MODULES.find(m => m.id === id)?.name ?? id;
 
 export async function readLaunch(propertyId?: string) {
   return launchReadSchema.parse((await liveApi("/launch" + (propertyId ? "?propertyId=" + encodeURIComponent(propertyId) : ""))).data);
@@ -66,10 +72,14 @@ function TickForm({ p, step, settings, busy, onTick }: { p: Palette; step: Launc
     <Text style={[ui.small, { color: p.muted }]}>{`${ticks.length} of ${settings.condition.length} ticked. Anything that cannot be ticked goes to property maintenance first.`}</Text>
     <Button p={p} icon="check" label="Every statement is ticked" disabled={busy || ticks.length < settings.condition.length} onPress={() => onTick({ ticks })} />
   </View>;
-  if (step.kind === "expiry") return <View style={{ gap: 8 }}>
-    <DateField p={p} label="Expiry date" mode="single" wholeMonthLink={false} empty="Choose the expiry date" today={today()} value={{ from: on, to: on }} onChange={next => setOn(next.from)} />
-    <Button p={p} icon="check" label="In place" disabled={busy || !on} onPress={() => onTick({ expiresOn: on })} />
-  </View>;
+  if (step.kind === "expiry") {
+    const needsFile = settings.requireComplianceFile && step.files.length === 0;
+    return <View style={{ gap: 8 }}>
+      <DateField p={p} label={step.state === "done" ? "New expiry date" : "Expiry date"} mode="single" wholeMonthLink={false} empty="Choose the expiry date" today={today()} value={{ from: on, to: on }} onChange={next => setOn(next.from)} />
+      {needsFile && <Text style={[ui.small, { color: p.muted }]}>Upload the certificate above first.</Text>}
+      <Button p={p} icon="check" label={step.state === "done" ? "Renewed" : "In place"} disabled={busy || !on || needsFile} onPress={() => onTick({ expiresOn: on })} />
+    </View>;
+  }
   if (step.kind === "licence") return <View style={{ gap: 8 }}>
     <Text style={{ color: p.text, fontSize: 14 }}>Does the property need a short-term let licence?</Text>
     <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}><Choice p={p} on={required === true} label="Yes" onPress={() => setRequired(true)} /><Choice p={p} on={required === false} label="No" onPress={() => setRequired(false)} /></View>
@@ -79,6 +89,36 @@ function TickForm({ p, step, settings, busy, onTick }: { p: Palette; step: Launc
   return <View style={{ gap: 8 }}>
     <Field p={p} label="Note (optional)" value={note} onChange={v => setNote(v.slice(0, 1000))} />
     <Button p={p} icon="check" label="Mark done" disabled={busy} onPress={() => onTick(note.trim() ? { note } : undefined)} />
+  </View>;
+}
+
+// A safety document's certificates: open, add (PDF or photo) and remove.
+function Certificates({ p, propertyId, step, editable, busy, onChange, onRemove }: {
+  p: Palette; propertyId: string; step: LaunchStep; editable: boolean; busy: boolean; onChange: (r: LaunchRead) => void; onRemove: (fileId: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false), [error, setError] = useState("");
+  async function add() {
+    setError("");
+    const picked = await DocumentPicker.getDocumentAsync({ type: [...LAUNCH_FILE_MIMES], copyToCacheDirectory: true, multiple: false });
+    const asset = picked.canceled ? null : picked.assets?.[0];
+    if (!asset) return;
+    setUploading(true);
+    try { onChange(launchReadSchema.parse(await uploadLaunchFile(propertyId, step.key, { uri: asset.uri, name: asset.name, mimeType: asset.mimeType, file: (asset as { file?: File }).file }))); }
+    catch (e) { setError(message(e)); } finally { setUploading(false); }
+  }
+  async function open(fileId: string) {
+    try { await Linking.openURL((await launchFileLink(propertyId, fileId)).url); } catch (e) { setError(message(e)); }
+  }
+  if (!step.files.length && !editable) return null;
+  return <View style={{ gap: 4 }}>
+    {step.files.map(f => <View key={f.id} style={[ui.row, { gap: 6 }]}>
+      <Feather name={f.mime === "application/pdf" ? "file-text" : "image"} size={14} color={p.muted} />
+      <Text numberOfLines={1} style={[ui.small, { color: p.text, flex: 1 }]}>{`${f.name}, ${when(f.uploadedAt)}`}</Text>
+      <Button p={p} quiet icon="external-link" label="Open" onPress={() => void open(f.id)} />
+      {editable && <Button p={p} quiet icon="trash-2" label="Remove" disabled={busy} onPress={() => onRemove(f.id)} />}
+    </View>)}
+    {editable && step.files.length < 10 && <Button p={p} quiet icon="upload" label={uploading ? "Uploading" : step.files.length ? "Add another certificate" : "Upload the certificate"} disabled={uploading || busy} onPress={() => void add()} />}
+    {!!error && <Notice p={p} tone="bad" text={error} />}
   </View>;
 }
 
@@ -193,9 +233,12 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
                 {s.state === "na" && <Text style={[ui.small, { color: p.muted }]}>Not needed for this property.</Text>}
                 {s.state === "done" && <Done p={p} step={s} />}
               </View>
-              {s.canTick && <Button p={p} quiet icon={openStep === s.key ? "x" : "edit-3"} label={openStep === s.key ? "Close" : "Tick"} onPress={() => setOpenStep(o => o === s.key ? null : s.key)} />}
+              {s.canTick && <Button p={p} quiet icon={openStep === s.key ? "x" : s.state === "done" ? "refresh-cw" : "edit-3"} label={openStep === s.key ? "Close" : s.state === "done" ? "Renew" : "Tick"} onPress={() => setOpenStep(o => o === s.key ? null : s.key)} />}
               {s.canReopen && <Button p={p} quiet icon="rotate-ccw" label="Reopen" disabled={busy} onPress={() => void act({ action: "reopen", step: s.key }, "Reopened.")} />}
             </View>
+            {s.kind === "expiry" && <Certificates p={p} propertyId={propertyId} step={s} editable={s.canTick || s.canReopen} busy={busy}
+              onChange={r => { setRead(r); setError(""); }} onRemove={fileId => void act({ action: "removeFile", step: s.key, fileId }, "Certificate removed.")} />}
+            {!!s.ticketId && !owner && read.settings.boards[s.section] && <Text style={[ui.small, { color: p.muted }]}>{`Also on the ${boardName(read.settings.boards[s.section] ?? "")} board.`}</Text>}
             {openStep === s.key && <TickForm p={p} step={s} settings={settings} busy={busy} onTick={data => void act({ action: "tick", step: s.key, ...(data ? { data } : {}) }, "Ticked.")} />}
             {s.kind === "housekeeper" && v.canAllocate && <View style={{ gap: 6 }}>
               {read.housekeepers.length === 0 ? <Text style={[ui.small, { color: p.muted }]}>There are no active housekeepers yet. Raise a recruitment to-do with the role and area.</Text>
@@ -254,7 +297,7 @@ export function HousekeeperInspections({ p }: { p: Palette }) {
 // ---------------------------------------------------------------- admins: the condition statements and notes
 export function LaunchSettingsSheet({ p, visible, onClose }: { p: Palette; visible: boolean; onClose: () => void }) {
   const [read, setRead] = useState<LaunchRead | null>(null), [draft, setDraft] = useState<LaunchSettings | null>(null);
-  const [error, setError] = useState(""), [busy, setBusy] = useState(false), [saved, setSaved] = useState(false);
+  const [error, setError] = useState(""), [busy, setBusy] = useState(false), [saved, setSaved] = useState(false), [boardFor, setBoardFor] = useState<string | null>(null);
   const request = useRequestId("launch-settings:" + JSON.stringify(draft));
   const load = useCallback(async () => { try { const r = await readLaunch(); setRead(r); setDraft(r.settings); setError(""); } catch (e) { setError(message(e)); } }, []);
   useEffect(() => { if (!visible) return; let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [visible, load]);
@@ -271,7 +314,7 @@ export function LaunchSettingsSheet({ p, visible, onClose }: { p: Palette; visib
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (
-    <Sheet palette={p} visible={visible} onClose={onClose} title="Launch preparation" subtitle="The condition checklist and the note under each part" icon="check-square" width={720}>
+    <Sheet palette={p} visible={visible} onClose={onClose} title="Launch preparation" subtitle="The condition checklist, notes, safety reminders and task boards" icon="check-square" width={720}>
       <View style={{ gap: 14 }}>
         {!draft && !error && <Loading p={p} rows={4} />}
         {draft && <>
@@ -297,6 +340,28 @@ export function LaunchSettingsSheet({ p, visible, onClose }: { p: Palette; visib
             <Text style={{ color: p.text, fontSize: 14, flex: 1 }}>The readiness inspection needs the changeover video</Text>
             <Switch accessibilityLabel="The readiness inspection needs the changeover video" value={draft.requireVideo} disabled={!canEdit} onValueChange={v => set({ requireVideo: v })} />
           </View>
+          <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>Safety compliance</Text>
+          <View style={[ui.between, { gap: 8 }]}>
+            <Text style={{ color: p.text, fontSize: 14, flex: 1 }}>Each document needs its certificate uploaded</Text>
+            <Switch accessibilityLabel="Each document needs its certificate uploaded" value={draft.requireComplianceFile} disabled={!canEdit} onValueChange={v => set({ requireComplianceFile: v })} />
+          </View>
+          <Text style={{ color: p.text, fontSize: 14 }}>Remind the owner, and raise a renewal ticket, this many months before a certificate expires</Text>
+          <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{[1, 2, 3, 4, 5, 6].map(m => <Choice key={m} p={p} on={draft.reminderMonths === m} label={`${m} month${m === 1 ? "" : "s"}`} onPress={() => canEdit && set({ reminderMonths: m })} />)}</View>
+          <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>Task boards</Text>
+          <Text style={[ui.small, { color: p.muted }]}>Each of Recharge's parts also goes on this board as a ticket. Ticking either one completes both. Set-up, garden, the housekeeper and licensing have their own onboarding tickets.</Text>
+          {TICKET_SECTIONS.map(sec => <View key={sec} style={{ gap: 6 }}>
+            <View style={[ui.between, { gap: 8 }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{LAUNCH_SECTION_TITLE[sec]}</Text>
+                <Text style={[ui.small, { color: p.muted }]}>{draft.boards[sec] ? boardName(draft.boards[sec] ?? "") : "No ticket"}</Text>
+              </View>
+              {canEdit && <Button p={p} quiet icon={boardFor === sec ? "x" : "edit-3"} label={boardFor === sec ? "Close" : "Change"} onPress={() => setBoardFor(b => b === sec ? null : sec)} />}
+            </View>
+            {canEdit && boardFor === sec && <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
+              {[...(read?.boardIds ?? []).filter(b => MODULES.some(m => m.id === b)), ""].map(b => <Choice key={b || "none"} p={p} on={(draft.boards[sec] ?? "") === b} label={b ? boardName(b) : "No ticket"}
+                onPress={() => { set({ boards: { ...draft.boards, [sec]: b } }); setBoardFor(null); }} />)}
+            </View>}
+          </View>)}
         </>}
         {!!error && <Notice p={p} tone="bad" text={error} />}
         {saved && <Notice p={p} text="Saved. New checks use these from now on." />}

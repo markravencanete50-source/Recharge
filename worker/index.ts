@@ -161,6 +161,11 @@ function startScheduledJobs(controller: { cron?: string; scheduledTime?: number 
   ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_onboarding_fee_sweep', {})).catch(() => {
     console.error('Onboarding fee reminders failed; the next run retries.');
   }));
+  // Safety certificates (20261029200000): some months before one expires (an admin setting), the owner is reminded in the
+  // property's chat and a renewal ticket goes on the safety board. Each document and expiry date once; at most 100 a run.
+  ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_launch_compliance_sweep', {})).catch(() => {
+    console.error('Safety certificate reminders failed; the next run retries.');
+  }));
   // Owners are reminded once an approval has waited 48 hours; client relations are told at 96.
   ctx.waitUntil(import('../lib/auth-security').then(module => module.securityRpc('workspace_chase_owner_approvals', {})).catch(() => {
     console.error('Owner approval reminders failed; the next run retries.');
