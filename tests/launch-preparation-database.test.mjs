@@ -306,7 +306,7 @@ test('safety certificates: the owner uploads their own, the team any; renewing r
   await act({ action: 'saveSettings', settings: L.DEFAULT_LAUNCH_SETTINGS }, ADMIN);
 });
 
-test('expiry reminders: the owner in the chat and a renewal ticket on the safety board, once; renewing completes it', async () => {
+test('expiry reminders: the owner in the chat and, for a document Recharge organise, a renewal job, once', async () => {
   const prop = await signed('Reminder Flat');
   await certificate(prop, 'compliance:eicr');
   await tick(prop, 'compliance:eicr', { expiresOn: plus(60) });
@@ -318,15 +318,23 @@ test('expiry reminders: the owner in the chat and a renewal ticket on the safety
   const reminders = await owner('select step,work_id from private.workspace_launch_reminders where property_id=$1', [prop]);
   assert.equal(reminders.length - before, 1, 'only the document within three months');
   assert.equal(reminders[0].step, 'compliance:eicr');
-  await said(/EICR certificate expires on .*upload the new certificate/);
-  const [ticket] = await owner("select w.module_id,w.status,d.kind from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where w.id=$1", [reminders[0].work_id]);
-  assert.deepEqual(ticket, { module_id: 'safety-maintenance', status: 'waiting', kind: 'compliance_renewal' });
+  await said(/EICR certificate expires on .*We are arranging the renewal/);
+  // Recharge organise the EICR (20261029700000): the renewal is a property maintenance job (quote, approvals, visit, invoice).
+  const [ticket] = await owner("select w.module_id,w.status,w.client_visible,d.kind,d.data->>'phase' phase,d.data->>'complianceStep' step,w.title from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where w.id=$1", [reminders[0].work_id]);
+  assert.deepEqual(ticket, { module_id: 'stays-maintenance-reporting', status: 'waiting', client_visible: true, kind: 'maintenance', phase: 'triage', step: 'compliance:eicr', title: 'Renew the EICR' });
   await sweep();
   assert.equal((await owner('select count(*)::int n from private.workspace_launch_reminders where property_id=$1', [prop]))[0].n, 1, 'once');
 
+  // The new certificate does not close the job: it finishes through its own steps (and the owner's expense).
   await certificate(prop, 'compliance:eicr');
   await tick(prop, 'compliance:eicr', { expiresOn: plus(800) });
-  assert.equal((await owner('select status from public.workspace_work_items where id=$1', [reminders[0].work_id]))[0].status, 'completed');
+  assert.equal((await owner('select status from public.workspace_work_items where id=$1', [reminders[0].work_id]))[0].status, 'waiting');
+
+  // A document the owner looks after keeps the plain renewal ticket on the safety board.
+  await owner("update private.workspace_launch_steps set data=jsonb_set(data,'{expiresOn}',to_jsonb($2::text)) where property_id=$1 and step='compliance:epc'", [prop, plus(30)]);
+  await sweep();
+  const [epc] = await owner("select d.kind,w.module_id from private.workspace_launch_reminders m join public.workspace_work_items w on w.id=m.work_id join private.workspace_domain_details d on d.work_id=w.id where m.property_id=$1 and m.step='compliance:epc'", [prop]);
+  assert.deepEqual(epc, { kind: 'compliance_renewal', module_id: 'safety-maintenance' });
 });
 
 test("Recharge's parts are mirrored on their boards; ticking either completes both", async () => {
@@ -334,7 +342,7 @@ test("Recharge's parts are mirrored on their boards; ticking either completes bo
   const prop = await signed('Board Flat', { answers });
   const tickets = async () => owner("select t.step,w.module_id,w.status,w.id from private.workspace_launch_tickets t join public.workspace_work_items w on w.id=t.work_id where t.property_id=$1 order by t.step", [prop]);
   let list = await tickets();
-  assert.deepEqual(list.map(t => [t.step, t.module_id]), [['broadband.setUp', 'new-property-inspection-board'], ['compliance:eicr', 'safety-maintenance']],
+  assert.deepEqual(list.map(t => [t.step, t.module_id]), [['broadband.setUp', 'new-property-inspection-board'], ['compliance:eicr', 'stays-maintenance-reporting']],
     "Recharge's open parts only; set-up and the owner's parts get none");
   const v = await read(prop);
   assert.equal(stepOf(v, 'compliance:eicr').ticketId, list[1].id);
@@ -348,8 +356,10 @@ test("Recharge's parts are mirrored on their boards; ticking either completes bo
   assert.equal((await owner('select status from public.workspace_work_items where id=$1', [board]))[0].status, 'waiting');
   await tick(prop, 'broadband.setUp');
   assert.equal((await owner('select status from public.workspace_work_items where id=$1', [board]))[0].status, 'completed');
-  // A part with something to enter is finished in Launch Preparation.
-  await refused(owner("update public.workspace_work_items set status='completed' where id=$1", [list[1].id]), /Finish "EICR" in Launch Preparation/);
+  // The EICR is a job: completing it asks the team for the certificate, and the document stays to tick.
+  await owner("update public.workspace_work_items set status='completed',completed_at=now() where id=$1", [list[1].id]);
+  assert.equal(stepOf(await read(prop), 'compliance:eicr').state, 'todo');
+  assert.ok((await owner("select count(*)::int n from private.workspace_lead_activity a join private.workspace_client_enquiries e on e.id=a.enquiry_id where e.property_id=$1 and a.body like 'The EICR job is done.%'", [prop]))[0].n >= 1);
 
   // Admins choose the boards; an unknown board is refused, and none means no ticket.
   await refused(act({ action: 'saveSettings', settings: { ...L.DEFAULT_LAUNCH_SETTINGS, boards: { ...L.DEFAULT_LAUNCH_SETTINGS.boards, social: 'no-such-board' } } }, ADMIN), /Choose a board/);
