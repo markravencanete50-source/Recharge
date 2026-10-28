@@ -53,7 +53,7 @@ export async function launchFilesRoute(request: Request, native = false) {
     if (form === 'too-large') return businessResponse({ error: 'Certificates can be up to 15 MB each' }, 413);
     if (!form) return businessResponse({ error: 'Choose a certificate to upload' }, 400);
     if ([...form.keys()].some(k => !['propertyId', 'step', 'lineId', 'file'].includes(k)) || [...form.keys()].some(k => form.getAll(k).length !== 1)) return businessResponse({ error: 'Unexpected upload fields' }, 400);
-    const propertyId = id.safeParse(form.get('propertyId')); const step = z.string().regex(/^(compliance:[a-z0-9-]{1,40}|setUp\.(received|install))$/).safeParse(form.get('step')); const file = form.get('file');
+    const propertyId = id.safeParse(form.get('propertyId')); const step = z.string().regex(/^(compliance:[a-z0-9-]{1,40}|setUp\.(received|install)|guidebook:[a-z][a-z0-9_]{1,39})$/).safeParse(form.get('step')); const file = form.get('file');
     const lineId = form.has('lineId') ? id.safeParse(form.get('lineId')) : null;
     if (lineId && !lineId.success) return businessResponse({ error: 'Choose the item' }, 400);
     if (!propertyId.success || !step.success || !(file instanceof Blob)) return businessResponse({ error: 'Choose a document and a certificate' }, 400);
@@ -69,4 +69,37 @@ export async function launchFilesRoute(request: Request, native = false) {
     if (saved.error) { await storage.remove([path]).catch(() => undefined); return databaseFailure(saved.error); }
     return businessResponse({ ok: true, data: saved.data });
   } catch (error) { return viewAsFailure(error) ?? businessResponse({ error: 'Certificates are temporarily unavailable' }, 503); }
+}
+
+// ---------------------------------------------------------------- the guest guidebook: no account, the link is the key
+const guidebookPageSchema = z.object({
+  propertyName: z.string(), address: z.string().nullable(), wifiName: z.string(), wifiPassword: z.string(), guestCode: z.string(),
+  sections: z.array(z.object({ key: z.string(), title: z.string(), text: z.string(), videoUrl: z.string(), photos: z.array(z.object({ path: z.string(), name: z.string() })) })),
+});
+export type GuidebookPhoto = { url: string; name: string };
+export type GuidebookPage =
+  | { state: 'open'; propertyName: string; address: string | null; wifiName: string; wifiPassword: string; guestCode: string;
+    sections: { key: string; title: string; text: string; videoUrl: string; photos: GuidebookPhoto[] }[] }
+  | { state: 'invalid' | 'unavailable' };
+export const GUIDEBOOK_LINK = /^[0-9a-f]{64}$/;
+// Only a submitted guidebook, and never the team's key box code (20261029500000). Photos are signed for an hour.
+export async function openGuidebook(token: string | undefined): Promise<GuidebookPage> {
+  if (!token || !GUIDEBOOK_LINK.test(token)) return { state: 'invalid' };
+  const config = authSecurityConfiguration();
+  if (!config) return { state: 'unavailable' };
+  try {
+    const client = createClient(config.url, config.key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+    const result = await client.rpc('workspace_guidebook_public', { link: token });
+    if (result.error) return result.error.code === 'P0002' ? { state: 'invalid' } : { state: 'unavailable' };
+    const page = guidebookPageSchema.parse(result.data);
+    const storage = client.storage.from(LEAD_FILES_BUCKET);
+    const sections = await Promise.all(page.sections.map(async s => ({
+      ...s,
+      photos: (await Promise.all(s.photos.map(async x => {
+        const signed = await storage.createSignedUrl(x.path, 3600);
+        return signed.data?.signedUrl ? { url: signed.data.signedUrl, name: x.name } : null;
+      }))).filter((x): x is GuidebookPhoto => !!x),
+    })));
+    return { state: 'open', ...page, sections };
+  } catch { return { state: 'unavailable' }; }
 }
