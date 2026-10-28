@@ -153,6 +153,8 @@ const EXACT: Record<string, NoticeCopy> = {
   'enquiry.fee_sent': copy('Onboarding fee invoice sent', 'Accounts have sent an owner their onboarding fee invoice. The owner has been told in the app; reminders go every 48 hours until it is settled.'),
   'enquiry.fee_settled': copy('Onboarding fee settled', 'An owner has paid their onboarding fee. The onboarding package tasks have been released onto their boards.'),
   'enquiry.package_submitted': copy('Onboarding package ready', 'An owner has built their onboarding package. Check it on their lead, then publish their management agreement: it is filled in from the package.'),
+  'launch.readiness_booked': copy('Readiness inspection booked', 'You have a readiness inspection booked at a new property. Open Cleans to see the day and fill in the form on the day.'),
+  'launch.guest_ready': copy('A property is guest ready', 'The readiness inspection for a new property is in. Photography can be booked now; any issues found are on the property maintenance board.'),
   'listing.photos_received': copy('Property photos are in', 'A guest-ready property’s photos are in. Its Hostaway listing can now be checked on the lead and saved for approval.'),
   'listing.awaiting_approval': copy('A listing is waiting for your approval', 'A property’s Hostaway listing has been checked and saved. Open Leads, Listings to approve it.'),
   'listing.published': copy('Listing in Hostaway', 'A property’s listing has gone to Hostaway. Connect it to Airbnb, Booking.com and the other channels in Hostaway, then record the live listing on the lead.'),

@@ -44,3 +44,5 @@
 -- 20261027500000 owner_enquiry_stage: installed by Lee 2026-10-27, verified
 
 -- 20261028100000 onboarding_package: installed by Lee 2026-10-27, verified
+
+-- 20261028200000 hostaway_listing: installed by Lee 2026-10-28, verified

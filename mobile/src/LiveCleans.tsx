@@ -28,6 +28,7 @@ import { readCleanerRepairs, readControls, readOperations, readTeams, writeOpera
 import { CLEANER_REPAIR_STATUS, cleanerRepairOpen, readCleanerRepairList, type CleanerRepair } from "../../lib/cleaner-repairs";
 import { londonDayOf } from "../../lib/repairs-live";
 import { operationViewSchema, readableStage, type PropertyView } from "../../lib/workspace-view";
+import { HousekeeperInspections } from "./LaunchPreparation";
 import { candidatesSchema, cleanTimesLine, defaultRedoBy, disputeFor, guestLine, hoursLine, hoursProblem, monthPay, performanceSchema, problemsOf, redoByFrom, redoByLabel, redoParts, scheduleSchema, type CleanerMonth } from "../../lib/cleans-live";
 import { repairTypeLabel } from "../../lib/repair-guides";
 import { formatDay, formatMoney } from "../../lib/format";
@@ -174,6 +175,8 @@ export function LiveCleans({ palette: p, account, properties, onForm }: { palett
         <StatTile p={p} icon={manager ? "eye" : "clock"} tone="cleans" label={manager ? "To review" : "This week"} value={manager ? toReview.length : cleans.filter(w => w.dueOn && w.dueOn >= today && w.dueOn <= addDays(today, 6)).length} detail={manager ? "Submitted cleans" : "Next 7 days"} attention={manager && toReview.length > 0} />
         <StatTile p={p} icon={manager ? "user-plus" : "award"} tone="cleans" label={manager ? "Unassigned" : "Accepted"} value={manager ? unassigned.length : mine?.accepted ?? 0} detail={manager ? "Need a cleaner" : "This month"} attention={manager && unassigned.length > 0} />
       </StatGrid>}
+
+      {!manager && !only && <HousekeeperInspections p={p} />}
 
       {!manager && (only === "section-needs-your-response" || (mine && (mine.warning || mine.openComplaints.length > 0))) && (
         <Section title="Needs your response" count={(mine?.openComplaints ?? []).filter(c => !c.cleanerStatement).length} p={p}>

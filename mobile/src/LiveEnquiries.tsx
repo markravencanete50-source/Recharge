@@ -13,6 +13,7 @@ import { LeadTicket } from "./LeadTicket";
 import { FollowUpSettingsSheet } from "./AgreementFollowUps";
 import { FeeSettingsSheet } from "./OnboardingFee";
 import { PackageSettingsSheet } from "./OnboardingPackage";
+import { LaunchSettingsSheet } from "./LaunchPreparation";
 import { ListingSettingsSheet } from "./ListingDraft";
 import { useCelebrate } from "./Celebrate";
 import { depth, ui, type Palette } from "./theme";
@@ -43,7 +44,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
   const [filter, setFilter] = useState<Filter | null>(null);
   const [sending, setSending] = useState(false);
   const [followUps, setFollowUps] = useState(false);
-  const [feeSettings, setFeeSettings] = useState(false), [packageSettings, setPackageSettings] = useState(false), [listingSettings, setListingSettings] = useState(false);
+  const [feeSettings, setFeeSettings] = useState(false), [packageSettings, setPackageSettings] = useState(false), [listingSettings, setListingSettings] = useState(false), [launchSettings, setLaunchSettings] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const load = useCallback(async () => {
     try { setData(clientEnquiriesSchema.parse((await readTeams({ section: "clientEnquiries" })).data)); setError(""); } catch (e) { setError(message(e)); }
@@ -63,6 +64,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
           <SoftButton palette={p} icon="edit-3" label="Agreement follow-ups" onPress={() => setFollowUps(true)} />
           <SoftButton palette={p} icon="edit-3" label="Onboarding fee" onPress={() => setFeeSettings(true)} />
           <SoftButton palette={p} icon="package" label="Onboarding package" onPress={() => setPackageSettings(true)} />
+          <SoftButton palette={p} icon="check-square" label="Launch preparation" onPress={() => setLaunchSettings(true)} />
           <SoftButton palette={p} icon="home" label="Listings" onPress={() => setListingSettings(true)} />
           <SoftButton palette={p} primary icon="plus" label="Send the form to a landlord" onPress={() => setSending(true)} />
         </View>} />
@@ -85,6 +87,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
       <FollowUpSettingsSheet p={p} visible={followUps} onClose={() => setFollowUps(false)} />
       <FeeSettingsSheet p={p} visible={feeSettings} onClose={() => setFeeSettings(false)} />
       <PackageSettingsSheet p={p} visible={packageSettings} onClose={() => setPackageSettings(false)} />
+      <LaunchSettingsSheet p={p} visible={launchSettings} onClose={() => setLaunchSettings(false)} />
       <ListingSettingsSheet p={p} visible={listingSettings} onClose={() => setListingSettings(false)} />
       <SendSheet p={p} visible={sending} emailReady={!!data?.emailReady} onClose={() => setSending(false)} onSent={load} />
       <EnquirySheet key={open?.id ?? "none"} p={p} enquiry={open} step={open ? steps.get(open.id)! : "sent"} emailReady={!!data?.emailReady} onClose={() => setOpenId(null)} onChanged={load}
