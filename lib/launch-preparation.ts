@@ -121,6 +121,9 @@ export function statementKey(title: string, taken: readonly string[]): string {
 }
 
 const id = z.string().uuid();
+export const GARDEN_BASES = ['month', 'visit'] as const;
+export const GARDEN_FREQUENCIES = ['weekly', 'fortnightly', 'monthly'] as const;
+export const GARDEN_FREQUENCY_LABEL: Record<(typeof GARDEN_FREQUENCIES)[number], string> = { weekly: 'Weekly', fortnightly: 'Fortnightly', monthly: 'Monthly' };
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a date');
 // What the technician fills in: each section's words and video link, the Wi-Fi and both key box codes.
 const guidebookFields = {
@@ -154,6 +157,12 @@ export const launchActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('submitGuidebook'), ...guidebookFields }).strict(),
   z.object({ action: z.literal('reopenGuidebook'), requestId: id, propertyId: id }).strict(),
   z.object({ action: z.literal('resetGuidebookLink'), requestId: id, propertyId: id }).strict(),
+  // The garden maintenance quote (20261029800000): the team add the contractor's quote; the owner accepts it or says why not.
+  z.object({
+    action: z.literal('addGardenQuote'), requestId: id, propertyId: id, contractor: z.string().trim().min(1, 'Enter the contractor').max(200),
+    pricePence: z.number().int().min(1, 'Enter the price').max(10_000_000), basis: z.enum(GARDEN_BASES), frequency: z.enum(GARDEN_FREQUENCIES), details: z.string().trim().max(2000),
+  }).strict(),
+  z.object({ action: z.literal('decideGardenQuote'), requestId: id, propertyId: id, quoteId: id, decision: z.enum(['accept', 'reject']), reason: z.string().trim().max(1000).optional() }).strict(),
   z.object({ action: z.literal('allocate'), requestId: id, propertyId: id, housekeeperId: id }).strict(),
   z.object({ action: z.literal('bookReadiness'), requestId: id, propertyId: id, date }).strict(),
   z.object({
@@ -171,7 +180,7 @@ export const STEP_STATES = ['todo', 'done', 'locked', 'na'] as const;
 export type StepState = (typeof STEP_STATES)[number];
 const stepSchema = z.object({
   key: z.string(), section: z.enum(LAUNCH_SECTIONS), title: z.string(), who: z.enum(['recharge', 'client']),
-  kind: z.enum(['tick', 'date', 'condition', 'expiry', 'licence', 'housekeeper', 'readiness', 'auto', 'furnishingQuote', 'furnishingOrder', 'furnishingReceived', 'furnishingInstall', 'inventory', 'guidebookBook', 'guidebook']),
+  kind: z.enum(['tick', 'date', 'condition', 'expiry', 'licence', 'housekeeper', 'readiness', 'auto', 'furnishingQuote', 'furnishingOrder', 'furnishingReceived', 'furnishingInstall', 'inventory', 'guidebookBook', 'guidebook', 'gardenQuote']),
   manual: z.boolean(), state: z.enum(STEP_STATES), lockedBecause: z.string().nullable().default(null),
   data: z.record(z.unknown()).default({}), doneAt: z.string().nullable().default(null), doneByName: z.string().nullable().default(null),
   canTick: z.boolean().default(false), canReopen: z.boolean().default(false),
@@ -224,6 +233,16 @@ export const guidebookSchema = z.object({
   canBook: z.boolean().default(false), canEdit: z.boolean().default(false), canReopen: z.boolean().default(false), canResetLink: z.boolean().default(false),
 });
 export type LaunchGuidebook = z.infer<typeof guidebookSchema>;
+export const GARDEN_QUOTE_STATUSES = ['sent', 'accepted', 'rejected', 'withdrawn'] as const;
+export const gardenSchema = z.object({
+  quotes: z.array(z.object({
+    id, contractor: z.string(), pricePence: z.number(), basis: z.enum(GARDEN_BASES), frequency: z.enum(GARDEN_FREQUENCIES), details: z.string().default(''),
+    status: z.enum(GARDEN_QUOTE_STATUSES), reason: z.string().default(''), sentAt: z.string(), sentByName: z.string().nullable().default(null),
+    decidedAt: z.string().nullable().default(null), decidedByName: z.string().nullable().default(null),
+  })).default([]),
+  canQuote: z.boolean().default(false), canDecide: z.boolean().default(false),
+});
+export type LaunchGarden = z.infer<typeof gardenSchema>;
 export const launchViewSchema = z.object({
   propertyId: id, name: z.string().default(''), address: z.string().nullable().default(null), stage: z.string().default(''),
   steps: z.array(stepSchema).nullable(),
@@ -239,6 +258,7 @@ export const launchViewSchema = z.object({
   isInstaller: z.boolean().default(false), isAccounts: z.boolean().default(false), furnishing: furnishingSchema.nullable().default(null),
   inventory: inventorySchema.nullable().default(null),
   isTechnician: z.boolean().default(false), guidebook: guidebookSchema.nullable().default(null),
+  garden: gardenSchema.nullable().default(null),
   canAllocate: z.boolean().default(false), canBookReadiness: z.boolean().default(false), canSubmitReadiness: z.boolean().default(false),
 });
 export type LaunchView = z.infer<typeof launchViewSchema>;

@@ -16,7 +16,7 @@ import type { RecruitmentRead } from "../../lib/recruitment";
 import { categoryName, normaliseInputs, type StudioInputs } from "../../lib/furnishing-studio";
 import { MODULES } from "../../lib/modules";
 import {
-  BOARD_TITLE, DEFAULT_LAUNCH_SETTINGS, LAUNCH_FILE_MIMES, LAUNCH_SECTIONS, TICKET_SECTIONS, LAUNCH_SECTION_TITLE, launchActionSchema, launchProgress, launchReadSchema, launchSettingsSchema, sectionMark, statementKey,
+  BOARD_TITLE, DEFAULT_LAUNCH_SETTINGS, GARDEN_FREQUENCIES, GARDEN_FREQUENCY_LABEL, LAUNCH_FILE_MIMES, LAUNCH_SECTIONS, TICKET_SECTIONS, LAUNCH_SECTION_TITLE, launchActionSchema, launchProgress, launchReadSchema, launchSettingsSchema, sectionMark, statementKey,
   type LaunchFurnishing, type LaunchRead, type LaunchSettings, type LaunchStep, type LaunchView,
 } from "../../lib/launch-preparation";
 
@@ -269,6 +269,7 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
               onChange={r => { setRead(r); setError(""); }} onRemove={fileId => void act({ action: "removeFile", step: s.key, fileId }, "Certificate removed.")} />}
             {s.kind.startsWith("guidebook") && s.state !== "locked" && <GuidebookStep p={p} propertyId={propertyId} step={s} launch={v} read={read} busy={busy}
               act={(body, done) => void act(body, done)} onRead={r => { setRead(r); setError(""); }} />}
+            {s.kind === "gardenQuote" && s.state !== "locked" && <GardenStep p={p} launch={v} busy={busy} act={(body, done) => void act(body, done)} />}
             {s.kind === "inventory" && s.state !== "locked" && <InventoryStep p={p} launch={v} busy={busy} act={(body, done) => void act(body, done)} />}
             {(s.kind.startsWith("furnishing") || s.key === "setUp.invoice") && <FurnishingStep p={p} propertyId={propertyId} step={s} launch={v} read={read} busy={busy} act={(body, done) => void act(body, done)} onRead={r => { setRead(r); setError(""); }} />}
             {/* Recharge's safety documents are property maintenance jobs (20261029700000): quote, approval, visit and invoice there. */}
@@ -458,6 +459,53 @@ function InventoryStep({ p, launch, busy, act }: { p: Palette; launch: LaunchVie
 }
 
 // ---------------------------------------------------------------- the furnishing (Recharge sets up)
+// ---------------------------------------------------------------- garden maintenance (20261029800000)
+// The team add the contractor's quote (who, the price a month or a visit, how often, what it covers); the owner accepts it
+// or rejects it and says why. A rejected quote leaves room for a new one.
+function GardenStep({ p, launch, busy, act }: { p: Palette; launch: LaunchView; busy: boolean; act: (body: Record<string, unknown>, done: string) => void }) {
+  const g = launch.garden;
+  const [contractor, setContractor] = useState(""), [price, setPrice] = useState(""), [basis, setBasis] = useState<"month" | "visit">("month");
+  const [frequency, setFrequency] = useState<(typeof GARDEN_FREQUENCIES)[number]>("weekly"), [details, setDetails] = useState(""), [reason, setReason] = useState(""), [adding, setAdding] = useState(false);
+  if (!g) return null;
+  const waiting = g.quotes.some(q => q.status === "sent");
+  const pence = Math.round(Number(price.replace(/[£,\s]/g, "")) * 100);
+  const STATUS = { sent: "Waiting for the owner", accepted: "Accepted", rejected: "Rejected", withdrawn: "Replaced" } as const;
+  return <View style={{ gap: 6 }}>
+    {!g.quotes.length && <Text style={[ui.small, { color: p.muted }]}>{launch.isTeam ? "Get a quote for regular garden maintenance from a contractor and add it here for the owner." : "We are getting a quote for regular garden maintenance. You will be able to accept it here."}</Text>}
+    {g.quotes.map(q => <View key={q.id} style={{ gap: 4, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border, opacity: q.status === "withdrawn" ? 0.6 : 1 }}>
+      <View style={[ui.between, { gap: 8 }]}>
+        <Text style={{ color: p.text, fontWeight: "600", flex: 1 }}>{`${pounds(q.pricePence)} a ${q.basis}, ${GARDEN_FREQUENCY_LABEL[q.frequency].toLowerCase()} visits`}</Text>
+        <Tag p={p} label={STATUS[q.status]} tone={q.status === "accepted" ? "good" : q.status === "sent" ? "wait" : "plain"} />
+      </View>
+      <Text style={[ui.small, { color: p.muted }]}>{`${q.contractor}. Sent ${when(q.sentAt)}${q.sentByName ? ` by ${q.sentByName}` : ""}.`}</Text>
+      {!!q.details && <Text style={[ui.small, { color: p.text }]}>{q.details}</Text>}
+      {!!q.decidedAt && <Text style={[ui.small, { color: p.muted }]}>{`${q.status === "accepted" ? "Accepted" : "Rejected"} ${when(q.decidedAt)}${q.decidedByName ? ` by ${q.decidedByName}` : ""}${q.reason ? `: ${q.reason}` : "."}`}</Text>}
+      {g.canDecide && q.status === "sent" && <View style={{ gap: 6 }}>
+        <Field p={p} label="Note (needed if you reject it: say why)" value={reason} multiline onChange={t => setReason(t.slice(0, 1000))} />
+        <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+          <Button p={p} primary icon="check" label="Accept this quote" disabled={busy} onPress={() => act({ action: "decideGardenQuote", quoteId: q.id, decision: "accept", ...(reason.trim() ? { reason } : {}) }, "Accepted. We will arrange the garden maintenance.")} />
+          <Button p={p} quiet icon="x" label="Reject" disabled={busy || reason.trim().length < 3} onPress={() => act({ action: "decideGardenQuote", quoteId: q.id, decision: "reject", reason }, "Rejected. We will come back with another quote.")} />
+        </View>
+      </View>}
+    </View>)}
+    {g.canQuote && (adding ? <View style={{ gap: 6 }}>
+      <Field p={p} label="Contractor" value={contractor} onChange={t => setContractor(t.slice(0, 200))} />
+      <Field p={p} label="Price (£)" value={price} placeholder="120.00" onChange={t => setPrice(t.replace(/[^0-9.,£]/g, "").slice(0, 12))} />
+      <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
+        <Choice p={p} on={basis === "month"} label="A month" onPress={() => setBasis("month")} />
+        <Choice p={p} on={basis === "visit"} label="A visit" onPress={() => setBasis("visit")} />
+      </View>
+      <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{GARDEN_FREQUENCIES.map(f => <Choice key={f} p={p} on={frequency === f} label={GARDEN_FREQUENCY_LABEL[f]} onPress={() => setFrequency(f)} />)}</View>
+      <Field p={p} label="What it covers" value={details} multiline placeholder="Grass cut and edged, beds weeded, clippings taken away" onChange={t => setDetails(t.slice(0, 2000))} />
+      <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+        <Button p={p} primary icon="send" label={waiting ? "Replace the quote" : "Send to the owner"} disabled={busy || !contractor.trim() || !(pence > 0)}
+          onPress={() => { act({ action: "addGardenQuote", contractor, pricePence: pence, basis, frequency, details }, "Sent. The owner has been told in the property chat."); setAdding(false); }} />
+        <Button p={p} quiet icon="x" label="Cancel" onPress={() => setAdding(false)} />
+      </View>
+    </View> : <Button p={p} quiet icon="plus" label={waiting ? "Replace the quote" : g.quotes.length ? "Add a new quote" : "Add the quote"} onPress={() => setAdding(true)} />)}
+  </View>;
+}
+
 const pounds = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
 
 // Photos of furnishing (one item as it arrives, or the finished install): open, add and remove.
