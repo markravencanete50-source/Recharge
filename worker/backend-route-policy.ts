@@ -25,6 +25,7 @@ const endpoints = new Set([
   // The onboarding fee (20261027300000).
   "/api/workspace/onboarding-fee", "/api/mobile/onboarding-fee",
   "/api/workspace/onboarding-package", "/api/mobile/onboarding-package", "/api/workspace/launch", "/api/mobile/launch", "/api/workspace/launch-files", "/api/mobile/launch-files",
+  "/api/workspace/recruitment", "/api/mobile/recruitment",
   // Listings in Hostaway, made from onboarding (20261028200000).
   "/api/workspace/listing", "/api/mobile/listing", "/api/workspace/listing-photos", "/api/mobile/listing-photos",
   "/api/workspace/owner", "/api/mobile/owner",

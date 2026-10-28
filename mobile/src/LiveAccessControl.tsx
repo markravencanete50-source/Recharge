@@ -211,7 +211,7 @@ function AccessSheet({ p, actor, person, onClose, onDone }: { p: Palette; actor:
 
 // The one-time link a new (or locked-out) person opens to choose their own password. It's shown
 // once, here; nobody else sees the password they choose.
-const linkSchema = z.object({ data: z.object({ link: z.string().url().nullable(), minutes: z.number() }) });
+const linkSchema = z.object({ data: z.object({ userId: z.string().uuid().optional(), link: z.string().url().nullable(), minutes: z.number() }) });
 function LinkCard({ p, name, link, minutes }: { p: Palette; name: string; link: string; minutes: number }) {
   const [note, setNote] = useState("");
   const text = `Hi ${name}, your Recharge account is ready. Open this link to choose your password (it works once, for ${minutes} minutes): ${link}`;
@@ -232,9 +232,10 @@ function LinkCard({ p, name, link, minutes }: { p: Palette; name: string; link: 
   );
 }
 
-function AddPersonSheet({ p, actorRole, onClose, onDone }: { p: Palette; actorRole: string; onClose: () => void; onDone: () => Promise<void> }) {
+// Recruitment opens it prefilled from the selected candidate, and links the new account to them (onDone gets its id).
+export function AddPersonSheet({ p, actorRole, onClose, onDone, initial }: { p: Palette; actorRole: string; onClose: () => void; onDone: (userId?: string) => Promise<void>; initial?: { name: string; email: string; role: WorkspaceRole } }) {
   const celebrate = useCelebrate();
-  const [name, setName] = useState(""), [email, setEmail] = useState(""), [role, setRole] = useState<WorkspaceRole>("stays");
+  const [name, setName] = useState(initial?.name ?? ""), [email, setEmail] = useState(initial?.email ?? ""), [role, setRole] = useState<WorkspaceRole>(initial && rolesFor(actorRole).includes(initial.role) ? initial.role : "stays");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [made, setMade] = useState<{ link: string | null; minutes: number } | null>(null);
   const first = name.trim().split(/\s+/)[0] || "them";
   // What the chosen role signs and completes before their tools open (Onboarding & training).
@@ -255,7 +256,7 @@ function AddPersonSheet({ p, actorRole, onClose, onDone }: { p: Palette; actorRo
     setBusy(true); setError("");
     try {
       const result = linkSchema.parse(await writeAdmin({ action: "addPerson", fullName: name.trim(), email: email.trim().toLowerCase(), role, modules: isWorkspaceAdmin(role) ? [] : toolsOnRoleChange(role) }));
-      setMade(result.data); celebrate(`${first} added`); await onDone();
+      setMade(result.data); celebrate(`${first} added`); await onDone(result.data.userId);
     } catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (
@@ -352,7 +353,7 @@ export function AccessControl({ palette: p, account }: { palette: Palette; accou
           {history.slice(0, 20).map((e, i) => <HistoryRow key={e.id} p={p} e={e} first={i === 0} />)}
         </View>
       </Section>}
-      {adding && <AddPersonSheet p={p} actorRole={account.role} onClose={() => setAdding(false)} onDone={load} />}
+      {adding && <AddPersonSheet p={p} actorRole={account.role} onClose={() => setAdding(false)} onDone={() => load()} />}
       {person && <AccessSheet key={person.userId + person.status + person.modules.join() + person.role + String(person.passwordRevoked) + person.activeSessions} p={p} actor={account} person={person} onClose={() => setOpenId(null)} onDone={load} />}
     </View></Anchor>
   );

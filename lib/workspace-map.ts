@@ -2,7 +2,7 @@ import { MODULES, type ModuleId, type WorkspaceRole } from "./modules";
 import type { WorkView } from "./tool-directory";
 import type { HomeToolTarget } from "./home-tools";
 
-export type WorkspaceSection = "home" | "work" | "properties" | "inbox" | "more" | "workspace" | "analytics" | "calendar" | "approvals" | "help" | "activity" | "training" | "statements" | "favorites" | "enquiries" | "feedback" | "moderation" | "todo" | "decisions" | "mailbox";
+export type WorkspaceSection = "home" | "work" | "properties" | "inbox" | "more" | "workspace" | "analytics" | "calendar" | "approvals" | "help" | "activity" | "training" | "statements" | "favorites" | "enquiries" | "feedback" | "moderation" | "todo" | "decisions" | "mailbox" | "recruitment";
 export type DepartmentTone = "cleans" | "ready" | "stays" | "clients" | "accounts";
 type Destination = { area: string; tone: DepartmentTone; icon: string; service: string };
 
@@ -86,7 +86,7 @@ export const isWorkSub = (view: WorkView, sub: string) => { const known = SUBS_B
 
 // Every top-level page a deep link can name. "activity" is no longer a menu entry; it stays here so old
 // links resolve (they open Messages, Updates).
-export const PAGE_SECTIONS: readonly WorkspaceSection[] = ["home", "mailbox", "todo", "work", "calendar", "inbox", "decisions", "properties", "analytics", "favorites", "approvals", "statements", "enquiries", "feedback", "moderation", "help", "activity"];
+export const PAGE_SECTIONS: readonly WorkspaceSection[] = ["home", "mailbox", "todo", "work", "calendar", "inbox", "decisions", "properties", "analytics", "favorites", "approvals", "statements", "enquiries", "feedback", "moderation", "recruitment", "help", "activity"];
 // `team` opens that team's own calendar (Booking, Maintenance, Housekeeping), and `preset` the calendar of one kind of
 // work (safety visits, onboarding inspections): each shows only its type, with no way to switch (lib/calendar-live.ts
 // CALENDAR_LOCKS). The plain Calendar page, with neither, is the all-teams calendar.

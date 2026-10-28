@@ -26,13 +26,14 @@ export type PanelGroup = { key: string; title: string; links: PanelLink[] };
 // menu know which panel link that button stands for wherever the menu puts it.
 export type RolePanel = { title: string; tagline: string; icon: PanelIcon; groups: PanelGroup[]; work?: WorkView };
 
-type Page = 'home' | 'todo' | 'calendar' | 'decisions' | 'favorites' | 'properties' | 'analytics' | 'inbox' | 'help' | 'approvals' | 'statements' | 'enquiries' | 'feedback' | 'moderation' | 'mailbox';
+type Page = 'home' | 'todo' | 'calendar' | 'decisions' | 'favorites' | 'properties' | 'analytics' | 'inbox' | 'help' | 'approvals' | 'statements' | 'enquiries' | 'feedback' | 'moderation' | 'mailbox' | 'recruitment';
 const PAGE: Record<Page, [string, PanelIcon]> = {
   home: ['Home', 'home'], todo: ['To-do', 'clipboard'], calendar: ['Calendar', 'calendar'], decisions: ['My requests', 'check-circle'],
   favorites: ['Favourites', 'star'], properties: ['Properties', 'key'], analytics: ['Reports', 'bar-chart-2'],
   inbox: ['Messages', 'message-circle'], help: ['Help & training', 'help-circle'],
   approvals: ['Approvals', 'check-circle'], mailbox: ['Mailbox', 'mail'], statements: ['Owner statements', 'pie-chart'], enquiries: ['Leads', 'mail'],
   feedback: ['Feedback', 'message-square'], moderation: ['Reported messages', 'flag'],
+  recruitment: ['Recruitment', 'user-plus'],
 };
 const AREA_ICON: Record<WorkView, PanelIcon> = {
   management: 'briefcase', hub: 'layers', calendar: 'calendar', stays: 'moon', clients: 'users', cleans: 'check-square', repairs: 'tool', accounts: 'pie-chart', all: 'list',
@@ -79,7 +80,7 @@ function teamGroups(role: string): [string, string, string[]][] {
     ['maintenance', 'Maintenance', [...(role === 'ready' ? ['tool:pipeline=Reactive Jobs', ...VISIT_KINDS, 'area:repairs=All maintenance'] : ['area:repairs=Reactive Jobs', ...VISIT_KINDS]),
       'tool:visits', 'tool:aircover=AirCover Claims', 'tool:calendar-ready=Maintenance Calendar']],
     ['management', 'Management', ['page:decisions=Approval Requests', 'same:queue', 'tool:dailytasks=Daily Checklist',
-      'tool:people', 'tool:productivity', 'tool:performance', 'tool:access', 'tool:limits', 'page:moderation', ...only(admin, ['tool:training', 'page:feedback']),
+      'tool:people', 'page:recruitment', 'tool:productivity', 'tool:performance', 'tool:access', 'tool:limits', 'page:moderation', ...only(admin, ['tool:training', 'page:feedback']),
       'area:management=Management centre', 'area:all']],
     // Compliance Certs opens the licensing tracker too (its certificates are steps there); the calendar is preset to safety work.
     ['safety', 'Safety & Compliance', ['tool:licensing=Licensing', 'tool:compliance=Compliance Certs', 'tool:calendar-safety=Safety & Compliance Calendar']],
@@ -125,6 +126,8 @@ const PAGE_ROLES: Partial<Record<Page, string[]>> = {
   todo: TEAM, calendar: TEAM, decisions: TEAM,
   approvals: ['client'], mailbox: ['client'], statements: ['accounts', 'admin', 'super_admin'], enquiries: ['admin', 'super_admin', 'stays'],
   feedback: ['admin', 'super_admin', 'stays'], moderation: ['admin', 'super_admin'],
+  // Recruitment (20261029600000): every team role but housekeepers asks for roles there; recruiters run it.
+  recruitment: ['super_admin', 'admin', 'stays', 'cleaning_manager', 'ready', 'accounts'],
 };
 
 // A Home tool that opens a Work area at its top is that area. (Tools kept in All work, such as
