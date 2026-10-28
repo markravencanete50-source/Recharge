@@ -7,7 +7,9 @@ import { z } from 'zod';
 // ready. Admins edit the condition statements, the note under each part and whether the changeover video is required.
 // Round two (20261029200000): safety certificates with expiry reminders, and each of Recharge's parts mirrored as a ticket
 // on its section's task board (an admin setting). Round three (20261029300000): the furnishing order and install, from the
-// owner approving a Furnishing Studio quote to the installer's photos of the finished work.
+// owner approving a Furnishing Studio quote to the installer's photos of the finished work. Round four (20261029400000): the
+// inventory, calculated from the property's details with the Furnishing Studio presets (required or additional items),
+// agreed by the owner when Recharge sets up, then ticked item by item until it is 100% complete.
 
 export const LAUNCH_SECTIONS = ['setUp', 'broadband', 'utilities', 'compliance', 'licensing', 'housekeeper', 'readiness', 'photography', 'garden', 'waste', 'guidebook', 'listing', 'pricing', 'social'] as const;
 export type LaunchSection = (typeof LAUNCH_SECTIONS)[number];
@@ -113,6 +115,12 @@ export const launchActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('proposeInstall'), requestId: id, propertyId: id, date }).strict(),
   z.object({ action: z.literal('approveInstall'), requestId: id, propertyId: id }).strict(),
   z.object({ action: z.literal('completeInstall'), requestId: id, propertyId: id }).strict(),
+  // The inventory: calculate from the property's details (the Furnishing Studio's inputs), keep or remove additional items,
+  // the owner's approval (Recharge's set-up), then each item ticked as in the property.
+  z.object({ action: z.literal('calculateInventory'), requestId: id, propertyId: id, inputs: z.record(z.unknown()) }).strict(),
+  z.object({ action: z.literal('decideInventory'), requestId: id, propertyId: id, itemId: id, keep: z.boolean() }).strict(),
+  z.object({ action: z.literal('approveInventory'), requestId: id, propertyId: id }).strict(),
+  z.object({ action: z.literal('checkInventory'), requestId: id, propertyId: id, itemId: id, present: z.boolean() }).strict(),
   z.object({ action: z.literal('allocate'), requestId: id, propertyId: id, housekeeperId: id }).strict(),
   z.object({ action: z.literal('bookReadiness'), requestId: id, propertyId: id, date }).strict(),
   z.object({
@@ -130,7 +138,7 @@ export const STEP_STATES = ['todo', 'done', 'locked', 'na'] as const;
 export type StepState = (typeof STEP_STATES)[number];
 const stepSchema = z.object({
   key: z.string(), section: z.enum(LAUNCH_SECTIONS), title: z.string(), who: z.enum(['recharge', 'client']),
-  kind: z.enum(['tick', 'date', 'condition', 'expiry', 'licence', 'housekeeper', 'readiness', 'auto', 'furnishingQuote', 'furnishingOrder', 'furnishingReceived', 'furnishingInstall']),
+  kind: z.enum(['tick', 'date', 'condition', 'expiry', 'licence', 'housekeeper', 'readiness', 'auto', 'furnishingQuote', 'furnishingOrder', 'furnishingReceived', 'furnishingInstall', 'inventory']),
   manual: z.boolean(), state: z.enum(STEP_STATES), lockedBecause: z.string().nullable().default(null),
   data: z.record(z.unknown()).default({}), doneAt: z.string().nullable().default(null), doneByName: z.string().nullable().default(null),
   canTick: z.boolean().default(false), canReopen: z.boolean().default(false),
@@ -160,6 +168,20 @@ export const furnishingSchema = z.object({
   canProposeInstall: z.boolean().default(false), canApproveInstall: z.boolean().default(false), canCompleteInstall: z.boolean().default(false),
 });
 export type LaunchFurnishing = z.infer<typeof furnishingSchema>;
+export const INVENTORY_KINDS = ['required', 'additional'] as const;
+export const inventorySchema = z.object({
+  rechargeSetsUp: z.boolean().default(false), inputs: z.record(z.unknown()).nullable().default(null),
+  calculatedAt: z.string().nullable().default(null), calculatedByName: z.string().nullable().default(null),
+  approvedAt: z.string().nullable().default(null), approvedByName: z.string().nullable().default(null),
+  items: z.array(z.object({
+    itemId: id, name: z.string(), category: z.string(), unit: z.string(), kind: z.enum(INVENTORY_KINDS), quantity: z.number(),
+    // Additional items: kept, removed (false) or waiting for the owner (null). Required items are always kept.
+    kept: z.boolean().nullable(), decidedByName: z.string().nullable().default(null), checkedAt: z.string().nullable(), checkedByName: z.string().nullable().default(null),
+  })).default([]),
+  counts: z.object({ total: z.number(), checked: z.number(), undecided: z.number() }).default({ total: 0, checked: 0, undecided: 0 }),
+  canCalculate: z.boolean().default(false), canDecide: z.boolean().default(false), canApprove: z.boolean().default(false), canCheck: z.boolean().default(false),
+});
+export type LaunchInventory = z.infer<typeof inventorySchema>;
 export const launchViewSchema = z.object({
   propertyId: id, name: z.string().default(''), address: z.string().nullable().default(null), stage: z.string().default(''),
   steps: z.array(stepSchema).nullable(),
@@ -173,6 +195,7 @@ export const launchViewSchema = z.object({
   access: z.string().nullable().default(null),
   isTeam: z.boolean().default(false), isOwner: z.boolean().default(false), isHousekeeper: z.boolean().default(false),
   isInstaller: z.boolean().default(false), isAccounts: z.boolean().default(false), furnishing: furnishingSchema.nullable().default(null),
+  inventory: inventorySchema.nullable().default(null),
   canAllocate: z.boolean().default(false), canBookReadiness: z.boolean().default(false), canSubmitReadiness: z.boolean().default(false),
 });
 export type LaunchView = z.infer<typeof launchViewSchema>;

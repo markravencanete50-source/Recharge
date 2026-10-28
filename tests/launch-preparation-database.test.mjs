@@ -14,6 +14,7 @@ const L = await vite.ssrLoadModule('/lib/launch-preparation.ts');
 const MIGRATION = 'supabase/migrations/20261029100000_launch_preparation.sql';
 const ROUND_TWO = 'supabase/migrations/20261029200000_launch_compliance_boards.sql';
 const ROUND_THREE = 'supabase/migrations/20261029300000_launch_furnishing.sql';
+const ROUND_FOUR = 'supabase/migrations/20261029400000_launch_inventory.sql';
 const studio = await vite.ssrLoadModule('/lib/furnishing-studio.ts');
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -87,7 +88,7 @@ async function certificate(prop, step, i = STAYS, over = {}) {
 }
 async function preparedForReadiness(prop) {
   await tick(prop, 'setUp.inspection', { on: plus(2), access: 'Keybox by the front door' });
-  await tick(prop, 'setUp.inventory');
+  await inventoried(prop);
   const v = await read(prop);
   await tick(prop, 'setUp.condition', { ticks: v.settings.condition.map(c => c.key) });
   await furnishedQuickly(prop);
@@ -120,16 +121,28 @@ async function photo(prop, step, lineId, i = FITTER) {
   return L.launchReadSchema.parse(await rpc('workspace_launch_action', [{ action: 'addFile', requestId: crypto.randomUUID(), propertyId: prop, step, fileId, name: 'Photo.jpg', mime: 'image/jpeg', bytes: 900,
     path: `launch/${prop}/${fileId}.jpg`, ...(lineId ? { lineId } : {}) }]));
 }
+// The inventory calculated by the team, every additional item accepted and approved by the owner, then all ticked.
+async function inventoried(prop, inputs = { bedrooms: 1, guests: 2 }) {
+  await act({ action: 'calculateInventory', propertyId: prop, inputs: studio.normaliseInputs({ ...studio.DEFAULT_INPUTS, ...inputs }) });
+  const v = (await read(prop, OWNER)).launch;
+  if (v.inventory.rechargeSetsUp) {
+    for (const x of v.inventory.items.filter(x => x.kept === null)) await act({ action: 'decideInventory', propertyId: prop, itemId: x.itemId, keep: true }, OWNER);
+    await act({ action: 'approveInventory', propertyId: prop }, OWNER);
+  }
+  await owner('update private.workspace_launch_inventory_items set checked_at=now() where property_id=$1 and kept', [prop]);
+}
 const allTicked = v => v.settings.condition.map(c => ({ key: c.key, ok: true, note: '' }));
 
 test('the migration runs twice, stays locked down, and its starting statements match the app', async () => {
   const sql = await fs.readFile(MIGRATION, 'utf8');
   const two = await fs.readFile(ROUND_TWO, 'utf8');
   const three = await fs.readFile(ROUND_THREE, 'utf8');
-  await db.exec('reset role'); await db.exec(sql); await db.exec(two); await db.exec(three); await db.exec(sql); await db.exec(two); await db.exec(three);
-  assert.ok(!/—/.test(sql + two + three), 'no em dashes');
+  const four = await fs.readFile(ROUND_FOUR, 'utf8');
+  await db.exec('reset role');
+  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four]) await db.exec(x);
+  assert.ok(!/—/.test(sql + two + three + four), 'no em dashes');
   for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets',
-    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines']) {
+    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
     for (const role of ['anon', 'authenticated', 'service_role']) assert.equal((await owner('select has_table_privilege($1,$2,$3) ok', [role, 'private.' + t, 'select']))[0].ok, false, role + ' ' + t);
   }
@@ -147,7 +160,8 @@ test('the checklist follows the package, and nothing opens before the onboarding
   let v = await read(early);
   assert.ok(v.launch.steps.every(s => ['locked', 'done', 'na'].includes(s.state)), 'locked before the fee');
   assert.match(stepOf(v, 'setUp.inventory').lockedBecause, /onboarding fee is settled/);
-  await refused(tick(early, 'setUp.inventory'), /onboarding fee is settled/);
+  await refused(tick(early, 'setUp.inspection', { on: plus(2), access: 'Keybox' }), /onboarding fee is settled/);
+  await refused(act({ action: 'calculateInventory', propertyId: early, inputs: studio.DEFAULT_INPUTS }), /onboarding fee is settled/);
 
   const prop = await signed('Shore Flat');
   v = await read(prop);
@@ -168,7 +182,7 @@ test('the checklist follows the package, and nothing opens before the onboarding
   assert.equal(mine.launch.isOwner, true);
   assert.equal(mine.launch.address, null, 'the team and housekeeper see the address and access');
   assert.equal(stepOf(mine, 'setUp.inventory').canTick, false);
-  await refused(tick(prop, 'setUp.inventory', null, OWNER), /Recharge ticks this part/);
+  await refused(act({ action: 'calculateInventory', propertyId: prop, inputs: studio.DEFAULT_INPUTS }, OWNER), /Recharge prepare this inventory/);
   await refused(tick(prop, 'licensing.licence', { required: true }, OWNER), /licence number/);
   await tick(prop, 'licensing.licence', { required: false }, OWNER);
   await refused(tick(prop, 'compliance:epc', { expiresOn: plus(-1) }, OWNER), /expired/);
@@ -422,4 +436,133 @@ test('furnishing: the owner approves a quote, accounts invoice and order it, the
   await said(/furnishing is installed/);
   assert.equal((await owner('select status from private.workspace_furnishing_projects where id=$1', [standard.id]))[0].status, 'complete');
   assert.equal((await read(null, FITTER)).furnishingWork.length, 0, 'nothing left for the installer');
+});
+
+test('the inventory quantity rules in the database match the Furnishing Studio', async () => {
+  let seed = 7;
+  const rand = n => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
+  for (let n = 0; n < 40; n++) {
+    const raw = { ...studio.DEFAULT_INPUTS, propertyType: studio.PROPERTY_TYPES[rand(studio.PROPERTY_TYPES.length)], tv: studio.TV_SETUPS[rand(3)],
+      windowCovering: studio.WINDOW_COVERINGS[rand(3)], cooker: studio.COOKERS[rand(3)] };
+    for (const c of studio.COUNT_INPUTS) raw[c.key] = c.min + rand(Math.min(c.max - c.min, 6) + 1);
+    for (const k of studio.OPTION_KEYS) raw[k] = rand(2) === 1;
+    raw.zipLinkSetups = Array.from({ length: raw.zipLinkBeds }, () => rand(2) ? 'twin' : 'double');
+    const inputs = studio.normaliseInputs(raw);
+    const [row] = await owner(`select (select jsonb_object_agg(b,private.workspace_furnishing_basis($1,b)) from unnest($2::text[]) b) bases,
+      (select jsonb_object_agg(w,private.workspace_furnishing_applies($1,w)) from unnest($3::text[]) w) whens,
+      private.workspace_furnishing_quantity($1,'guest',0.5,null) half, private.workspace_furnishing_quantity($1,'bedroom',1.25,'garden') garden,
+      private.workspace_furnishing_inputs($1) = $1::jsonb same`, [inputs, [...studio.RULE_BASES], [...studio.RULE_WHEN]]);
+    for (const b of studio.RULE_BASES) assert.equal(row.bases[b], studio.basisValue(inputs, b), b);
+    for (const w of studio.RULE_WHEN) assert.equal(row.whens[w], studio.ruleApplies(inputs, w), w);
+    assert.equal(row.half, studio.ruleQuantity({ basis: 'guest', per: 0.5, when: null }, inputs));
+    assert.equal(row.garden, studio.ruleQuantity({ basis: 'bedroom', per: 1.25, when: 'garden' }, inputs));
+  }
+});
+
+test('inventory, Recharge set-up: the team calculate it, the owner decides the additional items and approves, then every item is ticked', async () => {
+  const prop = await signed('Inventory Flat');
+  const inputs = studio.normaliseInputs({ ...studio.DEFAULT_INPUTS, bedrooms: 2, guests: 4, doubleBeds: 2, garden: true });
+  let v = (await read(prop, OWNER)).launch;
+  assert.equal(stepOf({ launch: v }, 'setUp.inventory').kind, 'inventory');
+  assert.equal(v.inventory.rechargeSetsUp, true);
+  assert.equal(v.inventory.canCalculate, false, 'Recharge prepare it');
+  v = (await act({ action: 'calculateInventory', propertyId: prop, inputs })).launch;
+  const items = v.inventory.items;
+  const by = code => items.find(x => x.name === code);
+  assert.ok(items.length > 40);
+  assert.ok(!items.some(x => x.category === 'labour'), 'labour is not on the inventory');
+  assert.equal(by('Garden table and chairs').kind, 'additional', 'with a garden');
+  assert.equal(by('Garden table and chairs').kept, null, 'waiting for the owner');
+  assert.equal(by('Mugs').quantity, 8, '2 per guest');
+  for (const x of items.filter(x => x.kind === 'required')) assert.equal(x.kept, true, x.name);
+  // The quantities are the Furnishing Studio's.
+  const catalogue = (await owner("select id,inventory,rule_basis basis,rule_per::float per,rule_when \"when\" from private.workspace_furnishing_items where active"));
+  for (const c of catalogue) {
+    const n = studio.ruleQuantity({ basis: c.basis, per: c.per, when: c.when }, inputs);
+    const x = items.find(i => i.itemId === c.id);
+    if (c.inventory === 'none' || n === 0) assert.equal(x, undefined); else assert.equal(x.quantity, n, c.id);
+  }
+  await said(/Your inventory is ready in Launch Preparation: \d+ items, \d+ of them additional/);
+  assert.equal(stepOf({ launch: v }, 'setUp.inventory').state, 'todo');
+  assert.equal(v.inventory.canCheck, false, 'not until the owner approves');
+  const cushions = items.find(x => x.name.toLowerCase().includes('cushion'));
+  await refused(act({ action: 'checkInventory', propertyId: prop, itemId: items[0].itemId, present: true }), /waiting for the owner's approval/);
+  await refused(act({ action: 'decideInventory', propertyId: prop, itemId: cushions.itemId, keep: false }), /owner accepts or rejects/);
+  await refused(act({ action: 'approveInventory', propertyId: prop }, OWNER), /Accept or reject each additional item first/);
+  await refused(act({ action: 'decideInventory', propertyId: prop, itemId: items.find(x => x.kind === 'required').itemId, keep: false }, OWNER), /Only additional items/);
+
+  // The owner rejects the cushions and accepts the rest, then approves.
+  await act({ action: 'decideInventory', propertyId: prop, itemId: cushions.itemId, keep: false }, OWNER);
+  for (const x of items.filter(x => x.kept === null && x.itemId !== cushions.itemId)) await act({ action: 'decideInventory', propertyId: prop, itemId: x.itemId, keep: true }, OWNER);
+  v = (await act({ action: 'approveInventory', propertyId: prop }, OWNER)).launch;
+  assert.equal(v.inventory.approvedByName, 'Olive Owner');
+  assert.equal(v.inventory.canDecide, false);
+  assert.equal(v.inventory.counts.total, items.length - 1);
+  assert.equal(await notified(ADMIN, 'launch.inventory_approved') > 0, true);
+  await refused(act({ action: 'checkInventory', propertyId: prop, itemId: items[0].itemId, present: true }, OWNER), /Only whoever sets the property up/);
+  await refused(act({ action: 'checkInventory', propertyId: prop, itemId: cushions.itemId, present: true }), /not found on the inventory/);
+
+  // The team tick each item; the step is done at 100% and reopens if an item is unticked.
+  const kept = v.inventory.items.filter(x => x.kept);
+  for (const x of kept.slice(0, -1)) await act({ action: 'checkInventory', propertyId: prop, itemId: x.itemId, present: true });
+  v = (await read(prop)).launch;
+  assert.equal(v.inventory.counts.checked, kept.length - 1);
+  assert.equal(stepOf({ launch: v }, 'setUp.inventory').state, 'todo');
+  v = (await act({ action: 'checkInventory', propertyId: prop, itemId: kept.at(-1).itemId, present: true })).launch;
+  assert.equal(stepOf({ launch: v }, 'setUp.inventory').state, 'done');
+  assert.equal(v.inventory.items.find(x => x.itemId === kept[0].itemId).checkedByName, 'Fiona');
+  await said(/The inventory is complete/);
+  assert.equal(await notified(ADMIN, 'launch.inventory_complete') > 0, true);
+  v = (await act({ action: 'checkInventory', propertyId: prop, itemId: kept[0].itemId, present: false })).launch;
+  assert.equal(stepOf({ launch: v }, 'setUp.inventory').state, 'todo');
+  await act({ action: 'checkInventory', propertyId: prop, itemId: kept[0].itemId, present: true });
+
+  // The owner sees no hidden items; the housekeeper (at readiness) sees what is kept only.
+  assert.ok(!(await read(prop, OWNER)).launch.inventory.items.some(x => x.kept === null));
+
+  // Recalculating for more guests asks for approval again, keeps the owner's decisions and unticks what is now short.
+  v = (await act({ action: 'calculateInventory', propertyId: prop, inputs: { ...inputs, guests: 8 } })).launch;
+  assert.equal(v.inventory.approvedAt, null);
+  assert.equal(v.inventory.items.find(x => x.itemId === cushions.itemId).kept, false, 'still rejected');
+  const perGuest = v.inventory.items.find(x => x.name === 'Bath towel');
+  assert.equal(perGuest.checkedAt, null, 'more needed now');
+  assert.equal(stepOf({ launch: v }, 'setUp.inventory').state, 'todo');
+});
+
+test('inventory, the owner sets up: their own list needs no approval; they remove additional items and tick it off', async () => {
+  const prop = await signed('Own Set-Up Flat', { answers: { ...ANSWERS, setUp: 'self' } });
+  let v = (await read(prop, OWNER)).launch;
+  assert.equal(stepOf({ launch: v }, 'setUp.inventory').who, 'client');
+  assert.equal(v.inventory.canCalculate, true);
+  v = (await act({ action: 'calculateInventory', propertyId: prop, inputs: studio.normaliseInputs({ ...studio.DEFAULT_INPUTS, garden: true }) }, OWNER)).launch;
+  assert.ok(v.inventory.approvedAt, 'agreed as they make it');
+  assert.ok(v.inventory.items.every(x => x.kept === true));
+  const extra = v.inventory.items.find(x => x.kind === 'additional');
+  v = (await act({ action: 'decideInventory', propertyId: prop, itemId: extra.itemId, keep: false }, OWNER)).launch;
+  assert.equal(v.inventory.counts.total, v.inventory.items.length - 1);
+  for (const x of v.inventory.items.filter(x => x.kept)) v = (await act({ action: 'checkInventory', propertyId: prop, itemId: x.itemId, present: true }, OWNER)).launch;
+  assert.equal(stepOf({ launch: v }, 'setUp.inventory').state, 'done');
+  assert.equal(stepOf({ launch: v }, 'setUp.inventory').doneByName ?? null, null);
+});
+
+test('the catalogue marks each item required, additional or not on the inventory', async () => {
+  await as(ADMIN);
+  const catalogue = studio.catalogueSchema.parse(await rpc('workspace_furnishing_read', ['catalogue', null]));
+  assert.equal(catalogue.find(i => i.code === 'labour').inventory, 'none');
+  assert.equal(catalogue.find(i => i.code === 'cushions').inventory, 'additional');
+  const kettle = catalogue.find(i => i.code === 'kettle');
+  assert.equal(kettle.inventory, 'required');
+  const save = (i, extra) => rpc('workspace_furnishing_action', [studio.furnishingActionSchema.parse({ action: 'saveItem', requestId: crypto.randomUUID(), id: i.id, version: i.version, ...studio.itemToForm(i), ...extra })]);
+  let saved = studio.catalogueItemSchema.parse(await save(kettle, { inventory: 'additional' }));
+  assert.equal(saved.inventory, 'additional');
+  // An older screen that leaves it out keeps what is there.
+  const { inventory: _, ...older } = studio.itemToForm(saved);
+  saved = studio.catalogueItemSchema.parse(await rpc('workspace_furnishing_action', [{ action: 'saveItem', requestId: crypto.randomUUID(), id: saved.id, version: saved.version, ...older }]));
+  assert.equal(saved.inventory, 'additional');
+  await refused(rpc('workspace_furnishing_action', [{ action: 'saveItem', requestId: crypto.randomUUID(), id: saved.id, version: saved.version, ...older, inventory: 'maybe' }]), /required, additional or not on the inventory/);
+  saved = studio.catalogueItemSchema.parse(await save(saved, { inventory: 'none' }));
+  const prop = await signed('Kettle-free Flat', { answers: { ...ANSWERS, setUp: 'self' } });
+  const v = (await act({ action: 'calculateInventory', propertyId: prop, inputs: studio.DEFAULT_INPUTS }, OWNER)).launch;
+  assert.ok(!v.inventory.items.some(x => x.itemId === kettle.id), 'not on the inventory');
+  await as(SUPER); await save(saved, { inventory: 'required' });
 });

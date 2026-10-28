@@ -9,6 +9,7 @@ import { createServer } from 'vite';
 // analytics. Only the Stays team and management (admin, super_admin) can read or change anything; owners, cleaners, the
 // cleaning manager, Ready and Accounts are refused, and nobody signed out reaches it.
 const MIGRATION = 'supabase/migrations/20261023200000_furnishing_studio.sql';
+const INVENTORY = 'supabase/migrations/20261029400000_launch_inventory.sql';
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 const studio = await vite.ssrLoadModule('/lib/furnishing-studio.ts');
 const db = new PGlite();
@@ -64,7 +65,9 @@ test('the migration is safe to run twice, keeps edits to the catalogue, and foll
   await owner("update private.workspace_furnishing_items set cost_cap_pence=cost_cap_pence+1 where code='kettle'");
   const count = async () => (await owner('select count(*)::int n, sum(cost_cap_pence)::bigint s from private.workspace_furnishing_items'))[0];
   const seeded = await count();
+  // Launch Preparation's inventory (20261029400000) replaces the catalogue save; it runs again after, as it does in order.
   await db.exec(await fs.readFile(MIGRATION, 'utf8'));
+  await db.exec(await fs.readFile(INVENTORY, 'utf8'));
   assert.equal(await prints(), before, 'the fingerprints do not change on a second run');
   assert.deepEqual(await count(), seeded, 'the second run adds nothing and overwrites no edit');
   const text = await fs.readFile(MIGRATION, 'utf8');
