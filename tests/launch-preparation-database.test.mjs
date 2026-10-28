@@ -16,6 +16,7 @@ const ROUND_TWO = 'supabase/migrations/20261029200000_launch_compliance_boards.s
 const ROUND_THREE = 'supabase/migrations/20261029300000_launch_furnishing.sql';
 const ROUND_FOUR = 'supabase/migrations/20261029400000_launch_inventory.sql';
 const ROUND_FIVE = 'supabase/migrations/20261029500000_launch_guidebook.sql';
+const ROUND_SIX = 'supabase/migrations/20261029700000_launch_compliance_jobs.sql';
 const studio = await vite.ssrLoadModule('/lib/furnishing-studio.ts');
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -140,9 +141,10 @@ test('the migration runs twice, stays locked down, and its starting statements m
   const three = await fs.readFile(ROUND_THREE, 'utf8');
   const four = await fs.readFile(ROUND_FOUR, 'utf8');
   const five = await fs.readFile(ROUND_FIVE, 'utf8');
+  const six = await fs.readFile(ROUND_SIX, 'utf8');
   await db.exec('reset role');
-  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five]) await db.exec(x);
-  assert.ok(!/—/.test(sql + two + three + four + five), 'no em dashes');
+  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six]) await db.exec(x);
+  assert.ok(!/—/.test(sql + two + three + four + five + six), 'no em dashes');
   for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets',
     'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
@@ -242,7 +244,7 @@ test('readiness opens once everything before it is done; the housekeeper submits
   v = await act({ action: 'submitReadiness', propertyId: prop, inventory: { allPresent: false, missing: [label, 'Toaster'] }, condition: crossed, evidence }, KEEPER);
   assert.equal(await stageOf(prop), 'inspection_complete', 'guest ready');
   assert.equal(v.launch.readiness.issues, 2);
-  const repairs = await owner("select d.data->>'issue' issue from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where w.property_id=$1 and d.kind='maintenance' order by 1", [prop]);
+  const repairs = await owner("select d.data->>'issue' issue from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where w.property_id=$1 and d.kind='maintenance' and d.data->>'complianceStep' is null order by 1", [prop]);
   assert.deepEqual(repairs.map(r => r.issue), [`Readiness inspection, missing from the inventory: ${label}, Toaster`, 'Readiness inspection: Kitchen surfaces and fittings: Cupboard door hanging off']);
   v = await read(prop);
   assert.equal(stepOf(v, 'readiness.inspection').state, 'done');
@@ -357,6 +359,7 @@ test("Recharge's parts are mirrored on their boards; ticking either completes bo
   await tick(prop, 'broadband.setUp');
   assert.equal((await owner('select status from public.workspace_work_items where id=$1', [board]))[0].status, 'completed');
   // The EICR is a job: completing it asks the team for the certificate, and the document stays to tick.
+  await owner("update private.workspace_domain_details set data=data||'{\"workStatus\":\"completed\",\"phase\":\"completed\"}' where work_id=$1", [list[1].id]);
   await owner("update public.workspace_work_items set status='completed',completed_at=now() where id=$1", [list[1].id]);
   assert.equal(stepOf(await read(prop), 'compliance:eicr').state, 'todo');
   assert.ok((await owner("select count(*)::int n from private.workspace_lead_activity a join private.workspace_client_enquiries e on e.id=a.enquiry_id where e.property_id=$1 and a.body like 'The EICR job is done.%'", [prop]))[0].n >= 1);
