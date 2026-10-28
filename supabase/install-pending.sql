@@ -56,3 +56,4 @@
 -- 20261029400000 launch_inventory: installed by Lee 2026-10-28, verified
 -- 20261029500000 Launch Preparation guidebook: installed by Lee 2026-10-28, verified
 -- 20261029600000 Recruitment: installed by Lee 2026-10-28, verified
+-- 20261029700000 launch_compliance_jobs: installed by Lee 2026-10-28, verified
