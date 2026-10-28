@@ -9,7 +9,9 @@ import { z } from 'zod';
 // on its section's task board (an admin setting). Round three (20261029300000): the furnishing order and install, from the
 // owner approving a Furnishing Studio quote to the installer's photos of the finished work. Round four (20261029400000): the
 // inventory, calculated from the property's details with the Furnishing Studio presets (required or additional items),
-// agreed by the owner when Recharge sets up, then ticked item by item until it is 100% complete.
+// agreed by the owner when Recharge sets up, then ticked item by item until it is 100% complete. Round five
+// (20261029500000): the guest guidebook, filled in by the booked technician from an admin-edited template, with a private
+// guest link.
 
 export const LAUNCH_SECTIONS = ['setUp', 'broadband', 'utilities', 'compliance', 'licensing', 'housekeeper', 'readiness', 'photography', 'garden', 'waste', 'guidebook', 'listing', 'pricing', 'social'] as const;
 export type LaunchSection = (typeof LAUNCH_SECTIONS)[number];
@@ -31,6 +33,13 @@ const statementSchema = z.object({
   text: z.string().trim().min(1, 'Write the statement').max(1000),
 }).strict();
 export type ConditionStatement = z.infer<typeof statementSchema>;
+// A section of the guest guidebook template: its title and what the technician writes.
+const guideSectionSchema = z.object({
+  key: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+  title: z.string().trim().min(1, 'Give the section a title').max(80),
+  prompt: z.string().trim().max(1000),
+}).strict();
+export type GuideSection = z.infer<typeof guideSectionSchema>;
 export const launchSettingsSchema = z.object({
   condition: z.array(statementSchema).min(1, 'Keep at least one statement').max(30, 'Up to 30 statements')
     .refine(list => new Set(list.map(s => s.key)).size === list.length, 'Each statement needs its own key'),
@@ -43,6 +52,9 @@ export const launchSettingsSchema = z.object({
   boards: z.record(z.enum(BOARD_KEYS), z.string().max(80)),
   // Whether the installer photographs each furnishing item as it arrives.
   requireReceivedPhotos: z.boolean(),
+  // The guest guidebook's sections, in order. "access" and "wifi" also carry the key box codes and the Wi-Fi details.
+  guidebook: z.array(guideSectionSchema).min(1, 'Keep at least one guidebook section').max(20, 'Up to 20 sections')
+    .refine(list => new Set(list.map(s => s.key)).size === list.length, 'Each section needs its own key'),
 }).strict();
 export type LaunchSettings = z.infer<typeof launchSettingsSchema>;
 
@@ -84,6 +96,15 @@ export const DEFAULT_LAUNCH_SETTINGS: LaunchSettings = {
     furnishing: 'purchase-order',
   },
   requireReceivedPhotos: true,
+  guidebook: [
+    { key: "parking", title: "Where to park", prompt: "Where best to park, any costs and where to pay, with photos or a video that help." },
+    { key: "access", title: "Accessing the property", prompt: "How to get into the property, with a video. Put both key box codes in the boxes below: only the guest code is shown to guests." },
+    { key: "wifi", title: "Wi-Fi", prompt: "How to connect, where the router is, and what to try before contacting us. The network name and password go in the boxes below." },
+    { key: "heating", title: "Heating and hot water", prompt: "How to turn the heating on and off, where the thermostat, boiler and gas meter are, and what to try before contacting us." },
+    { key: "appliances", title: "Appliances", prompt: "The oven, hob, microwave, washing machine, dryer, dishwasher, coffee machine, TV and any other appliance: where each one is, how to use it and what to try before contacting us." },
+    { key: "amenities", title: "Included amenities", prompt: "What is provided for guests, for example two toilet rolls and a wash kit in each bathroom." },
+    { key: "checkout", title: "Checking out", prompt: "What guests do before they leave: the check-out time, keys, bins and dishes." },
+  ],
 };
 // Sections whose parts can have a board ticket; the others already raise their own onboarding tickets.
 export const TICKET_SECTIONS: readonly BoardKey[] = ['furnishing', 'broadband', 'compliance', 'readiness', 'photography', 'waste', 'guidebook', 'pricing', 'social'];
@@ -101,6 +122,12 @@ export function statementKey(title: string, taken: readonly string[]): string {
 
 const id = z.string().uuid();
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose a date');
+// What the technician fills in: each section's words and video link, the Wi-Fi and both key box codes.
+const guidebookFields = {
+  requestId: id, propertyId: id,
+  content: z.record(z.string(), z.object({ text: z.string().max(5000, 'Up to 5,000 characters a section'), videoUrl: z.string().trim().max(1000) }).strict()),
+  wifiName: z.string().trim().max(120), wifiPassword: z.string().trim().max(120), guestCode: z.string().trim().max(60), teamCode: z.string().trim().max(60),
+};
 export const launchActionSchema = z.discriminatedUnion('action', [
   // Tick a part by hand, with what it asks for (a date and access, the condition ticks, an expiry date, the licence).
   z.object({ action: z.literal('tick'), requestId: id, propertyId: id, step: z.string().max(80), data: z.record(z.unknown()).optional() }).strict(),
@@ -121,6 +148,12 @@ export const launchActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('decideInventory'), requestId: id, propertyId: id, itemId: id, keep: z.boolean() }).strict(),
   z.object({ action: z.literal('approveInventory'), requestId: id, propertyId: id }).strict(),
   z.object({ action: z.literal('checkInventory'), requestId: id, propertyId: id, itemId: id, present: z.boolean() }).strict(),
+  // The guidebook: book the technician, fill it in (saved as a draft, then submitted), reopen it, or replace the guest link.
+  z.object({ action: z.literal('bookGuidebook'), requestId: id, propertyId: id, technicianId: id, date }).strict(),
+  z.object({ action: z.literal('saveGuidebook'), ...guidebookFields }).strict(),
+  z.object({ action: z.literal('submitGuidebook'), ...guidebookFields }).strict(),
+  z.object({ action: z.literal('reopenGuidebook'), requestId: id, propertyId: id }).strict(),
+  z.object({ action: z.literal('resetGuidebookLink'), requestId: id, propertyId: id }).strict(),
   z.object({ action: z.literal('allocate'), requestId: id, propertyId: id, housekeeperId: id }).strict(),
   z.object({ action: z.literal('bookReadiness'), requestId: id, propertyId: id, date }).strict(),
   z.object({
@@ -138,7 +171,7 @@ export const STEP_STATES = ['todo', 'done', 'locked', 'na'] as const;
 export type StepState = (typeof STEP_STATES)[number];
 const stepSchema = z.object({
   key: z.string(), section: z.enum(LAUNCH_SECTIONS), title: z.string(), who: z.enum(['recharge', 'client']),
-  kind: z.enum(['tick', 'date', 'condition', 'expiry', 'licence', 'housekeeper', 'readiness', 'auto', 'furnishingQuote', 'furnishingOrder', 'furnishingReceived', 'furnishingInstall', 'inventory']),
+  kind: z.enum(['tick', 'date', 'condition', 'expiry', 'licence', 'housekeeper', 'readiness', 'auto', 'furnishingQuote', 'furnishingOrder', 'furnishingReceived', 'furnishingInstall', 'inventory', 'guidebookBook', 'guidebook']),
   manual: z.boolean(), state: z.enum(STEP_STATES), lockedBecause: z.string().nullable().default(null),
   data: z.record(z.unknown()).default({}), doneAt: z.string().nullable().default(null), doneByName: z.string().nullable().default(null),
   canTick: z.boolean().default(false), canReopen: z.boolean().default(false),
@@ -182,6 +215,15 @@ export const inventorySchema = z.object({
   canCalculate: z.boolean().default(false), canDecide: z.boolean().default(false), canApprove: z.boolean().default(false), canCheck: z.boolean().default(false),
 });
 export type LaunchInventory = z.infer<typeof inventorySchema>;
+export const guidebookSchema = z.object({
+  sections: z.array(z.object({ key: z.string(), title: z.string(), prompt: z.string().default(''), text: z.string(), videoUrl: z.string(), photos: z.array(fileSchema).default([]) })).default([]),
+  wifiName: z.string().nullable().default(null), wifiPassword: z.string().nullable().default(null), guestCode: z.string().nullable().default(null), teamCode: z.string().nullable().default(null),
+  technician: person.nullable().default(null), bookOn: z.string().nullable().default(null), bookedByName: z.string().nullable().default(null),
+  savedAt: z.string().nullable().default(null), savedByName: z.string().nullable().default(null), submittedAt: z.string().nullable().default(null), submittedByName: z.string().nullable().default(null),
+  guestPath: z.string().nullable().default(null),
+  canBook: z.boolean().default(false), canEdit: z.boolean().default(false), canReopen: z.boolean().default(false), canResetLink: z.boolean().default(false),
+});
+export type LaunchGuidebook = z.infer<typeof guidebookSchema>;
 export const launchViewSchema = z.object({
   propertyId: id, name: z.string().default(''), address: z.string().nullable().default(null), stage: z.string().default(''),
   steps: z.array(stepSchema).nullable(),
@@ -196,6 +238,7 @@ export const launchViewSchema = z.object({
   isTeam: z.boolean().default(false), isOwner: z.boolean().default(false), isHousekeeper: z.boolean().default(false),
   isInstaller: z.boolean().default(false), isAccounts: z.boolean().default(false), furnishing: furnishingSchema.nullable().default(null),
   inventory: inventorySchema.nullable().default(null),
+  isTechnician: z.boolean().default(false), guidebook: guidebookSchema.nullable().default(null),
   canAllocate: z.boolean().default(false), canBookReadiness: z.boolean().default(false), canSubmitReadiness: z.boolean().default(false),
 });
 export type LaunchView = z.infer<typeof launchViewSchema>;
@@ -210,6 +253,7 @@ export const launchReadSchema = z.object({
     installOn: z.string().nullable(), installApproved: z.boolean(),
   })).default([]),
   inspections: z.array(z.object({ propertyId: id, name: z.string(), address: z.string().nullable(), bookedOn: z.string() })).default([]),
+  guidebookWork: z.array(z.object({ propertyId: id, name: z.string(), address: z.string().nullable(), bookOn: z.string().nullable() })).default([]),
   launch: launchViewSchema.nullable().default(null),
 });
 export type LaunchRead = z.infer<typeof launchReadSchema>;

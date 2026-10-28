@@ -15,6 +15,7 @@ const MIGRATION = 'supabase/migrations/20261029100000_launch_preparation.sql';
 const ROUND_TWO = 'supabase/migrations/20261029200000_launch_compliance_boards.sql';
 const ROUND_THREE = 'supabase/migrations/20261029300000_launch_furnishing.sql';
 const ROUND_FOUR = 'supabase/migrations/20261029400000_launch_inventory.sql';
+const ROUND_FIVE = 'supabase/migrations/20261029500000_launch_guidebook.sql';
 const studio = await vite.ssrLoadModule('/lib/furnishing-studio.ts');
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -138,11 +139,12 @@ test('the migration runs twice, stays locked down, and its starting statements m
   const two = await fs.readFile(ROUND_TWO, 'utf8');
   const three = await fs.readFile(ROUND_THREE, 'utf8');
   const four = await fs.readFile(ROUND_FOUR, 'utf8');
+  const five = await fs.readFile(ROUND_FIVE, 'utf8');
   await db.exec('reset role');
-  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four]) await db.exec(x);
-  assert.ok(!/—/.test(sql + two + three + four), 'no em dashes');
+  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five]) await db.exec(x);
+  assert.ok(!/—/.test(sql + two + three + four + five), 'no em dashes');
   for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets',
-    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items']) {
+    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
     for (const role of ['anon', 'authenticated', 'service_role']) assert.equal((await owner('select has_table_privilege($1,$2,$3) ok', [role, 'private.' + t, 'select']))[0].ok, false, role + ' ' + t);
   }
@@ -235,23 +237,22 @@ test('readiness opens once everything before it is done; the housekeeper submits
   await refused(act({ action: 'submitReadiness', propertyId: prop, inventory: { allPresent: true, missing: [] }, condition: allTicked(v), evidence: { video: '', note: '' } }, KEEPER), /changeover video/);
   await refused(act({ action: 'submitReadiness', propertyId: prop, inventory: { allPresent: true, missing: [] }, condition: allTicked(v), evidence }, OTHERKEEPER), /Property not found/);
   const crossed = condition.map(c => c.key === 'kitchen' ? { ...c, note: 'Cupboard door hanging off' } : c);
-  v = await act({ action: 'submitReadiness', propertyId: prop, inventory: { allPresent: false, missing: ['Kettle', 'Toaster'] }, condition: crossed, evidence }, KEEPER);
+  // Missing items picked from the inventory are unticked on it too.
+  const gone = (await read(prop, KEEPER)).launch.inventory.items.find(x => x.kept), label = `${gone.quantity} x ${gone.name}`;
+  v = await act({ action: 'submitReadiness', propertyId: prop, inventory: { allPresent: false, missing: [label, 'Toaster'] }, condition: crossed, evidence }, KEEPER);
   assert.equal(await stageOf(prop), 'inspection_complete', 'guest ready');
   assert.equal(v.launch.readiness.issues, 2);
   const repairs = await owner("select d.data->>'issue' issue from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where w.property_id=$1 and d.kind='maintenance' order by 1", [prop]);
-  assert.deepEqual(repairs.map(r => r.issue), ['Readiness inspection, missing from the inventory: Kettle, Toaster', 'Readiness inspection: Kitchen surfaces and fittings: Cupboard door hanging off']);
+  assert.deepEqual(repairs.map(r => r.issue), [`Readiness inspection, missing from the inventory: ${label}, Toaster`, 'Readiness inspection: Kitchen surfaces and fittings: Cupboard door hanging off']);
   v = await read(prop);
   assert.equal(stepOf(v, 'readiness.inspection').state, 'done');
-  assert.equal(stepOf(v, 'guidebook.done').state, 'todo', 'the guidebook opens once guest ready');
+  assert.equal(v.launch.inventory.items.find(x => x.itemId === gone.itemId).checkedAt, null, 'unticked on the inventory');
+  assert.equal(stepOf(v, 'guidebook.book').state, 'todo', 'the guidebook opens once guest ready');
+  assert.equal(stepOf(v, 'guidebook.done').state, 'locked', 'once the technician is booked');
   assert.equal(stepOf(v, 'photography.booked').state, 'todo');
   assert.equal(stepOf(v, 'social.comingSoon').state, 'locked', 'after the photos');
   assert.equal(stepOf(v, 'pricing.base').state, 'locked', 'after the listing');
-  assert.equal(stepOf(v, 'setUp.inventory').canReopen, false, 'what readiness checked stays ticked');
-  assert.equal(stepOf(v, 'guidebook.done').canTick, true);
-  v = await tick(prop, 'guidebook.done', { note: 'Guidebook link sent to the team' });
-  assert.equal(stepOf(v, 'guidebook.done').canReopen, true);
-  v = await act({ action: 'reopen', propertyId: prop, step: 'guidebook.done' });
-  assert.equal(stepOf(v, 'guidebook.done').state, 'todo');
+  assert.equal(stepOf(v, 'setUp.condition').canReopen, false, 'what readiness checked stays ticked');
   assert.ok(await notified(ADMIN, 'launch.guest_ready') > 0, 'the team hears');
 });
 
@@ -565,4 +566,87 @@ test('the catalogue marks each item required, additional or not on the inventory
   const v = (await act({ action: 'calculateInventory', propertyId: prop, inputs: studio.DEFAULT_INPUTS }, OWNER)).launch;
   assert.ok(!v.inventory.items.some(x => x.itemId === kettle.id), 'not on the inventory');
   await as(SUPER); await save(saved, { inventory: 'required' });
+});
+
+test('guidebook: the team book the technician, who fills in the template with photos and the codes; guests get a private link', async () => {
+  const prop = await signed('Guidebook Flat');
+  const content = v => Object.fromEntries(v.launch.guidebook.sections.map(x => [x.key, { text: `${x.title}: the details.`, videoUrl: x.key === 'access' ? 'https://video.test/access' : '' }]));
+  const fields = { wifiName: 'GuidebookFlat', wifiPassword: 'stay-well-2026', guestCode: '1234', teamCode: '9876' };
+  await refused(act({ action: 'bookGuidebook', propertyId: prop, technicianId: users[FITTER], date: plus(1) }), /once the property is guest ready/);
+  // Guest ready, as the readiness inspection leaves it (tested above).
+  await owner("select set_config('recharge.launch','on',false)");
+  await owner("update private.workspace_journeys set stage='inspection_complete' where property_id=$1", [prop]);
+  await owner("select set_config('recharge.launch','',false)");
+  let v = await read(prop);
+  assert.equal(stepOf(v, 'guidebook.book').state, 'todo');
+  assert.equal(stepOf(v, 'guidebook.done').state, 'locked');
+  assert.deepEqual(v.launch.guidebook.sections.map(x => x.key), L.DEFAULT_LAUNCH_SETTINGS.guidebook.map(x => x.key));
+  await refused(act({ action: 'bookGuidebook', propertyId: prop, technicianId: users[OWNER], date: plus(1) }), /Choose the technician/);
+  await refused(act({ action: 'bookGuidebook', propertyId: prop, technicianId: users[FITTER], date: plus(-1) }), /from today/);
+  v = await act({ action: 'bookGuidebook', propertyId: prop, technicianId: users[FITTER], date: plus(1) });
+  assert.equal(stepOf(v, 'guidebook.book').state, 'done');
+  assert.equal(v.launch.guidebook.technician.name, 'Ian Installer');
+  assert.equal(await notified(FITTER, 'launch.guidebook_booked'), 1);
+  assert.deepEqual((await read(null, FITTER)).guidebookWork.map(x => x.name), ['Guidebook Flat']);
+
+  // The technician sees the property and fills it in; the owner cannot.
+  const t = (await read(prop, FITTER)).launch;
+  assert.equal(t.isTechnician, true);
+  assert.ok(t.address, 'the technician sees the address');
+  assert.equal(t.guidebook.canEdit, true);
+  assert.equal((await read(prop, OWNER)).launch.guidebook.canEdit, false);
+  await refused(act({ action: 'saveGuidebook', propertyId: prop, content: {}, wifiName: '', wifiPassword: '', guestCode: '', teamCode: '' }, OWNER), /Only the technician or the team/);
+  const partial = { ...content(v), checkout: { text: '', videoUrl: '' } };
+  v = await act({ action: 'saveGuidebook', propertyId: prop, content: partial, ...fields }, FITTER);
+  assert.equal(v.launch.guidebook.savedByName, 'Ian Installer');
+  assert.equal(v.launch.guidebook.sections.find(x => x.key === 'parking').text, 'Where to park: the details.');
+  await refused(act({ action: 'submitGuidebook', propertyId: prop, content: partial, ...fields }, FITTER), /Fill in every section first: Checking out/);
+  await refused(act({ action: 'saveGuidebook', propertyId: prop, content: { parking: { text: 'x', videoUrl: 'http://insecure.test' } }, ...fields }, FITTER), /video links starting https/);
+  await photo(prop, 'guidebook:parking', null, FITTER);
+  await refused(certificate(prop, 'guidebook:parking', FITTER), /Upload a photo/);
+  await refused(photo(prop, 'guidebook:nowhere', null, FITTER), /Choose a guidebook section/);
+  await refused(photo(prop, 'guidebook:parking', null, OWNER), /Only the technician or the team add guidebook photos/);
+
+  v = await act({ action: 'submitGuidebook', propertyId: prop, content: content(v), ...fields }, FITTER);
+  assert.equal(stepOf(v, 'guidebook.done').state, 'done');
+  assert.equal(v.launch.guidebook.canEdit, false);
+  assert.equal(v.launch.guidebook.guestPath, null, 'the technician does not hand out the link');
+  await said(/Your guest guidebook is ready/);
+  assert.ok(await notified(ADMIN, 'launch.guidebook_done') > 0);
+  const [secret] = await owner('select access_instructions a from private.workspace_property_secrets where property_id=$1', [prop]);
+  assert.match(secret.a, /Accessing the property: the details\.\nGuest key box code: 1234\nTeam key box code: 9876/);
+  assert.match((await read(prop, FITTER)).launch.access, /Guest key box code: 1234/, 'the technician sees the access details');
+
+  // The guest version: the guest code, never the team code; photos for the server to sign.
+  const team = (await read(prop)).launch.guidebook;
+  assert.equal((await read(prop, OWNER)).launch.guidebook.guestPath, team.guestPath);
+  const token = team.guestPath.split('t=')[1];
+  const [page] = await owner('select public.workspace_guidebook_public($1) g', [token]);
+  assert.equal(page.g.guestCode, '1234');
+  assert.ok(!JSON.stringify(page.g).includes('9876'), 'no team code');
+  assert.equal(page.g.sections.length, L.DEFAULT_LAUNCH_SETTINGS.guidebook.length);
+  assert.equal(page.g.sections.find(x => x.key === 'parking').photos.length, 1);
+  await refused(owner('select public.workspace_guidebook_public($1) g', ['0'.repeat(64)]), /Guidebook not found/);
+  assert.equal((await owner("select has_function_privilege('authenticated','public.workspace_guidebook_public(text)','execute') ok"))[0].ok, false);
+
+  // A new link stops the old one; reopening hides the guest version until it is submitted again.
+  v = await act({ action: 'resetGuidebookLink', propertyId: prop });
+  assert.notEqual(v.launch.guidebook.guestPath, team.guestPath);
+  await refused(owner('select public.workspace_guidebook_public($1) g', [token]), /Guidebook not found/);
+  await refused(act({ action: 'reopenGuidebook', propertyId: prop }, FITTER), /Only the team reopen the guidebook/);
+  v = await act({ action: 'reopenGuidebook', propertyId: prop });
+  assert.equal(stepOf(v, 'guidebook.done').state, 'todo');
+  assert.equal(v.launch.guidebook.canEdit, true);
+});
+
+test('admins edit the guidebook template', async () => {
+  const settings = (await read(null, ADMIN)).settings;
+  const guidebook = [...settings.guidebook, { key: 'local_tips', title: 'Local recommendations', prompt: 'Cafés, shops and walks nearby.' }];
+  let r = await act({ action: 'saveSettings', settings: { ...settings, guidebook } }, ADMIN);
+  assert.equal(r.settings.guidebook.at(-1).title, 'Local recommendations');
+  await refused(act({ action: 'saveSettings', settings: { ...settings, guidebook: [{ key: 'x1', title: ' ', prompt: '' }] } }, ADMIN), /./);
+  await as(ADMIN);
+  await refused(rpc('workspace_launch_action', [{ action: 'saveSettings', requestId: crypto.randomUUID(), settings: { ...settings, guidebook: [{ key: 'x1', title: '', prompt: '' }] } }]), /Give every guidebook section a title/);
+  r = await act({ action: 'saveSettings', settings }, ADMIN);
+  assert.deepEqual(r.settings.guidebook, settings.guidebook);
 });

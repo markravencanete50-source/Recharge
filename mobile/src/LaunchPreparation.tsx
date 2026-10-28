@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Linking, Switch, View } from "react-native";
+import { Linking, Platform, Switch, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
@@ -9,7 +9,7 @@ import { Sheet } from "./TeamFlows";
 import { DateField } from "./CalendarPicker";
 import { liveApi } from "./LivePages";
 import { ui, type Palette } from "./theme";
-import { launchFileLink, uploadLaunchFile } from "./backend/client";
+import { launchFileLink, liveApiOrigin, uploadLaunchFile } from "./backend/client";
 import { PropertyDetails } from "./FurnishingStudio";
 import { categoryName, normaliseInputs, type StudioInputs } from "../../lib/furnishing-studio";
 import { MODULES } from "../../lib/modules";
@@ -24,7 +24,8 @@ import {
 // housekeeper fills in the readiness inspection form, which makes the property guest ready. Admins edit the condition
 // statements, notes, reminders and boards from the Leads page. Safety documents carry their certificate (20261029200000)
 // and each of Recharge's parts is mirrored as a ticket on its board. The inventory (20261029400000) is calculated from the
-// property's details with the Furnishing Studio presets, agreed by the owner when Recharge sets up, then ticked off.
+// property's details with the Furnishing Studio presets, agreed by the owner when Recharge sets up, then ticked off. The
+// guest guidebook (20261029500000) is filled in by the booked technician and shared with guests by a private link.
 const when = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
 const day = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" }).format(new Date(iso + "T12:00:00Z"));
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
@@ -245,6 +246,8 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
             </View>
             {s.kind === "expiry" && <Certificates p={p} propertyId={propertyId} step={s} editable={s.canTick || s.canReopen} busy={busy}
               onChange={r => { setRead(r); setError(""); }} onRemove={fileId => void act({ action: "removeFile", step: s.key, fileId }, "Certificate removed.")} />}
+            {s.kind.startsWith("guidebook") && s.state !== "locked" && <GuidebookStep p={p} propertyId={propertyId} step={s} launch={v} read={read} busy={busy}
+              act={(body, done) => void act(body, done)} onRead={r => { setRead(r); setError(""); }} />}
             {s.kind === "inventory" && s.state !== "locked" && <InventoryStep p={p} launch={v} busy={busy} act={(body, done) => void act(body, done)} />}
             {(s.kind.startsWith("furnishing") || s.key === "setUp.invoice") && <FurnishingStep p={p} propertyId={propertyId} step={s} launch={v} read={read} busy={busy} act={(body, done) => void act(body, done)} onRead={r => { setRead(r); setError(""); }} />}
             {!!s.ticketId && !owner && read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] && <Text style={[ui.small, { color: p.muted }]}>{`Also on the ${boardName(read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] ?? "")} board.`}</Text>}
@@ -273,6 +276,106 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
     })}
     {!!error && <Notice p={p} tone="bad" text={error} />}
     {!!note && <Notice p={p} text={note} />}
+  </View>;
+}
+
+// ---------------------------------------------------------------- the guest guidebook
+// The team book the technician and the date; the technician (or the team) fills in each section of the template with
+// words, a video link and photos, plus the Wi-Fi and both key box codes, then submits. Guests get a private link.
+type GuideDraft = { content: Record<string, { text: string; videoUrl: string }>; wifiName: string; wifiPassword: string; guestCode: string; teamCode: string };
+function GuidebookStep({ p, propertyId, step, launch, read, busy, act, onRead }: {
+  p: Palette; propertyId: string; step: LaunchStep; launch: LaunchView; read: LaunchRead; busy: boolean;
+  act: (body: Record<string, unknown>, done: string) => void; onRead: (r: LaunchRead) => void;
+}) {
+  const g = launch.guidebook;
+  const [who, setWho] = useState(""), [on, setOn] = useState(""), [draft, setDraft] = useState<{ at: string | null; value: GuideDraft } | null>(null), [note, setNote] = useState("");
+  if (!g) return null;
+  if (step.kind === "guidebookBook") {
+    const booked = g.technician ? `${g.technician.name}${g.bookOn ? `, ${day(g.bookOn)}` : ""}` : "";
+    return <View style={{ gap: 6 }}>
+      {!!booked && <Text style={[ui.small, { color: p.text }]}>{`Booked: ${booked}.`}</Text>}
+      {g.canBook && <>
+        <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{read.installers.map(x => <Choice key={x.id} p={p} on={(who || g.technician?.id) === x.id} label={x.name} onPress={() => setWho(x.id)} />)}</View>
+        <DateField p={p} label="Date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today()} value={{ from: on || g.bookOn || "", to: on || g.bookOn || "" }} onChange={next => setOn(next.from)} />
+        <Button p={p} icon="calendar" label={g.technician ? "Change the booking" : "Book the technician"} disabled={busy || !(who || g.technician?.id) || !(on || g.bookOn)}
+          onPress={() => act({ action: "bookGuidebook", technicianId: who || g.technician?.id, date: on || g.bookOn }, "Booked. The technician has been told.")} />
+      </>}
+    </View>;
+  }
+  const fresh = (): GuideDraft => ({
+    content: Object.fromEntries(g.sections.map(x => [x.key, { text: x.text, videoUrl: x.videoUrl }])),
+    wifiName: g.wifiName ?? "", wifiPassword: g.wifiPassword ?? "", guestCode: g.guestCode ?? "", teamCode: g.teamCode ?? "",
+  });
+  // The form is kept against the last save; a newer save (by anyone) starts it again from what is stored.
+  const form = draft && draft.at === (g.savedAt ?? g.submittedAt) ? draft.value : fresh();
+  const change = (patch: Partial<GuideDraft>) => setDraft({ at: g.savedAt ?? g.submittedAt, value: { ...form, ...patch } });
+  const section = (key: string, patch: Partial<{ text: string; videoUrl: string }>) => change({ content: { ...form.content, [key]: { ...(form.content[key] ?? { text: "", videoUrl: "" }), ...patch } } });
+  const link = g.guestPath ? (liveApiOrigin() ?? "") + g.guestPath : "";
+  async function copy() {
+    try {
+      if (Platform.OS === "web" && globalThis.navigator?.clipboard) { await globalThis.navigator.clipboard.writeText(link); setNote("Link copied. Share it with guests; anyone with it can read the guidebook."); }
+      else await Linking.openURL(link);
+    } catch (e) { setNote(message(e)); }
+  }
+  return <View style={{ gap: 8 }}>
+    <Text style={[ui.small, { color: p.muted }]}>{g.submittedAt ? `Submitted ${when(g.submittedAt)}${g.submittedByName ? ` by ${g.submittedByName}` : ""}.`
+      : g.savedAt ? `Draft saved ${when(g.savedAt)}${g.savedByName ? ` by ${g.savedByName}` : ""}.` : g.canEdit ? "Fill in each section. The address is added for you." : "The technician fills this in."}</Text>
+    {g.sections.map(x => <View key={x.key} style={{ gap: 6, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border }}>
+      <Text style={{ color: p.text, fontWeight: "600" }}>{x.title}</Text>
+      {g.canEdit ? <>
+        {!!x.prompt && <Text style={[ui.small, { color: p.muted }]}>{x.prompt}</Text>}
+        <Field p={p} multiline label="What guests need to know" value={form.content[x.key]?.text ?? ""} onChange={v => section(x.key, { text: v.slice(0, 5000) })} />
+        <Field p={p} label="Video link (optional)" value={form.content[x.key]?.videoUrl ?? ""} placeholder="https://" onChange={v => section(x.key, { videoUrl: v.slice(0, 1000) })} />
+        {x.key === "access" && <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+          <View style={{ flex: 1, minWidth: 160 }}><Field p={p} label="Guest key box code (shown to guests)" value={form.guestCode} onChange={v => change({ guestCode: v.slice(0, 60) })} /></View>
+          <View style={{ flex: 1, minWidth: 160 }}><Field p={p} label="Team key box code (never shown to guests)" value={form.teamCode} onChange={v => change({ teamCode: v.slice(0, 60) })} /></View>
+        </View>}
+        {x.key === "wifi" && <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+          <View style={{ flex: 1, minWidth: 160 }}><Field p={p} label="Wi-Fi name" value={form.wifiName} onChange={v => change({ wifiName: v.slice(0, 120) })} /></View>
+          <View style={{ flex: 1, minWidth: 160 }}><Field p={p} label="Wi-Fi password" value={form.wifiPassword} onChange={v => change({ wifiPassword: v.slice(0, 120) })} /></View>
+        </View>}
+      </> : <>
+        {!!x.text && <Text style={[ui.small, { color: p.text }]}>{x.text}</Text>}
+        {!!x.videoUrl && <Text selectable style={[ui.small, { color: p.primary }]}>{x.videoUrl}</Text>}
+        {x.key === "access" && !!(g.guestCode || g.teamCode) && <Text style={[ui.small, { color: p.text }]}>{[g.guestCode ? `Guest code ${g.guestCode}` : "", g.teamCode ? `team code ${g.teamCode}` : ""].filter(Boolean).join(", ")}</Text>}
+        {x.key === "wifi" && !!g.wifiName && <Text style={[ui.small, { color: p.text }]}>{`Wi-Fi ${g.wifiName}${g.wifiPassword ? `, password ${g.wifiPassword}` : ""}`}</Text>}
+      </>}
+      <Photos p={p} propertyId={propertyId} step={`guidebook:${x.key}`} photos={x.photos} editable={g.canEdit} busy={busy} onChange={onRead}
+        onRemove={fileId => act({ action: "removeFile", step: `guidebook:${x.key}`, fileId }, "Photo removed.")} />
+    </View>)}
+    {g.canEdit && <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+      <Button p={p} quiet icon="download" label="Save the draft" disabled={busy} onPress={() => act({ action: "saveGuidebook", ...form }, "Draft saved.")} />
+      <Button p={p} primary icon="check" label="Submit the guidebook" disabled={busy} onPress={() => act({ action: "submitGuidebook", ...form }, "Submitted. The owner and the team have been told.")} />
+    </View>}
+    {!!link && <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+      <Button p={p} quiet icon="external-link" label={Platform.OS === "web" ? "Copy the guest link" : "Open the guest version"} onPress={() => void copy()} />
+      {g.canResetLink && <Button p={p} quiet icon="refresh-cw" label="Replace the link" disabled={busy} onPress={() => act({ action: "resetGuidebookLink" }, "A new guest link is ready. The old one no longer works.")} />}
+      {g.canReopen && <Button p={p} quiet icon="edit-3" label="Reopen to change it" disabled={busy} onPress={() => act({ action: "reopenGuidebook" }, "Reopened. Submit it again once it is updated.")} />}
+    </View>}
+    {!!note && <Text style={[ui.small, { color: p.muted }]}>{note}</Text>}
+  </View>;
+}
+
+// Guidebooks the signed-in technician is booked to fill in, on Home.
+export function GuidebookWork({ p }: { p: Palette }) {
+  const [read, setRead] = useState<LaunchRead | null>(null), [open, setOpen] = useState<string | null>(null), [error, setError] = useState("");
+  const load = useCallback(async () => { try { setRead(await readLaunch()); setError(""); } catch (e) { setError(message(e)); } }, []);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  if (!read || read.guidebookWork.length === 0) return null;
+  return <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, padding: 14, gap: 10 }]}>
+    <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>Guest guidebooks</Text>
+    <Text style={[ui.small, { color: p.muted }]}>New properties you are booked to create the guidebook for. Fill in each section with photos and videos, then submit.</Text>
+    {read.guidebookWork.map(x => <View key={x.propertyId} style={{ gap: 8 }}>
+      <View style={[ui.between, { gap: 8 }]}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ color: p.text, fontWeight: "600" }}>{x.name}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{[x.address, x.bookOn ? `booked for ${day(x.bookOn)}` : ""].filter(Boolean).join(", ")}</Text>
+        </View>
+        <Button p={p} quiet icon={open === x.propertyId ? "x" : "chevron-right"} label={open === x.propertyId ? "Close" : "Open"} onPress={() => setOpen(o => o === x.propertyId ? null : x.propertyId)} />
+      </View>
+      {open === x.propertyId && <LaunchPanel p={p} propertyId={x.propertyId} />}
+    </View>)}
+    {!!error && <Notice p={p} tone="bad" text={error} />}
   </View>;
 }
 
@@ -333,7 +436,7 @@ const pounds = (pence: number) => new Intl.NumberFormat("en-GB", { style: "curre
 
 // Photos of furnishing (one item as it arrives, or the finished install): open, add and remove.
 function Photos({ p, propertyId, step, lineId, photos, editable, busy, onChange, onRemove }: {
-  p: Palette; propertyId: string; step: "setUp.received" | "setUp.install"; lineId?: string; photos: LaunchFurnishing["installPhotos"]; editable: boolean; busy: boolean;
+  p: Palette; propertyId: string; step: string; lineId?: string; photos: LaunchFurnishing["installPhotos"]; editable: boolean; busy: boolean;
   onChange: (r: LaunchRead) => void; onRemove: (fileId: string) => void;
 }) {
   const [uploading, setUploading] = useState(false), [error, setError] = useState("");
@@ -531,7 +634,7 @@ export function LaunchSettingsSheet({ p, visible, onClose }: { p: Palette; visib
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (
-    <Sheet palette={p} visible={visible} onClose={onClose} title="Launch preparation" subtitle="The condition checklist, notes, safety reminders and task boards" icon="clipboard" width={720}>
+    <Sheet palette={p} visible={visible} onClose={onClose} title="Launch preparation" subtitle="The condition checklist, guidebook template, notes, safety reminders and task boards" icon="clipboard" width={720}>
       <View style={{ gap: 14 }}>
         {!draft && !error && <Loading p={p} rows={4} />}
         {draft && <>
@@ -549,6 +652,20 @@ export function LaunchSettingsSheet({ p, visible, onClose }: { p: Palette; visib
             </> : <><Text style={{ color: p.text, fontWeight: "600" }}>{`${i + 1}. ${c.title}`}</Text><Text style={[ui.small, { color: p.muted }]}>{c.text}</Text></>}
           </View>)}
           {canEdit && draft.condition.length < 30 && <Button p={p} icon="plus" label="Add a statement" onPress={() => set({ condition: [...draft.condition, { key: statementKey("statement", draft.condition.map(c => c.key)), title: "New statement", text: "Describe what must be true." }] })} />}
+          <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>{`Guest guidebook sections (${draft.guidebook.length})`}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>The template the technician fills in. The address is added for you; Accessing the property and Wi-Fi also carry the key box codes and the Wi-Fi details.</Text>
+          {draft.guidebook.map((g, i) => <View key={g.key} style={{ gap: 6, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border }}>
+            {canEdit ? <>
+              <Field p={p} label={`${i + 1}. Section`} value={g.title} onChange={v => set({ guidebook: draft.guidebook.map((x, j) => j === i ? { ...x, title: v.slice(0, 80) } : x) })} />
+              <Field p={p} multiline label="What to write" value={g.prompt} onChange={v => set({ guidebook: draft.guidebook.map((x, j) => j === i ? { ...x, prompt: v.slice(0, 1000) } : x) })} />
+              <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
+                <Button p={p} quiet icon="arrow-up" label="Earlier" disabled={i === 0} onPress={() => { const next = [...draft.guidebook]; const [x] = next.splice(i, 1); next.splice(i - 1, 0, x); set({ guidebook: next }); }} />
+                <Button p={p} quiet icon="arrow-down" label="Later" disabled={i === draft.guidebook.length - 1} onPress={() => { const next = [...draft.guidebook]; const [x] = next.splice(i, 1); next.splice(i + 1, 0, x); set({ guidebook: next }); }} />
+                <Button p={p} quiet icon="trash-2" label="Remove" disabled={draft.guidebook.length <= 1} onPress={() => set({ guidebook: draft.guidebook.filter((_, j) => j !== i) })} />
+              </View>
+            </> : <><Text style={{ color: p.text, fontWeight: "600" }}>{`${i + 1}. ${g.title}`}</Text><Text style={[ui.small, { color: p.muted }]}>{g.prompt}</Text></>}
+          </View>)}
+          {canEdit && draft.guidebook.length < 20 && <Button p={p} icon="plus" label="Add a section" onPress={() => set({ guidebook: [...draft.guidebook, { key: statementKey("section", draft.guidebook.map(x => x.key)), title: "New section", prompt: "What the technician writes here." }] })} />}
           <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>Notes under each part</Text>
           {LAUNCH_SECTIONS.map(sec => canEdit
             ? <Field key={sec} p={p} multiline label={LAUNCH_SECTION_TITLE[sec]} value={draft.notes[sec] ?? ""} onChange={v => set({ notes: { ...draft.notes, [sec]: v.slice(0, 1000) } })} />

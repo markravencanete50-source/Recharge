@@ -52,3 +52,5 @@
 -- 20261029200000 launch_compliance_boards: installed by Lee 2026-10-28, verified
 
 -- 20261029300000 launch_furnishing: installed by Lee 2026-10-28, verified
+
+-- 20261029400000 launch_inventory: installed by Lee 2026-10-28, verified
