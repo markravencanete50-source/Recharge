@@ -177,6 +177,11 @@ export function ruleLine(rule: QuantityRule): string {
 }
 
 // --- Catalogue ----------------------------------------------------------------------------------------------------------
+// Whether an item goes on a property's inventory in Launch Preparation (20261029400000): required, additional (the owner
+// can remove it), or not at all (labour, for example).
+export const INVENTORY_ROLES = ['required', 'additional', 'none'] as const;
+export type InventoryRole = (typeof INVENTORY_ROLES)[number];
+export const INVENTORY_ROLE_LABEL: Record<InventoryRole, string> = { required: 'Required', additional: 'Additional', none: 'Not on the inventory' };
 export const FURNISHING_CATEGORIES = ['bedroom', 'linen', 'bathroom', 'kitchen', 'living', 'windows', 'appliances', 'cleaning', 'safety', 'outdoor', 'labour'] as const;
 export type FurnishingCategory = (typeof FURNISHING_CATEGORIES)[number];
 export const CATEGORY_LABEL: Record<FurnishingCategory, string> = {
@@ -191,7 +196,7 @@ export const quantityRuleSchema = z.object({ basis: z.enum(RULE_BASES), per: z.n
 export const catalogueItemSchema = z.object({
   id: z.string().uuid(), code: z.string().nullable(), name: z.string(), category: z.enum(FURNISHING_CATEGORIES), unit: z.string(), packSize: z.number().int().min(1),
   costCapPence: z.number().int().min(0), retailPricePence: z.number().int().min(0).nullable(), supplier: z.string(), productUrl: z.string().nullable(),
-  rule: quantityRuleSchema, stepPence: z.number().int().min(0), active: z.boolean(), sortOrder: z.number().int(), version: z.number().int().positive(),
+  rule: quantityRuleSchema, stepPence: z.number().int().min(0), active: z.boolean(), inventory: z.enum(INVENTORY_ROLES).default('required'), sortOrder: z.number().int(), version: z.number().int().positive(),
   updatedAt: z.string().nullable().optional(), updatedBy: z.string().nullable().optional(),
 });
 export type CatalogueItem = z.infer<typeof catalogueItemSchema>;
@@ -201,13 +206,13 @@ export const catalogueSchema = z.array(catalogueItemSchema);
 export const itemFormSchema = z.object({
   name: z.string().trim().min(2, 'Name the product').max(200), category: z.enum(FURNISHING_CATEGORIES), unit: z.string().trim().min(1, 'Say what one unit is, for example each or set of 4').max(60),
   packSize: z.number().int().min(1, 'A pack holds at least 1').max(1000), costCapPence: pence, retailPricePence: pence.nullable(), supplier: z.string().trim().max(120),
-  productUrl: https.nullable(), rule: quantityRuleSchema, stepPence: pence, active: z.boolean(),
+  productUrl: https.nullable(), rule: quantityRuleSchema, stepPence: pence, active: z.boolean(), inventory: z.enum(INVENTORY_ROLES),
 }).strict();
 export type ItemForm = z.infer<typeof itemFormSchema>;
 export const emptyItemForm = (): ItemForm => ({ name: '', category: 'bedroom', unit: 'each', packSize: 1, costCapPence: 0, retailPricePence: null, supplier: '', productUrl: null,
-  rule: { basis: 'fixed', per: 1, when: null }, stepPence: 0, active: true });
+  rule: { basis: 'fixed', per: 1, when: null }, stepPence: 0, active: true, inventory: 'required' });
 export const itemToForm = (i: CatalogueItem): ItemForm => ({ name: i.name, category: i.category, unit: i.unit, packSize: i.packSize, costCapPence: i.costCapPence,
-  retailPricePence: i.retailPricePence, supplier: i.supplier, productUrl: i.productUrl, rule: { ...i.rule }, stepPence: i.stepPence, active: i.active });
+  retailPricePence: i.retailPricePence, supplier: i.supplier, productUrl: i.productUrl, rule: { ...i.rule }, stepPence: i.stepPence, active: i.active, inventory: i.inventory });
 
 // Pounds typed as text ("12.50", "£1,200") to pence; null when empty or not a sum of money.
 export function poundsToPence(text: string): number | null {
@@ -366,7 +371,7 @@ export const saveLineSchema = z.object({ itemId: id, suggestedUnits: z.number().
 export const furnishingActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('saveItem'), requestId: id, id: id.optional(), version: version.optional(), name: z.string().trim().min(2).max(200), category: z.enum(FURNISHING_CATEGORIES),
     unit: z.string().trim().min(1).max(60), packSize: z.number().int().min(1).max(1000), costCapPence: pence, retailPricePence: pence.nullable(), supplier: z.string().trim().max(120),
-    productUrl: https.nullable(), rule: quantityRuleSchema, stepPence: pence, active: z.boolean() }).strict(),
+    productUrl: https.nullable(), rule: quantityRuleSchema, stepPence: pence, active: z.boolean(), inventory: z.enum(INVENTORY_ROLES).optional() }).strict(),
   z.object({ action: z.literal('saveProject'), requestId: id, id: id.optional(), version: version.optional(), clientName: z.string().trim().min(2).max(200),
     clientEmail: z.string().trim().email().max(320).nullable(), propertyId: id.nullable(), address: z.string().trim().max(500), estimateOn: isoDay, inputs: inputsSchema,
     markupPercent: z.number().min(0).max(200), feePence: pence, vat: z.boolean(), notes: z.string().trim().max(2000), lines: z.array(saveLineSchema).max(400) }).strict(),

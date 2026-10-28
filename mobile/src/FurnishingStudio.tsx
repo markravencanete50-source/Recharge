@@ -23,7 +23,7 @@ import { quoteFileName, quoteHtml, shoppingListHtml } from "../../lib/furnishing
 import {
   analyticsQuery, analyticsSchema, BASIS_LABEL, buying, canUseFurnishingStudio, catalogueQuery, catalogueSchema, categoryName, COOKER_LABEL, COOKERS, COUNT_INPUTS,
   COVERING_LABEL, editable, emptyItemForm, emptyProjectForm, estimateLines, estimateTotals, formFromProject, FURNISHING_CATEGORIES, FURNISHING_INTRO, FURNISHING_TITLE,
-  headerStats, itemToForm, monthName, MOVE_LABEL, NEXT_STATUS, normaliseInputs, OPTION_KEYS, OPTION_LABEL, penceToPounds, poundsToPence,
+  headerStats, INVENTORY_ROLE_LABEL, INVENTORY_ROLES, itemToForm, monthName, MOVE_LABEL, NEXT_STATUS, normaliseInputs, OPTION_KEYS, OPTION_LABEL, penceToPounds, poundsToPence,
   projectFormError, projectQuery, projectSchema, projectsQuery, projectsSchema, propertiesQuery, propertyChoiceSchema, PROPERTY_TYPE_LABEL, PROPERTY_TYPES, RULE_BASES,
   RULE_WHEN, ruleLine, saveProjectAction, savedLines, shoppingGroups, spendSummary, STATUS_LABEL, STATUS_TONE, TV_LABEL, TV_SETUPS, varianceLine, WHEN_LABEL,
   WINDOW_COVERINGS, ZIP_SETUP_LABEL, ZIP_SETUPS,
@@ -166,6 +166,32 @@ function MoneyField({ p, label, pence, optional, disabled, onChange }: { p: Pale
   );
 }
 
+// The property details the quantity rules work from (also the inventory in Launch Preparation, 20261029400000).
+export function PropertyDetails({ p, inputs, disabled, onChange }: { p: Palette; inputs: StudioInputs; disabled?: boolean; onChange: (inputs: StudioInputs) => void }) {
+  const setInputs = (next: Partial<StudioInputs>) => onChange(normaliseInputs({ ...inputs, ...next }));
+  return <>
+    <ChoiceField p={p} label="Property type" hideLabel={false} value={inputs.propertyType} options={PROPERTY_TYPES.map(v => ({ value: v, label: PROPERTY_TYPE_LABEL[v] }))} onChange={v => setInputs({ propertyType: v })} />
+    {(["property", "beds", "rooms"] as const).map(group => <View key={group} style={{ gap: 8 }}>
+      {group !== "property" && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text, marginTop: 8 }]}>{GROUP_TITLE[group]}</Text>}
+      {group === "beds" && <Text style={[ui.small, { color: p.muted }]}>Zip & link linen covers both configurations: three rotations for the primary setup and one for the secondary.</Text>}
+      {COUNT_INPUTS.filter(i => i.group === group).map(i => <Stepper key={i.key} p={p} label={i.label} help={i.help} value={inputs[i.key]} min={i.min} max={i.max} disabled={disabled}
+        onChange={v => setInputs({ [i.key]: v })} />)}
+      {group === "beds" && inputs.zipLinkSetups.map((s, n) => <View key={n} style={{ gap: 4 }}>
+        <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Zip & link bed {n + 1}: primary setup</Text>
+        <Pills p={p} title={`Zip & link bed ${n + 1} primary setup`} values={ZIP_SETUPS} value={s} label={v => ZIP_SETUP_LABEL[v]}
+          onChange={v => setInputs({ zipLinkSetups: inputs.zipLinkSetups.map((x, k) => k === n ? v : x) })} />
+      </View>)}
+      {group === "rooms" && <>
+        <ChoiceField p={p} label="TV setup" hideLabel={false} value={inputs.tv} options={TV_SETUPS.map(v => ({ value: v, label: TV_LABEL[v] }))} onChange={v => setInputs({ tv: v })} />
+        <ChoiceField p={p} label="Window coverings" hideLabel={false} value={inputs.windowCovering} options={WINDOW_COVERINGS.map(v => ({ value: v, label: COVERING_LABEL[v] }))} onChange={v => setInputs({ windowCovering: v })} />
+      </>}
+    </View>)}
+    <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text, marginTop: 8 }]}>Appliances & optional</Text>
+    <ChoiceField p={p} label="Cooker type" hideLabel={false} value={inputs.cooker} options={COOKERS.map(v => ({ value: v, label: COOKER_LABEL[v] }))} onChange={v => setInputs({ cooker: v })} />
+    {OPTION_KEYS.map(k => <Toggle key={k} p={p} label={OPTION_LABEL[k]} value={inputs[k]} disabled={disabled} onChange={v => setInputs({ [k]: v })} />)}
+  </>;
+}
+
 function ProjectEditor({ p, catalogue, projectId, onBack, onSaved }: { p: Palette; catalogue: CatalogueItem[]; projectId: string | null; onBack: () => void; onSaved: (id: string) => void }) {
   const today = london(new Date());
   const [project, setProject] = useState<Project | null>(null), [form, setForm] = useState<ProjectForm>(() => emptyProjectForm(today));
@@ -188,7 +214,6 @@ function ProjectEditor({ p, catalogue, projectId, onBack, onSaved }: { p: Palett
     [project, status, catalogue, form]);
   const totals = estimateTotals(lines, form);
   const change = (next: Partial<ProjectForm>) => { setForm(f => ({ ...f, ...next })); setDirty(true); setNote(""); };
-  const setInputs = (next: Partial<StudioInputs>) => change({ inputs: normaliseInputs({ ...form.inputs, ...next }) });
   const override = (itemId: string, next: { units?: number; existing?: number }) => change({ overrides: { ...form.overrides, [itemId]: { ...form.overrides[itemId], ...next } } });
   const where = form.propertyId ? (properties.find(x => x.id === form.propertyId)?.name ?? project?.propertyName ?? "") + (form.address ? `, ${form.address}` : "") : form.address;
 
@@ -267,25 +292,7 @@ function ProjectEditor({ p, catalogue, projectId, onBack, onSaved }: { p: Palett
             }} />
           <Field p={p} label={form.propertyId ? "Address or note" : "Property address or project name"} value={form.address} onChange={v => change({ address: v })} placeholder="For example 14 Example Terrace, Edinburgh" />
           <DateField p={p} label="Estimate date" mode="single" value={{ from: form.estimateOn, to: form.estimateOn }} onChange={v => v.from && change({ estimateOn: v.from })} />
-          <ChoiceField p={p} label="Property type" hideLabel={false} value={form.inputs.propertyType} options={PROPERTY_TYPES.map(v => ({ value: v, label: PROPERTY_TYPE_LABEL[v] }))} onChange={v => setInputs({ propertyType: v })} />
-          {(["property", "beds", "rooms"] as const).map(group => <View key={group} style={{ gap: 8 }}>
-            {group !== "property" && <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text, marginTop: 8 }]}>{GROUP_TITLE[group]}</Text>}
-            {group === "beds" && <Text style={[ui.small, { color: p.muted }]}>Zip & link linen covers both configurations: three rotations for the primary setup and one for the secondary.</Text>}
-            {COUNT_INPUTS.filter(i => i.group === group).map(i => <Stepper key={i.key} p={p} label={i.label} help={i.help} value={form.inputs[i.key]} min={i.min} max={i.max} disabled={locked}
-              onChange={v => setInputs({ [i.key]: v })} />)}
-            {group === "beds" && form.inputs.zipLinkSetups.map((s, n) => <View key={n} style={{ gap: 4 }}>
-              <Text style={[ui.small, { color: p.muted, fontWeight: "600" }]}>Zip & link bed {n + 1}: primary setup</Text>
-              <Pills p={p} title={`Zip & link bed ${n + 1} primary setup`} values={ZIP_SETUPS} value={s} label={v => ZIP_SETUP_LABEL[v]}
-                onChange={v => setInputs({ zipLinkSetups: form.inputs.zipLinkSetups.map((x, k) => k === n ? v : x) })} />
-            </View>)}
-            {group === "rooms" && <>
-              <ChoiceField p={p} label="TV setup" hideLabel={false} value={form.inputs.tv} options={TV_SETUPS.map(v => ({ value: v, label: TV_LABEL[v] }))} onChange={v => setInputs({ tv: v })} />
-              <ChoiceField p={p} label="Window coverings" hideLabel={false} value={form.inputs.windowCovering} options={WINDOW_COVERINGS.map(v => ({ value: v, label: COVERING_LABEL[v] }))} onChange={v => setInputs({ windowCovering: v })} />
-            </>}
-          </View>)}
-          <Text accessibilityRole="header" style={[ui.sectionTitle, { color: p.text, marginTop: 8 }]}>Appliances & optional</Text>
-          <ChoiceField p={p} label="Cooker type" hideLabel={false} value={form.inputs.cooker} options={COOKERS.map(v => ({ value: v, label: COOKER_LABEL[v] }))} onChange={v => setInputs({ cooker: v })} />
-          {OPTION_KEYS.map(k => <Toggle key={k} p={p} label={OPTION_LABEL[k]} value={form.inputs[k]} disabled={locked} onChange={v => setInputs({ [k]: v })} />)}
+          <PropertyDetails p={p} inputs={form.inputs} disabled={locked} onChange={inputs => change({ inputs })} />
           <Notice p={p} text="Labour starts at the catalogue's one-bedroom cap, plus the amount set per additional bedroom (GBP 250 to start)." />
         </View>
       </View>}
@@ -423,7 +430,7 @@ function Catalogue({ p, catalogue, onSaved }: { p: Palette; catalogue: Catalogue
       <SearchBox p={p} value={query} onChange={setQuery} placeholder="Search products or suppliers" />
       <List p={p} search={false} empty={query.trim() ? "Nothing matches that search." : "No products here."}>
         {shown.map((i, n) => <Row key={i.id} p={p} first={n === 0} title={i.name}
-          detail={[categoryName(i.category), i.unit, ruleLine(i.rule), i.stepPence ? `plus ${formatMoney(i.stepPence)} per extra bedroom` : "", i.supplier, i.productUrl ? "link" : ""].filter(Boolean).join(" · ")}
+          detail={[categoryName(i.category), i.unit, ruleLine(i.rule), i.stepPence ? `plus ${formatMoney(i.stepPence)} per extra bedroom` : "", i.supplier, i.productUrl ? "link" : "", i.inventory === "required" ? "" : INVENTORY_ROLE_LABEL[i.inventory].toLowerCase()].filter(Boolean).join(" · ")}
           amount={formatMoney(i.costCapPence)} onPress={() => setEditing(i)} />)}
       </List>
       <ItemSheet p={p} item={editing} onClose={() => setEditing(null)} onSaved={async () => { setEditing(null); await onSaved(); }} />
@@ -473,6 +480,8 @@ function ItemSheet({ p, item, onClose, onSaved }: { p: Palette; item: CatalogueI
         <Text style={[ui.small, { color: p.muted }]}>{ruleLine({ ...form.rule, per: Number(per) || 0 })}</Text>
         <MoneyField key={`step:${existing?.id ?? "new"}`} p={p} label="Add for each bedroom after the first (£)" pence={form.stepPence} onChange={v => set({ stepPence: v ?? 0 })} />
         <Toggle p={p} label="In use (offered in new quotes)" value={form.active} onChange={v => set({ active: v })} />
+        <ChoiceField p={p} label="On a property's inventory (Launch Preparation)" hideLabel={false} value={form.inventory} options={INVENTORY_ROLES.map(v => ({ value: v, label: INVENTORY_ROLE_LABEL[v] }))} onChange={v => set({ inventory: v })} />
+        <Text style={[ui.small, { color: p.muted }]}>Additional items can be removed from a property's inventory; when Recharge sets the property up, the owner accepts or rejects them.</Text>
         {!!existing?.updatedBy && <Text style={[ui.small, { color: p.muted }]}>{`Last changed by ${existing.updatedBy}`}</Text>}
         {!!error && <Notice p={p} text={error} tone="bad" />}
         <Button p={p} primary label={busy ? "Saving…" : "Save product"} disabled={busy} onPress={() => void save()} />

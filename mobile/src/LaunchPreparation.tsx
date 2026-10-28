@@ -10,6 +10,8 @@ import { DateField } from "./CalendarPicker";
 import { liveApi } from "./LivePages";
 import { ui, type Palette } from "./theme";
 import { launchFileLink, uploadLaunchFile } from "./backend/client";
+import { PropertyDetails } from "./FurnishingStudio";
+import { categoryName, normaliseInputs, type StudioInputs } from "../../lib/furnishing-studio";
 import { MODULES } from "../../lib/modules";
 import {
   BOARD_TITLE, DEFAULT_LAUNCH_SETTINGS, LAUNCH_FILE_MIMES, LAUNCH_SECTIONS, TICKET_SECTIONS, LAUNCH_SECTION_TITLE, launchActionSchema, launchProgress, launchReadSchema, launchSettingsSchema, sectionMark, statementKey,
@@ -21,7 +23,8 @@ import {
 // owner's app the owner sees every part (Recharge's marked with a bolt, theirs with a person) and ticks their own; the
 // housekeeper fills in the readiness inspection form, which makes the property guest ready. Admins edit the condition
 // statements, notes, reminders and boards from the Leads page. Safety documents carry their certificate (20261029200000)
-// and each of Recharge's parts is mirrored as a ticket on its board.
+// and each of Recharge's parts is mirrored as a ticket on its board. The inventory (20261029400000) is calculated from the
+// property's details with the Furnishing Studio presets, agreed by the owner when Recharge sets up, then ticked off.
 const when = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric" }).format(new Date(iso));
 const day = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long" }).format(new Date(iso + "T12:00:00Z"));
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
@@ -136,7 +139,8 @@ function Done({ p, step }: { p: Palette; step: LaunchStep }) {
 
 // ---------------------------------------------------------------- the readiness inspection form (the housekeeper, or the team)
 export function ReadinessForm({ p, launch, settings, onSubmitted }: { p: Palette; launch: LaunchView; settings: LaunchSettings; onSubmitted: (r: LaunchRead) => void }) {
-  const [allPresent, setAllPresent] = useState<boolean | null>(null), [missing, setMissing] = useState("");
+  const [allPresent, setAllPresent] = useState<boolean | null>(null), [missing, setMissing] = useState(""), [picked, setPicked] = useState<string[]>([]);
+  const listed = (launch.inventory?.items ?? []).filter(x => x.kept);
   const [marks, setMarks] = useState<Record<string, { ok: boolean | null; note: string }>>({});
   const [video, setVideo] = useState(""), [note, setNote] = useState(""), [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const request = useRequestId("readiness:" + launch.propertyId);
@@ -144,7 +148,7 @@ export function ReadinessForm({ p, launch, settings, onSubmitted }: { p: Palette
   async function submit() {
     const body = {
       action: "submitReadiness", requestId: request.get(), propertyId: launch.propertyId,
-      inventory: { allPresent: allPresent === true, missing: allPresent ? [] : missing.split(/\n|,/).map(x => x.trim()).filter(Boolean).slice(0, 50) },
+      inventory: { allPresent: allPresent === true, missing: allPresent ? [] : [...picked, ...missing.split(/\n|,/).map(x => x.trim()).filter(Boolean)].slice(0, 50) },
       condition: settings.condition.map(c => ({ key: c.key, ok: marks[c.key]?.ok === true, note: marks[c.key]?.note ?? "" })),
       evidence: { video: video.trim(), note },
     };
@@ -160,7 +164,10 @@ export function ReadinessForm({ p, launch, settings, onSubmitted }: { p: Palette
       <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>1. Inventory</Text>
       <Text style={[ui.small, { color: p.muted }]}>Is every item from the inventory in the property?</Text>
       <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}><Choice p={p} on={allPresent === true} label="Everything is here" onPress={() => setAllPresent(true)} /><Choice p={p} on={allPresent === false} label="Something is missing" onPress={() => setAllPresent(false)} /></View>
-      {allPresent === false && <Field p={p} multiline label="What is missing (one per line)" value={missing} onChange={v => setMissing(v.slice(0, 4000))} />}
+      {allPresent === false && listed.length > 0 && <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
+        {listed.map(x => { const name = `${x.quantity} x ${x.name}`; return <Choice key={x.itemId} p={p} on={picked.includes(name)} label={name} onPress={() => setPicked(all => all.includes(name) ? all.filter(y => y !== name) : [...all, name])} />; })}
+      </View>}
+      {allPresent === false && <Field p={p} multiline label={listed.length ? "Anything else missing (one per line)" : "What is missing (one per line)"} value={missing} onChange={v => setMissing(v.slice(0, 4000))} />}
     </View>
     <View style={{ gap: 8 }}>
       <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>{`2. Condition (${answered} of ${settings.condition.length})`}</Text>
@@ -238,6 +245,7 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
             </View>
             {s.kind === "expiry" && <Certificates p={p} propertyId={propertyId} step={s} editable={s.canTick || s.canReopen} busy={busy}
               onChange={r => { setRead(r); setError(""); }} onRemove={fileId => void act({ action: "removeFile", step: s.key, fileId }, "Certificate removed.")} />}
+            {s.kind === "inventory" && s.state !== "locked" && <InventoryStep p={p} launch={v} busy={busy} act={(body, done) => void act(body, done)} />}
             {(s.kind.startsWith("furnishing") || s.key === "setUp.invoice") && <FurnishingStep p={p} propertyId={propertyId} step={s} launch={v} read={read} busy={busy} act={(body, done) => void act(body, done)} onRead={r => { setRead(r); setError(""); }} />}
             {!!s.ticketId && !owner && read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] && <Text style={[ui.small, { color: p.muted }]}>{`Also on the ${boardName(read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] ?? "")} board.`}</Text>}
             {openStep === s.key && <TickForm p={p} step={s} settings={settings} busy={busy} onTick={data => void act({ action: "tick", step: s.key, ...(data ? { data } : {}) }, "Ticked.")} />}
@@ -265,6 +273,58 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
     })}
     {!!error && <Notice p={p} tone="bad" text={error} />}
     {!!note && <Notice p={p} text={note} />}
+  </View>;
+}
+
+// ---------------------------------------------------------------- the inventory
+// Whoever sets the property up enters its details; the Furnishing Studio presets work out each item, required or
+// additional. Additional items can be removed (when Recharge sets up, the owner accepts or rejects them and approves the
+// list); then each item is ticked as in the property.
+function InventoryStep({ p, launch, busy, act }: { p: Palette; launch: LaunchView; busy: boolean; act: (body: Record<string, unknown>, done: string) => void }) {
+  const inv = launch.inventory;
+  // The details being entered, for the calculation they were opened against (a new calculation closes them).
+  const [draft, setDraft] = useState<{ at: string | null; inputs: StudioInputs } | null>(null), [open, setOpen] = useState(false);
+  if (!inv) return null;
+  const inputs = draft && draft.at === inv.calculatedAt ? draft.inputs : null;
+  const rs = inv.rechargeSetsUp, calculated = !!inv.calculatedAt, waiting = inv.items.filter(x => x.kept === null).length;
+  const status = !calculated ? (inv.canCalculate ? "Enter the property's details and the inventory is worked out from Recharge's presets." : "Recharge are preparing the inventory.")
+    : !inv.approvedAt ? (inv.canApprove || inv.canDecide ? (waiting ? `Accept or reject the ${waiting} additional ${waiting === 1 ? "item" : "items"}, then approve the inventory.` : "Approve the inventory.") : `Waiting for the owner to approve${waiting ? ` (${waiting} additional ${waiting === 1 ? "item" : "items"} to decide)` : ""}.`)
+    : `${inv.counts.checked} of ${inv.counts.total} items in the property.`;
+  const groups = [...new Set(inv.items.map(x => x.category))];
+  // Additional items: undecided ones can be accepted or rejected; decided ones changed back.
+  const decide = (x: (typeof inv.items)[number]) => inv.canDecide && x.kind === "additional" ? (x.kept === null ? [true, false] : [!x.kept]) : [];
+  return <View style={{ gap: 8 }}>
+    <Text style={[ui.small, { color: p.text }]}>{status}</Text>
+    {calculated && <Text style={[ui.small, { color: p.muted }]}>{[inv.calculatedByName ? `Calculated by ${inv.calculatedByName} ${when(inv.calculatedAt!)}` : "", rs && inv.approvedAt ? `Approved by ${inv.approvedByName ?? "the owner"} ${when(inv.approvedAt)}` : ""].filter(Boolean).join(". ")}</Text>}
+    <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+      {inv.canCalculate && !inputs && <Button p={p} quiet icon={calculated ? "refresh-cw" : "edit-3"} label={calculated ? "Change the details" : "Enter the property details"} onPress={() => setDraft({ at: inv.calculatedAt, inputs: normaliseInputs((inv.inputs ?? {}) as Partial<StudioInputs>) })} />}
+      {calculated && <Button p={p} quiet icon={open ? "chevron-up" : "list"} label={open ? "Hide the inventory" : `Show the inventory (${inv.items.length})`} onPress={() => setOpen(o => !o)} />}
+      {inv.canApprove && <Button p={p} primary icon="check" label="Approve the inventory" disabled={busy} onPress={() => act({ action: "approveInventory" }, "Approved. Recharge will make sure everything is in the property.")} />}
+    </View>
+    {!!inputs && <View style={{ gap: 8, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border }}>
+      <PropertyDetails p={p} inputs={inputs} onChange={next => setDraft({ at: inv.calculatedAt, inputs: next })} />
+      {calculated && rs && <Notice p={p} text="Recalculating asks the owner to approve the inventory again. Their decisions on additional items are kept." />}
+      <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+        <Button p={p} primary icon="check" label={calculated ? "Recalculate the inventory" : "Calculate the inventory"} disabled={busy}
+          onPress={() => { act({ action: "calculateInventory", inputs }, rs ? "Calculated. The owner has been asked to approve it." : "Calculated. Tick each item as it is in the property."); setOpen(true); }} />
+        <Button p={p} quiet icon="x" label="Cancel" onPress={() => setDraft(null)} />
+      </View>
+    </View>}
+    {open && groups.map(g => <View key={g} style={{ gap: 4 }}>
+      <Text style={[ui.small, { color: p.muted, fontWeight: "700" }]}>{categoryName(g)}</Text>
+      {inv.items.filter(x => x.category === g).map(x => {
+        const label = `${x.quantity} x ${x.name}`, detail = [x.unit !== "each" ? x.unit : "", x.kind === "additional" ? "Additional" : "", x.kept === false ? "Removed" : "",
+          x.checkedAt ? `In the property${x.checkedByName ? `, ticked by ${x.checkedByName}` : ""}` : ""].filter(Boolean).join(". ");
+        return <View key={x.itemId} style={[ui.row, { gap: 8, opacity: x.kept === false ? 0.55 : 1 }]}>
+          <View style={{ flex: 1 }}>
+            {inv.canCheck && x.kept ? <Check p={p} on={!!x.checkedAt} label={label} detail={detail} onPress={() => act({ action: "checkInventory", itemId: x.itemId, present: !x.checkedAt }, x.checkedAt ? "Unticked." : "Ticked.")} />
+              : <View style={{ gap: 2, paddingVertical: 4 }}><Text style={{ color: p.text, fontSize: 14 }}>{label}</Text>{!!detail && <Text style={[ui.small, { color: p.muted }]}>{detail}</Text>}</View>}
+          </View>
+          {decide(x).map(keep => <Button key={String(keep)} p={p} quiet icon={keep ? "check" : "x"} label={keep ? (rs ? "Accept" : "Add back") : rs ? "Reject" : "Remove"} disabled={busy}
+            onPress={() => act({ action: "decideInventory", itemId: x.itemId, keep }, keep ? "Kept on the inventory." : "Removed from the inventory.")} />)}
+        </View>;
+      })}
+    </View>)}
   </View>;
 }
 

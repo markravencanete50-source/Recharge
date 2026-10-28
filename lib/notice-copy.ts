@@ -164,6 +164,8 @@ const EXACT: Record<string, NoticeCopy> = {
   'launch.install_proposed': copy('Install date to approve', 'The installer has proposed a furnishing install date. Approve it in Launch Preparation so the owner is told.'),
   'launch.install_approved': copy('Install date approved', 'The furnishing install date you proposed has been approved and the owner has been told.'),
   'launch.furnished': copy('Furnishing installed', 'The furnishing at a new property is installed, with photos of the finished work.'),
+  'launch.inventory_approved': copy('Inventory approved', 'An owner has approved the inventory for their new property. Tick each item as it is in the property.'),
+  'launch.inventory_complete': copy('Inventory complete', 'Everything on a new property’s inventory is in the property.'),
   'listing.photos_received': copy('Property photos are in', 'A guest-ready property’s photos are in. Its Hostaway listing can now be checked on the lead and saved for approval.'),
   'listing.awaiting_approval': copy('A listing is waiting for your approval', 'A property’s Hostaway listing has been checked and saved. Open Leads, Listings to approve it.'),
   'listing.published': copy('Listing in Hostaway', 'A property’s listing has gone to Hostaway. Connect it to Airbnb, Booking.com and the other channels in Hostaway, then record the live listing on the lead.'),
