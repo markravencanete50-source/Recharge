@@ -92,6 +92,7 @@ import { PriceNightsLink, WorkHistory } from "./WorkHistory";
 import { WorkJumpContext } from "./WorkJump";
 import { LiveFeedback } from "./LiveFeedback";
 import { LiveModeration } from "./LiveModeration";
+import { LiveRecruitment } from "./LiveRecruitment";
 import { BlockedPeopleSheet } from "./BlockedPeople";
 import { FavoritesPage, HeaderSearch, SearchPanel } from "./WorkspaceSearch";
 import { FavoriteButton, FavoritesContext, useFavoritesStore } from "./Favorites";
@@ -113,7 +114,7 @@ type IconName = ComponentProps<typeof Feather>["name"];
 const SECTIONS: readonly WorkspaceSection[] = PAGE_SECTIONS;
 const TEAM_ROLES: Role[] = ["super_admin", "admin", "stays", "cleans", "cleaning_manager", "ready", "accounts"];
 // Pages only some roles have.
-const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], mailbox: ["client"], statements: ["accounts", "admin", "super_admin"], enquiries: ["admin", "super_admin", "stays"], feedback: ["admin", "super_admin", "stays"], moderation: ["admin", "super_admin"], todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES };
+const ROLE_SECTIONS: Partial<Record<WorkspaceSection, Role[]>> = { approvals: ["client"], mailbox: ["client"], statements: ["accounts", "admin", "super_admin"], enquiries: ["admin", "super_admin", "stays"], feedback: ["admin", "super_admin", "stays"], moderation: ["admin", "super_admin"], recruitment: ["super_admin", "admin", "stays", "cleaning_manager", "ready", "accounts"], todo: TEAM_ROLES, decisions: TEAM_ROLES, calendar: TEAM_ROLES };
 const bookingPolicySchema = z.object({ confirmed: z.boolean(), minimum_nights: z.number(), discount_bps: z.number(), discount_cap_minor: z.number(), version: z.number() });
 type BookingPolicy = z.infer<typeof bookingPolicySchema>;
 // Direct-booking offers use this discount policy; only a super admin can set and confirm it.
@@ -720,6 +721,7 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "enquiries" ? null
     : tab === "feedback" ? <LiveFeedback palette={p} account={account} />
     : tab === "moderation" ? <LiveModeration palette={p} onOpenConversation={openMessages} />
+    : tab === "recruitment" ? <LiveRecruitment palette={p} account={account} />
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={conversation => openMessages(conversation ?? "")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} />
     : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} guestEmailWaiting={guestEmailWaiting} openConversation={chatTarget?.id} focusReply={!!chatTarget?.reply}
         updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={conversation => openMessages(conversation ?? "")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} onLeave={() => navigate("home")} />

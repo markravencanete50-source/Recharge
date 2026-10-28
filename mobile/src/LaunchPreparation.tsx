@@ -11,6 +11,8 @@ import { liveApi } from "./LivePages";
 import { ui, type Palette } from "./theme";
 import { launchFileLink, liveApiOrigin, uploadLaunchFile } from "./backend/client";
 import { PropertyDetails } from "./FurnishingStudio";
+import { RequestRoleSheet, readRecruitment } from "./LiveRecruitment";
+import type { RecruitmentRead } from "../../lib/recruitment";
 import { categoryName, normaliseInputs, type StudioInputs } from "../../lib/furnishing-studio";
 import { MODULES } from "../../lib/modules";
 import {
@@ -31,6 +33,25 @@ const day = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "UTC",
 const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 
 const boardName = (id: string) => MODULES.find(m => m.id === id)?.name ?? id;
+
+// No housekeeper free for the property: ask recruitment for one (Business Plan: "raise a ticket on the recruitment board
+// with the role and area required"), with the property and its area filled in.
+function AskHousekeeper({ p, propertyId, name, address }: { p: Palette; propertyId: string; name: string; address: string | null }) {
+  const [rec, setRec] = useState<RecruitmentRead | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(""), [sent, setSent] = useState(false);
+  const area = (address ?? "").split(/\n|,/).map(x => x.trim()).filter(Boolean).slice(-2).join(", ");
+  async function open() {
+    setBusy(true); setError("");
+    try { setRec(await readRecruitment()); } catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  const job = rec?.settings.jobs.find(j => j.role === "cleans");
+  return <View style={{ gap: 6 }}>
+    {sent ? <Text style={[ui.small, { color: p.success }]}>Recruitment have the request. You can follow it on the Recruitment page.</Text>
+      : <Button p={p} quiet icon="user-plus" label={busy ? "Opening…" : "Ask recruitment for a housekeeper"} disabled={busy} onPress={() => void open()} />}
+    {!!error && <Notice text={error} p={p} tone="bad" />}
+    {rec && <RequestRoleSheet p={p} read={rec} initial={{ jobKey: job?.key, area, propertyId, notes: `Housekeeper for ${name || "a new property"}${address ? ` (${address.replace(/\n/g, ", ")})` : ""}.` }}
+      onClose={() => setRec(null)} onDone={() => { setRec(null); setSent(true); }} />}
+  </View>;
+}
 
 export async function readLaunch(propertyId?: string) {
   return launchReadSchema.parse((await liveApi("/launch" + (propertyId ? "?propertyId=" + encodeURIComponent(propertyId) : ""))).data);
@@ -253,9 +274,10 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
             {!!s.ticketId && !owner && read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] && <Text style={[ui.small, { color: p.muted }]}>{`Also on the ${boardName(read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] ?? "")} board.`}</Text>}
             {openStep === s.key && <TickForm p={p} step={s} settings={settings} busy={busy} onTick={data => void act({ action: "tick", step: s.key, ...(data ? { data } : {}) }, "Ticked.")} />}
             {s.kind === "housekeeper" && v.canAllocate && <View style={{ gap: 6 }}>
-              {read.housekeepers.length === 0 ? <Text style={[ui.small, { color: p.muted }]}>There are no active housekeepers yet. Raise a recruitment to-do with the role and area.</Text>
+              {read.housekeepers.length === 0 ? <Text style={[ui.small, { color: p.muted }]}>There are no active housekeepers yet. Ask recruitment for one, with the area.</Text>
                 : <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{read.housekeepers.map(h => <Choice key={h.id} p={p} on={(hk || v.housekeeper?.id) === h.id} label={h.name} onPress={() => setHk(h.id)} />)}</View>}
               {!!hk && hk !== v.housekeeper?.id && <Button p={p} icon="user-check" label="Allocate" disabled={busy} onPress={() => void act({ action: "allocate", housekeeperId: hk }, "Allocated. The property is on their calendar from the readiness inspection.")} />}
+              {!v.housekeeper && <AskHousekeeper p={p} propertyId={propertyId} name={v.name} address={v.address} />}
             </View>}
             {s.kind === "readiness" && <View style={{ gap: 6 }}>
               {v.readiness && <Text style={[ui.small, { color: p.text }]}>{v.readiness.submittedAt
