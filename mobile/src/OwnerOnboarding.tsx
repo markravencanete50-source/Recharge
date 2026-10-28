@@ -9,6 +9,7 @@ import { EstimateExplorer } from "./LiveEstimate";
 import { EstimateGuide } from "./LiveOnboardingGuide";
 import { WorkHistory } from "./WorkHistory";
 import { PackageBuilder } from "./OnboardingPackage";
+import { LaunchPanel } from "./LaunchPreparation";
 import { packageMark } from "../../lib/onboarding-package";
 import { TrackerProgress } from "./Tracker";
 import { journeyProgress } from "../../lib/tracker-onboarding";
@@ -127,6 +128,8 @@ export function OwnerOnboarding({ p, account, j, property, onForm, details }: { 
                 : <PackageBuilder p={p} propertyId={j.propertyId} />}
             </View>}
           </View>
+          {/* Launch preparation (migration 20261029100000): from signing to going live, following the package. */}
+          {!!j.package?.submittedAt && !["enquiry", "estimate", "reviewing", "agreement", "archived"].includes(j.stage) && <LaunchPanel key={j.propertyId + j.stage + "launch"} p={p} propertyId={j.propertyId} owner />}
         </View>
         {details}
         <View style={{ gap: 8 }}>

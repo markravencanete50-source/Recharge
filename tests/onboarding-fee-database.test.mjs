@@ -72,6 +72,8 @@ async function sent(by = OWNER, name = 'Harbour Flat') {
   await journey(by, prop, { action: 'decideEstimate', decision: 'proceed' });
   await db.exec('reset role'); await db.query("insert into private.workspace_onboarding_packages(property_id,answers,submitted_at) values($1,'{}',now()) on conflict(property_id) do update set submitted_at=coalesce(private.workspace_onboarding_packages.submitted_at,now())", [prop]);
   await journey(ADMIN, prop, { action: 'publishAgreement', agreement: 'This management agreement is between Recharge and the owner.' });
+  // The package only had to be in to publish; the inspection steps here are the ones before Launch Preparation (20261029100000).
+  await db.exec('reset role'); await db.query('delete from private.workspace_onboarding_packages where property_id=$1', [prop]);
   return prop;
 }
 async function signed(who = OWNER, name = 'Harbour Flat') {

@@ -84,7 +84,10 @@ async function signed(name = 'Harbour Flat') {
 // Guest ready: its inspection is complete.
 async function ready(name) {
   const prop = await signed(name);
+  // As a readiness inspection does (migration 20261029100000 books and completes it through Launch Preparation only).
+  await owner("select set_config('recharge.launch','on',false)");
   await owner("update private.workspace_journeys set stage='inspection_complete' where property_id=$1", [prop]);
+  await owner("select set_config('recharge.launch','',false)");
   return prop;
 }
 const SHOOT = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
