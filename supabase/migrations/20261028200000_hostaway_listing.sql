@@ -3,12 +3,16 @@
 --    (name, address, type, bedrooms, bathrooms, parking, garden), the estimate (the medium nightly rate), the access
 --    instructions from the set-up form, and an admin's settings (the description template, house rules, check-in and
 --    check-out times, minimum nights, guests per bedroom, cleaning fee).
---  * From the set-up form onwards the stays team checks the draft, edits anything and adds the photos (stored in the
---    private "lead-files" bucket under listings/). Saving keeps their version; until then the draft follows onboarding.
---  * An admin approves it: the server then creates the listing in Hostaway (or updates the one it made before) and writes
---    the outcome back through the service-role-only private.workspace_listing_publish_result, which links the listing to
---    the property, so the Hostaway sync takes it from there. A property already linked to a listing made elsewhere is
---    never overwritten.
+--  * Business Plan v1.0 (17/10/26), Launch Preparation: the listing comes after guest readiness and photography.
+--    - Photography opens once the property is guest ready (its inspection is complete): the team books the date (the owner
+--      is told in the property chat), uploads the photographer's photos (stored in the private "lead-files" bucket under
+--      listings/) and marks them received.
+--    - Then the stays team checks the draft, edits anything, orders and captions the photos and saves. Saving keeps their
+--      version (until then the draft follows onboarding) and asks the Property Performance Manager to approve.
+--  * Approval is the Property Performance Manager's: admins, and the people an admin names in the listing settings. The
+--    server then creates the listing in Hostaway (or updates the one it made before) and writes the outcome back through
+--    the service-role-only private.workspace_listing_publish_result, which links the listing to the property, so the
+--    Hostaway sync takes it from there. A property already linked to a listing made elsewhere is never overwritten.
 -- New tables and functions only; no existing function is changed and no data is changed. Safe to run twice.
 
 -- 1. Settings, drafts and photos.
@@ -60,6 +64,21 @@ end $fn$;
 drop trigger if exists workspace_listing_photo_gone on private.workspace_listing_photos;
 create trigger workspace_listing_photo_gone after delete on private.workspace_listing_photos for each row execute function private.workspace_listing_photo_gone();
 revoke all on function private.workspace_listing_photo_gone() from public,anon,authenticated,service_role;
+-- Photography: booked, then received (Launch Preparation, Photography i and ii).
+create table if not exists private.workspace_listing_photography (
+ property_id uuid primary key references public.workspace_properties(id) on delete cascade,
+ booked_on date not null, photographer text not null default '' check (char_length(photographer)<=200),
+ booked_by uuid references auth.users(id) on delete set null, booked_at timestamptz not null default now(),
+ received_at timestamptz, received_by uuid references auth.users(id) on delete set null
+);
+-- The Property Performance Managers: besides admins, who approve listings.
+create table if not exists private.workspace_listing_approvers (
+ user_id uuid primary key references public.workspace_profiles(user_id) on delete cascade,
+ added_by uuid references auth.users(id) on delete set null, added_at timestamptz not null default now()
+);
+alter table private.workspace_listing_photography enable row level security;
+alter table private.workspace_listing_approvers enable row level security;
+revoke all on private.workspace_listing_photography,private.workspace_listing_approvers from public,anon,authenticated,service_role;
 alter table private.workspace_listing_settings enable row level security;
 alter table private.workspace_listing_drafts enable row level security;
 alter table private.workspace_listing_photos enable row level security;
@@ -71,6 +90,25 @@ $$;
 create or replace function private.workspace_listing_person(who uuid) returns text language sql stable security definer set search_path='' as $$
  select nullif(btrim(p.full_name),'') from public.workspace_profiles p where p.user_id=who
 $$;
+-- Who can be named a Property Performance Manager: active stays team members who can open Leads (where listings are).
+create or replace function private.workspace_listing_eligible(u uuid) returns boolean language sql stable security definer set search_path='' as $$
+ select exists(select 1 from public.workspace_profiles p where p.user_id=u and p.status='active' and p.role='stays'
+  and exists(select 1 from public.workspace_module_grants g where g.user_id=u and g.module_id='property-onboarding'))
+$$;
+-- Who approves listings: admins, and the Property Performance Managers they name.
+create or replace function private.workspace_listing_can_approve() returns boolean language sql stable security definer set search_path='' as $$
+ select coalesce(private.workspace_actor_role() in ('admin','super_admin'),false)
+  or (private.workspace_can_enquiries() and exists(select 1 from private.workspace_listing_approvers a where a.user_id=auth.uid()))
+$$;
+-- Tells the approvers (or, for the team, whoever follows the property) that a listing needs them.
+create or replace function private.workspace_listing_tell_approvers(prop uuid,event text) returns void language plpgsql security definer set search_path='' as $fn$
+declare ev bigint;begin
+ insert into public.workspace_activity(property_id,event_type,created_at) values(prop,event,now()) returning id into ev;
+ insert into private.workspace_notification_outbox(user_id,event_id)
+  select p.user_id,ev from public.workspace_profiles p where p.status='active' and p.user_id is distinct from auth.uid()
+   and (p.role in ('admin','super_admin') or (exists(select 1 from private.workspace_listing_approvers a where a.user_id=p.user_id) and private.workspace_listing_eligible(p.user_id)))
+  on conflict do nothing;
+end $fn$;
 
 -- 2. The draft onboarding fills in.
 create or replace function private.workspace_listing_prefill(prop uuid) returns jsonb language plpgsql stable security definer set search_path='' as $fn$
@@ -113,20 +151,28 @@ declare p public.workspace_properties;j private.workspace_journeys;s jsonb;e jso
   'houseRules',left(s->>'houseRules',5000),'wifiName','','wifiPassword','','accessCode','','checkInInstructions',left(access,3000));
 end $fn$;
 
--- 3. Reading. The team who see enquiries; the draft from the set-up form onwards.
+-- 3. Reading. The team who see enquiries, and the Property Performance Managers. Photography once the property is
+-- guest ready; the listing once the photos are in.
 create or replace function private.workspace_listing_view(prop uuid) returns jsonb language plpgsql stable security definer set search_path='' as $fn$
 declare actor text:=private.workspace_actor_role();j private.workspace_journeys;p public.workspace_properties;d private.workspace_listing_drafts;pre jsonb;
- status text;stage_ok boolean;elsewhere boolean;begin
- if actor is null or not private.workspace_can_enquiries() then raise exception 'Property not found' using errcode='42501';end if;
+ ph private.workspace_listing_photography;status text;ready boolean;received boolean;elsewhere boolean;team boolean;approver boolean;editable boolean;photos integer;begin
+ team:=actor is not null and private.workspace_can_enquiries();
+ approver:=actor is not null and private.workspace_listing_can_approve();
+ if not team and not approver then raise exception 'Property not found' using errcode='42501';end if;
  select * into j from private.workspace_journeys where property_id=prop;
  if j.property_id is null then raise exception 'Property not found' using errcode='42501';end if;
  select * into p from public.workspace_properties where id=prop;
  select * into d from private.workspace_listing_drafts where property_id=prop;
+ select * into ph from private.workspace_listing_photography where property_id=prop;
+ photos:=(select count(*) from private.workspace_listing_photos x where x.property_id=prop and x.removed_at is null);
  pre:=private.workspace_listing_prefill(prop);
  -- A publish that never came back (the server stopped half way) can be approved again after five minutes.
  status:=case when d.status='publishing' and d.approved_at<now()-interval '5 minutes' then 'failed' else coalesce(d.status,'draft') end;
- stage_ok:=j.stage in ('form','invoice','inspection_to_book','inspection_booked','inspection_complete','live');
+ -- Guest ready: the property's inspection is complete (or it is live).
+ ready:=j.stage in ('inspection_complete','live');
+ received:=ph.received_at is not null;
  elsewhere:=p.hostaway_listing_id is not null and d.published_at is null;
+ editable:=ready and received and status<>'publishing' and not elsewhere;
  return jsonb_build_object('propertyId',prop,'stage',j.stage,'fields',case when d.property_id is null then pre else pre||d.fields end,'prefill',pre,
   'saved',d.property_id is not null,'status',status,'hostawayListingId',p.hostaway_listing_id,'linkedElsewhere',elsewhere,
   'publishedAt',d.published_at,'publishedByName',private.workspace_listing_person(d.published_by),
@@ -134,14 +180,33 @@ declare actor text:=private.workspace_actor_role();j private.workspace_journeys;
   'updatedAt',d.updated_at,'updatedByName',private.workspace_listing_person(d.updated_by),'version',coalesce(d.version,0),
   'photos',coalesce((select jsonb_agg(jsonb_build_object('id',x.id,'name',x.name,'caption',x.caption,'sort',x.sort,'sent',x.sent_at is not null) order by x.sort,x.created_at,x.id)
    from private.workspace_listing_photos x where x.property_id=prop and x.removed_at is null),'[]'),
-  'canEdit',stage_ok and status<>'publishing' and not elsewhere,
-  'canPublish',stage_ok and status<>'publishing' and not elsewhere and actor in ('admin','super_admin'));
+  'photography',jsonb_build_object('bookedOn',ph.booked_on,'photographer',coalesce(ph.photographer,''),'bookedByName',private.workspace_listing_person(ph.booked_by),
+   'receivedAt',ph.received_at,'receivedByName',private.workspace_listing_person(ph.received_by),
+   'canBook',team and ready and not received and not elsewhere,
+   'canAddPhotos',team and ready and ph.property_id is not null and status<>'publishing' and not elsewhere,
+   'canReceive',team and ready and ph.property_id is not null and not received and photos>0),
+  'locked',case when elsewhere then null when not ready then 'Opens once the property is guest ready (its inspection is complete).'
+   when not received then 'Opens once the photography is in.' end,
+  'canEdit',team and editable,
+  'canPublish',approver and editable);
 end $fn$;
 create or replace function private.workspace_listing_read(target uuid) returns jsonb language plpgsql stable security definer set search_path='' as $fn$
 declare actor text:=private.workspace_actor_role();st private.workspace_listing_settings;begin
- if actor is null or not private.workspace_can_enquiries() then raise exception 'Client enquiries access required' using errcode='42501';end if;
+ if actor is null or not (private.workspace_can_enquiries() or private.workspace_listing_can_approve()) then raise exception 'Client enquiries access required' using errcode='42501';end if;
  select * into st from private.workspace_listing_settings where singleton;
- return jsonb_build_object('settings',private.workspace_listing_settings(),'canEditSettings',actor in ('admin','super_admin'),
+ return jsonb_build_object('settings',private.workspace_listing_settings(),'canEditSettings',actor in ('admin','super_admin'),'canApprove',private.workspace_listing_can_approve(),
+  'approvers',coalesce((select jsonb_agg(jsonb_build_object('id',p.user_id,'name',coalesce(nullif(btrim(p.full_name),''),'Team member')) order by p.full_name,p.user_id)
+   from private.workspace_listing_approvers a join public.workspace_profiles p on p.user_id=a.user_id where private.workspace_listing_eligible(p.user_id)),'[]'),
+  -- Who an admin can name as a Property Performance Manager.
+  'team',case when actor in ('admin','super_admin') then coalesce((select jsonb_agg(jsonb_build_object('id',p.user_id,'name',coalesce(nullif(btrim(p.full_name),''),'Team member')) order by p.full_name,p.user_id)
+   from public.workspace_profiles p where private.workspace_listing_eligible(p.user_id)),'[]') else '[]' end,
+  -- For the Property Performance Manager: the listings saved and waiting for approval.
+  'awaiting',case when private.workspace_listing_can_approve() then coalesce((select jsonb_agg(jsonb_build_object('propertyId',d.property_id,'name',coalesce(nullif(btrim(p.name),''),'Property'),
+    'status',d.status,'updatedAt',d.updated_at,'updatedByName',private.workspace_listing_person(d.updated_by)) order by d.updated_at,d.property_id)
+   from private.workspace_listing_drafts d join public.workspace_properties p on p.id=d.property_id join private.workspace_journeys j on j.property_id=d.property_id
+   join private.workspace_listing_photography ph on ph.property_id=d.property_id
+   where d.status in ('draft','changed','failed') and j.stage in ('inspection_complete','live') and ph.received_at is not null
+    and (p.hostaway_listing_id is null or d.published_at is not null)),'[]') else '[]' end,
   'settingsUpdatedAt',case when st.updated_by is not null then st.updated_at end,'settingsUpdatedByName',private.workspace_listing_person(st.updated_by),
   'listing',case when target is null then null else private.workspace_listing_view(target) end);
 end $fn$;
@@ -177,8 +242,8 @@ create or replace function private.workspace_listing_missing(f jsonb,photos inte
   case when photos<1 then 'Photos' end],null)
 $$;
 
--- 5. Actions. saveDraft, removePhoto and addPhoto (the server, after storing the file) for the team who see enquiries;
--- publish and saveSettings for admins.
+-- 5. Actions. bookPhotography, photosReceived, saveDraft, removePhoto and addPhoto (the server, after storing the file)
+-- for the team who see enquiries; publish for the Property Performance Managers; saveSettings and setApprovers for admins.
 create or replace function private.workspace_listing_action(input jsonb) returns jsonb language plpgsql security definer set search_path='' as $fn$
 declare me uuid:=auth.uid();actor text:=private.workspace_actor_role();req uuid;prior private.workspace_action_receipts;result jsonb;prop uuid;view jsonb;
  d private.workspace_listing_drafts;p public.workspace_properties;s jsonb;x jsonb;n integer;ph private.workspace_listing_photos;missing text[];photos jsonb;payload jsonb;k text;lo bigint;hi bigint;begin
@@ -208,7 +273,17 @@ declare me uuid:=auth.uid();actor text:=private.workspace_actor_role();req uuid;
   end loop;
   update private.workspace_listing_settings set content=s,updated_by=me,updated_at=now() where singleton;
   result:=private.workspace_listing_read(null);
- elsif input->>'action' in ('saveDraft','removePhoto','addPhoto','publish') then
+ elsif input->>'action'='setApprovers' then
+  perform private.workspace_json_keys(input,array['action','requestId','userIds']);
+  if actor not in ('admin','super_admin') then raise exception 'Only admins can choose who approves listings' using errcode='42501';end if;
+  if jsonb_typeof(input->'userIds') is distinct from 'array' or jsonb_array_length(input->'userIds')>20
+   or exists(select 1 from jsonb_array_elements(input->'userIds') z where jsonb_typeof(z)<>'string' or z#>>'{}'!~'^[0-9a-fA-F-]{36}$') then raise exception 'Invalid approvers' using errcode='22023';end if;
+  if exists(select 1 from jsonb_array_elements_text(input->'userIds') z where not private.workspace_listing_eligible(z::uuid)) then
+   raise exception 'Choose stays team members who can open Leads' using errcode='22023';end if;
+  delete from private.workspace_listing_approvers where user_id::text not in (select jsonb_array_elements_text(input->'userIds'));
+  insert into private.workspace_listing_approvers(user_id,added_by) select z::uuid,me from jsonb_array_elements_text(input->'userIds') z on conflict do nothing;
+  result:=private.workspace_listing_read(null);
+ elsif input->>'action' in ('saveDraft','removePhoto','addPhoto','publish','bookPhotography','photosReceived') then
   begin prop:=(input->>'propertyId')::uuid; exception when others then prop:=null; end;
   if prop is null then raise exception 'Property not found' using errcode='42501';end if;
   perform 1 from public.workspace_properties where id=prop for update;
@@ -216,9 +291,9 @@ declare me uuid:=auth.uid();actor text:=private.workspace_actor_role();req uuid;
   select * into d from private.workspace_listing_drafts where property_id=prop;
   if input->>'action'='publish' then
    perform private.workspace_json_keys(input,array['action','requestId','propertyId']);
-   if actor not in ('admin','super_admin') then raise exception 'Only admins can approve a listing' using errcode='42501';end if;
+   if not private.workspace_listing_can_approve() then raise exception 'Only the Property Performance Manager can approve a listing' using errcode='42501';end if;
    if (view->>'linkedElsewhere')::boolean then raise exception 'This property is already linked to a Hostaway listing. Change it in Hostaway.' using errcode='22023';end if;
-   if not (view->>'canPublish')::boolean then raise exception 'The listing can be approved from the set-up form onwards' using errcode='22023';end if;
+   if not (view->>'canPublish')::boolean then raise exception '%',coalesce(view->>'locked','The listing is being sent to Hostaway. Try again in a moment.') using errcode='22023';end if;
    if d.property_id is null then raise exception 'Save the listing first' using errcode='22023';end if;
    missing:=private.workspace_listing_missing(view->'fields',jsonb_array_length(view->'photos'));
    if cardinality(missing)>0 then raise exception 'Fill in the listing first: %',array_to_string(missing,', ') using errcode='22023';end if;
@@ -232,10 +307,39 @@ declare me uuid:=auth.uid();actor text:=private.workspace_actor_role();req uuid;
    insert into private.workspace_action_receipts(actor_id,request_id,actor_role,input,result) values(me,req,actor,input,jsonb_build_object('send',false,'listing',private.workspace_listing_view(prop)));
    return payload;
   end if;
-  if not (view->>'canEdit')::boolean then
+  if not private.workspace_can_enquiries() then raise exception 'Client enquiries access required' using errcode='42501';end if;
+  if input->>'action'='bookPhotography' then
+   perform private.workspace_json_keys(input,array['action','requestId','propertyId','date','photographer']);
+   if not (view#>>'{photography,canBook}')::boolean then
+    raise exception '%',coalesce(case when (view->>'linkedElsewhere')::boolean then 'This property is already linked to a Hostaway listing. Change it in Hostaway.' end,
+     case when view#>>'{photography,receivedAt}' is not null then 'The photos are already in' end,'Photography opens once the property is guest ready (its inspection is complete)') using errcode='22023';end if;
+   if coalesce(input->>'date','')!~'^\d{4}-\d{2}-\d{2}$' or jsonb_typeof(input->'photographer') is distinct from 'string' or char_length(input->>'photographer')>200 then raise exception 'Choose the photography date' using errcode='22023';end if;
+   begin
+    if (input->>'date')::date not between current_date-30 and current_date+365 then raise exception 'Choose a date within the next year' using errcode='22023';end if;
+   exception when invalid_datetime_format or datetime_field_overflow then raise exception 'Choose the photography date' using errcode='22023';
+   end;
+   insert into private.workspace_listing_photography(property_id,booked_on,photographer,booked_by,booked_at) values(prop,(input->>'date')::date,btrim(input->>'photographer'),me,now())
+    on conflict(property_id) do update set booked_on=excluded.booked_on,photographer=excluded.photographer,booked_by=me,booked_at=now();
+   perform private.workspace_property_chat_post(prop,'Your property photography is booked for '||to_char((input->>'date')::date,'FMDay FMDD FMMonth YYYY')||'.',null,'event',now());
+   perform private.workspace_followup_note(prop,'Photography booked for '||to_char((input->>'date')::date,'FMDD FMMonth YYYY')||coalesce(' with '||nullif(btrim(input->>'photographer'),''),'')||'.',me);
+   result:=private.workspace_listing_read(prop);
+  elsif input->>'action'='photosReceived' then
+   perform private.workspace_json_keys(input,array['action','requestId','propertyId']);
+   if not (view#>>'{photography,canReceive}')::boolean then raise exception 'Book the photography and add the photos first' using errcode='22023';end if;
+   update private.workspace_listing_photography set received_at=now(),received_by=me where property_id=prop;
+   perform private.workspace_property_chat_post(prop,'Your property photos are in. Next: your listing.',null,'event',now());
+   perform private.workspace_followup_note(prop,'Photography received ('||jsonb_array_length(view->'photos')||' photos). The listing can now be prepared.',me);
+   perform private.workspace_followup_tell(prop,'listing.photos_received',now());
+   result:=private.workspace_listing_read(prop);
+  elsif input->>'action' in ('addPhoto','removePhoto') and not (view#>>'{photography,canAddPhotos}')::boolean and not (input->>'action'='removePhoto' and (view->>'canEdit')::boolean) then
    raise exception '%',case when (view->>'linkedElsewhere')::boolean then 'This property is already linked to a Hostaway listing. Change it in Hostaway.'
-    when view->>'status'='publishing' then 'The listing is being sent to Hostaway. Try again in a moment.' else 'The listing can be prepared from the set-up form onwards' end using errcode='22023';end if;
-  if input->>'action'='saveDraft' then
+    when view->>'status'='publishing' then 'The listing is being sent to Hostaway. Try again in a moment.'
+    when jsonb_array_length(view->'photos')>=40 and input->>'action'='addPhoto' then 'Up to 40 photos on a listing'
+    else 'Book the photography first' end using errcode='22023';
+  elsif input->>'action'='saveDraft' and not (view->>'canEdit')::boolean then
+   raise exception '%',coalesce(case when (view->>'linkedElsewhere')::boolean then 'This property is already linked to a Hostaway listing. Change it in Hostaway.' end,
+    view->>'locked','The listing is being sent to Hostaway. Try again in a moment.') using errcode='22023';
+  elsif input->>'action'='saveDraft' then
    perform private.workspace_json_keys(input,array['action','requestId','propertyId','fields','photos'],60000);
    perform private.workspace_listing_check_fields(input->'fields');
    if jsonb_typeof(input->'photos') is distinct from 'array' or jsonb_array_length(input->'photos')>40 then raise exception 'Invalid photos' using errcode='22023';end if;
@@ -250,6 +354,8 @@ declare me uuid:=auth.uid();actor text:=private.workspace_actor_role();req uuid;
    insert into private.workspace_listing_drafts(property_id,fields,status,updated_by,updated_at) values(prop,input->'fields','draft',me,now())
     on conflict(property_id) do update set fields=excluded.fields,updated_by=me,updated_at=now(),version=private.workspace_listing_drafts.version+1,
      status=case when private.workspace_listing_drafts.published_at is not null then 'changed' else 'draft' end;
+   -- The Property Performance Manager is asked to approve (not when they saved it themselves).
+   if not private.workspace_listing_can_approve() then perform private.workspace_listing_tell_approvers(prop,'listing.awaiting_approval');end if;
    result:=private.workspace_listing_read(prop);
   elsif input->>'action'='addPhoto' then
    perform private.workspace_json_keys(input,array['action','requestId','propertyId','photoId','name','mime','bytes','path']);
@@ -321,7 +427,7 @@ create or replace function public.workspace_listing_photo(prop uuid,photo uuid) 
 create or replace function public.workspace_listing_read(target uuid) returns jsonb language sql security invoker set search_path='' as $$select private.workspace_listing_read(target);$$;
 create or replace function public.workspace_listing_action(input jsonb) returns jsonb language sql security invoker set search_path='' as $$select private.workspace_listing_action(input);$$;
 create or replace function public.workspace_listing_publish_result(input jsonb) returns jsonb language sql security invoker set search_path='' as $$select private.workspace_listing_publish_result(input);$$;
-revoke all on function private.workspace_listing_settings_default(),private.workspace_listing_settings(),private.workspace_listing_person(uuid),private.workspace_listing_prefill(uuid),
+revoke all on function private.workspace_listing_eligible(uuid),private.workspace_listing_can_approve(),private.workspace_listing_tell_approvers(uuid,text),private.workspace_listing_settings_default(),private.workspace_listing_settings(),private.workspace_listing_person(uuid),private.workspace_listing_prefill(uuid),
  private.workspace_listing_view(uuid),private.workspace_listing_read(uuid),private.workspace_listing_check_fields(jsonb),private.workspace_listing_missing(jsonb,integer),
  private.workspace_listing_action(jsonb),private.workspace_listing_publish_result(jsonb),private.workspace_listing_photo(uuid,uuid),public.workspace_listing_photo(uuid,uuid),
  public.workspace_listing_read(uuid),public.workspace_listing_action(jsonb),public.workspace_listing_publish_result(jsonb) from public,anon,authenticated,service_role;

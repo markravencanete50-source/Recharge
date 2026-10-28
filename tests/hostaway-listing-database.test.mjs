@@ -4,9 +4,11 @@ import fs from 'node:fs/promises';
 import { PGlite } from '@electric-sql/pglite';
 import { createServer } from 'vite';
 
-// Listings in Hostaway made from onboarding (migration 20261028200000): onboarding fills in a draft; from the set-up form
-// onwards the stays team checks it and adds photos; an admin approves; the server's result links the Hostaway listing to the
-// property. A property already linked to a listing made elsewhere is never touched. Admins set the starting wording.
+// Listings in Hostaway made from onboarding (migration 20261028200000), as in the Business Plan's Launch Preparation:
+// onboarding fills in a draft; once the property is guest ready the team books the photography and adds the photos; once
+// they are in, the stays team checks the listing; the Property Performance Manager (admins, and whoever they name) approves;
+// the server's result links the Hostaway listing to the property. A property already linked to a listing made elsewhere is
+// never touched. Admins set the starting wording.
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 const { journeyActionSchema } = await vite.ssrLoadModule('/lib/journey-policy.ts');
 const L = await vite.ssrLoadModule('/lib/hostaway-listing.ts');
@@ -18,10 +20,10 @@ create table auth.sessions(id uuid primary key,user_id uuid references auth.user
 create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;
 create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;`);
 for (const file of (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql')).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
-const roles = ['super_admin', 'admin', 'stays', 'client', 'client', 'accounts'];
-const names = ['Sam', 'Morag', 'Fiona', 'Olive Owner', 'Other Owner', 'Andy Accounts'];
+const roles = ['super_admin', 'admin', 'stays', 'client', 'client', 'accounts', 'stays'];
+const names = ['Sam', 'Morag', 'Fiona', 'Olive Owner', 'Other Owner', 'Andy Accounts', 'Gina'];
 const users = roles.map((_, i) => `97770000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
-const [SUPER, ADMIN, STAYS, OWNER, OTHER, ACCOUNTS] = roles.map((_, i) => i);
+const [SUPER, ADMIN, STAYS, OWNER, OTHER, ACCOUNTS, GINA] = roles.map((_, i) => i);
 const session = i => users[i].replace('9777', '9877');
 for (let i = 0; i < users.length; i++) {
   await db.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())', [users[i], `lst${i}@example.com`]);
@@ -30,7 +32,7 @@ for (let i = 0; i < users.length; i++) {
   await db.query("update public.workspace_profiles set status='active',role=$2,full_name=$3 where user_id=$1", [users[i], roles[i], names[i]]);
   await db.query('insert into private.workspace_onboarding_done(user_id) values($1) on conflict do nothing', [users[i]]);
 }
-for (const i of [STAYS, OWNER, OTHER]) await db.query("insert into public.workspace_module_grants(user_id,module_id) values($1,'property-onboarding')", [users[i]]);
+for (const i of [STAYS, OWNER, OTHER, GINA]) await db.query("insert into public.workspace_module_grants(user_id,module_id) values($1,'property-onboarding')", [users[i]]);
 // Accounts keep the finance tools, as on the live site.
 await db.query('insert into public.workspace_module_grants(user_id,module_id) select $1,module_id from public.workspace_features on conflict do nothing', [users[ACCOUNTS]]);
 async function as(i) {
@@ -79,6 +81,20 @@ async function signed(name = 'Harbour Flat') {
   await journey(OWNER, prop, { action: 'signAgreement', agreementRevision: 1, signedName: names[OWNER], consent: true });
   return prop;
 }
+// Guest ready: its inspection is complete.
+async function ready(name) {
+  const prop = await signed(name);
+  await owner("update private.workspace_journeys set stage='inspection_complete' where property_id=$1", [prop]);
+  return prop;
+}
+const SHOOT = new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10);
+async function photographed(name, photos = ['Living room.jpg']) {
+  const prop = await ready(name);
+  await act({ action: 'bookPhotography', propertyId: prop, date: SHOOT, photographer: 'Lens & Co' });
+  for (const n of photos) await addPhoto(prop, n);
+  await act({ action: 'photosReceived', propertyId: prop });
+  return prop;
+}
 const read = async (prop, i = STAYS) => { await as(i); return L.listingViewSchema.parse(await rpc('workspace_listing_read', [prop])); };
 const act = async (input, i = STAYS) => { await as(i); return rpc('workspace_listing_action', [{ requestId: crypto.randomUUID(), ...input }]); };
 async function addPhoto(prop, name = 'Living room.jpg') {
@@ -94,7 +110,7 @@ test('the migration runs twice, stays locked down, and its starting wording matc
   const sql = await fs.readFile(MIGRATION, 'utf8');
   await db.exec('reset role'); await db.exec(sql); await db.exec(sql);
   assert.ok(!/—/.test(sql), 'no em dashes');
-  for (const t of ['workspace_listing_settings', 'workspace_listing_drafts', 'workspace_listing_photos']) {
+  for (const t of ['workspace_listing_settings', 'workspace_listing_drafts', 'workspace_listing_photos', 'workspace_listing_photography', 'workspace_listing_approvers']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
     for (const role of ['anon', 'authenticated', 'service_role']) assert.equal((await owner('select has_table_privilege($1,$2,$3) ok', [role, 'private.' + t, 'select']))[0].ok, false, role + ' ' + t);
   }
@@ -104,7 +120,7 @@ test('the migration runs twice, stays locked down, and its starting wording matc
   assert.deepEqual(L.listingSettingsSchema.parse(d.s), L.DEFAULT_LISTING_SETTINGS);
 });
 
-test('onboarding fills in the draft, and the team can edit it from the set-up form onwards', async () => {
+test('onboarding fills in the draft; nothing opens before the property is guest ready', async () => {
   const prop = await proceeded(OWNER, 'Shore Flat');
   await owner(`update private.workspace_journeys set enquiry='{"parking":"One space in the residents’ car park"}' where property_id=$1`, [prop]);
   let v = await read(prop);
@@ -119,17 +135,50 @@ test('onboarding fills in the draft, and the team can edit it from the set-up fo
   assert.ok(!/Outside:/.test(f.description), 'a line with nothing to fill it is left out');
   assert.equal(v.listing.saved, false);
   assert.equal(v.listing.canEdit, false, 'not before the agreement is signed');
-  await refused(act({ action: 'saveDraft', propertyId: prop, fields: f, photos: [] }), /from the set-up form onwards/);
+  await refused(act({ action: 'saveDraft', propertyId: prop, fields: f, photos: [] }), /guest ready/);
+  const form = await signed('Form Flat');
+  v = await read(form);
+  assert.equal(v.listing.stage, 'form');
+  assert.equal(v.listing.canEdit, false, 'not at the set-up form');
+  assert.equal(v.listing.photography.canBook, false);
+  assert.match(v.listing.locked, /guest ready/);
+  await refused(act({ action: 'bookPhotography', propertyId: form, date: SHOOT, photographer: '' }), /guest ready/);
+  await refused(addPhoto(form), /Book the photography first/);
   await as(OWNER); await refused(rpc('workspace_listing_read', [prop]), /Client enquiries access required/);
   await as(ACCOUNTS); await refused(rpc('workspace_listing_read', [prop]), /Client enquiries access required/);
 });
 
-test('an admin approves; the result links the Hostaway listing; later changes update it', async () => {
-  const prop = await signed('Quay Flat');
+test('photography once guest ready, then the listing; an admin approves; the result links the Hostaway listing', async () => {
+  const prop = await ready('Quay Flat');
   let v = await read(prop);
-  assert.equal(v.listing.stage, 'form');
+  assert.equal(v.listing.stage, 'inspection_complete');
+  assert.equal(v.listing.canEdit, false, 'not before the photos are in');
+  assert.match(v.listing.locked, /photography is in/);
+  assert.equal(v.listing.photography.canBook, true);
+  assert.equal(v.listing.photography.canAddPhotos, false);
+  await refused(addPhoto(prop), /Book the photography first/);
+  await refused(act({ action: 'bookPhotography', propertyId: prop, date: '2026-13-40', photographer: '' }), /Choose the photography date/);
+  await refused(act({ action: 'bookPhotography', propertyId: prop, date: '2030-01-01', photographer: '' }), /within the next year/);
+  v = L.listingViewSchema.parse(await act({ action: 'bookPhotography', propertyId: prop, date: SHOOT, photographer: 'Lens & Co' }));
+  assert.equal(v.listing.photography.bookedOn, SHOOT);
+  assert.equal(v.listing.photography.photographer, 'Lens & Co');
+  assert.equal(v.listing.photography.bookedByName, 'Fiona');
+  await said(/Your property photography is booked for /);
+  await refused(act({ action: 'photosReceived', propertyId: prop }), /add the photos first/);
+  await refused(act({ action: 'saveDraft', propertyId: prop, fields: v.listing.fields, photos: [] }), /photography is in/);
+  await refused(act({ action: 'addPhoto', propertyId: prop, photoId: crypto.randomUUID(), name: 'x.jpg', mime: 'image/jpeg', bytes: 10, path: `listings/${prop}/${crypto.randomUUID()}.jpg` }), /Invalid photo/);
+  const one = L.listingViewSchema.parse(await addPhoto(prop, 'Living room.jpg'));
+  const two = L.listingViewSchema.parse(await addPhoto(prop, 'Bedroom.jpg'));
+  const [a, b] = two.listing.photos;
+  assert.equal(one.listing.photos.length, 1);
+  v = L.listingViewSchema.parse(await act({ action: 'photosReceived', propertyId: prop }));
+  assert.equal(v.listing.photography.receivedByName, 'Fiona');
+  assert.equal(v.listing.photography.canBook, false);
+  assert.equal(v.listing.locked, null);
   assert.equal(v.listing.canEdit, true);
-  assert.equal(v.listing.canPublish, false, 'the stays team prepares, admins approve');
+  assert.equal(v.listing.canPublish, false, 'the stays team prepares, the Property Performance Manager approves');
+  await said(/Your property photos are in/);
+  assert.ok(await notified(ADMIN, 'listing.photos_received') > 0, 'the team hears');
   assert.equal(v.listing.fields.checkInInstructions, '');
   await owner("insert into private.workspace_property_secrets(property_id,access_instructions) values($1,'Keybox by the door, code sent the day before')", [prop]);
   v = await read(prop);
@@ -137,16 +186,12 @@ test('an admin approves; the result links the Hostaway listing; later changes up
   const fields = { ...v.listing.fields, externalName: 'Bright 2 bed flat by the Shore', wifiName: 'QuayFlat', wifiPassword: 'sea-breeze-22' };
   await refused(act({ action: 'saveDraft', propertyId: prop, fields: { ...fields, guests: 0 }, photos: [] }), /Check the listing's guests/);
   await refused(act({ action: 'saveDraft', propertyId: prop, fields: { ...fields, extra: 'x' }, photos: [] }), /./);
+  await refused(act({ action: 'publish', propertyId: prop }, ADMIN), /Save the listing first/);
   v = L.listingViewSchema.parse(await act({ action: 'saveDraft', propertyId: prop, fields, photos: [] }));
   assert.equal(v.listing.saved, true);
   assert.equal(v.listing.fields.wifiName, 'QuayFlat');
-  await refused(act({ action: 'publish', propertyId: prop }), /Only admins/);
-  await refused(act({ action: 'publish', propertyId: prop }, ADMIN), /Fill in the listing first: Photos/);
-  await refused(act({ action: 'addPhoto', propertyId: prop, photoId: crypto.randomUUID(), name: 'x.jpg', mime: 'image/jpeg', bytes: 10, path: `listings/${prop}/${crypto.randomUUID()}.jpg` }), /Invalid photo/);
-  const one = L.listingViewSchema.parse(await addPhoto(prop, 'Living room.jpg'));
-  const two = L.listingViewSchema.parse(await addPhoto(prop, 'Bedroom.jpg'));
-  const [a, b] = two.listing.photos;
-  assert.equal(one.listing.photos.length, 1);
+  assert.ok(await notified(ADMIN, 'listing.awaiting_approval') > 0, 'the approvers are asked');
+  await refused(act({ action: 'publish', propertyId: prop }), /Only the Property Performance Manager/);
   v = L.listingViewSchema.parse(await act({ action: 'saveDraft', propertyId: prop, fields, photos: [{ id: b.id, caption: 'The main bedroom' }, { id: a.id, caption: 'Living room' }] }));
   assert.deepEqual(v.listing.photos.map(x => x.caption), ['The main bedroom', 'Living room'], 'in the order chosen');
 
@@ -187,17 +232,18 @@ test('an admin approves; the result links the Hostaway listing; later changes up
 });
 
 test('a property already linked to a listing made elsewhere is never touched, and one listing links to one property', async () => {
-  const mine = await signed('Linked Flat');
+  const mine = await ready('Linked Flat');
   await owner("update public.workspace_properties set hostaway_listing_id='55555' where id=$1", [mine]);
   let v = await read(mine, ADMIN);
   assert.equal(v.listing.linkedElsewhere, true);
   assert.equal(v.listing.canEdit, false);
   assert.equal(v.listing.canPublish, false);
+  assert.equal(v.listing.photography.canBook, false);
   await refused(act({ action: 'publish', propertyId: mine }, ADMIN), /already linked to a Hostaway listing/);
+  await refused(act({ action: 'bookPhotography', propertyId: mine, date: SHOOT, photographer: '' }), /already linked to a Hostaway listing/);
 
-  const other = await signed('Clash Flat');
+  const other = await photographed('Clash Flat');
   const f = (await read(other)).listing.fields;
-  await addPhoto(other);
   await act({ action: 'saveDraft', propertyId: other, fields: f, photos: [] });
   const started = await act({ action: 'publish', propertyId: other }, ADMIN);
   assert.deepEqual(await result({ requestId: started.requestId, propertyId: other, ok: true, hostawayListingId: '55555' }), { recorded: true, ok: false });
@@ -208,7 +254,8 @@ test('a property already linked to a listing made elsewhere is never touched, an
 });
 
 test('removing a photo, and a deleted property queues its stored photos', async () => {
-  const prop = await signed('Photo Flat');
+  const prop = await ready('Photo Flat');
+  await act({ action: 'bookPhotography', propertyId: prop, date: SHOOT, photographer: '' });
   const v = L.listingViewSchema.parse(await addPhoto(prop));
   const removed = await act({ action: 'removePhoto', propertyId: prop, photoId: v.listing.photos[0].id });
   assert.match(removed.removedPath, new RegExp(`^listings/${prop}/`));
@@ -216,6 +263,34 @@ test('removing a photo, and a deleted property queues its stored photos', async 
   const kept = L.listingViewSchema.parse(await addPhoto(prop, 'Kitchen.jpg')).listing.photos[0];
   await owner('delete from private.workspace_listing_photos where id=$1', [kept.id]);
   assert.equal((await owner("select count(*)::int n from private.workspace_storage_removals where bucket='lead-files' and reason='listing_photo.deleted' and path like $1", [`listings/${prop}/%`]))[0].n, 1);
+});
+
+test('admins name the Property Performance Managers, who approve', async () => {
+  await refused(act({ action: 'setApprovers', userIds: [users[GINA]] }), /Only admins/);
+  await refused(act({ action: 'setApprovers', userIds: [users[ACCOUNTS]] }, ADMIN), /stays team members who can open Leads/);
+  let r = await act({ action: 'setApprovers', userIds: [users[GINA]] }, ADMIN);
+  assert.deepEqual(r.approvers, [{ id: users[GINA], name: 'Gina' }]);
+  assert.deepEqual(r.team.map(x => x.name), ['Fiona', 'Gina'], 'the stays team who can open Leads');
+  const prop = await photographed('Approver Flat');
+  const f = (await read(prop)).listing.fields;
+  await act({ action: 'saveDraft', propertyId: prop, fields: f, photos: [] });
+  assert.ok(await notified(GINA, 'listing.awaiting_approval') > 0, 'the Property Performance Manager is asked');
+  assert.equal(await notified(STAYS, 'listing.awaiting_approval'), 0, 'not whoever saved it');
+  let v = await read(null, GINA);
+  assert.equal(v.canApprove, true);
+  assert.equal(v.team.length, 0, 'only admins choose');
+  assert.ok(v.awaiting.some(x => x.propertyId === prop && x.name === 'Approver Flat' && x.updatedByName === 'Fiona'), 'waiting for approval');
+  assert.deepEqual((await read(null)).awaiting, [], 'only approvers see the queue');
+  v = await read(prop, GINA);
+  assert.equal(v.listing.canPublish, true);
+  assert.equal((await read(prop)).listing.canPublish, false);
+  await refused(act({ action: 'publish', propertyId: prop }), /Only the Property Performance Manager/);
+  const started = await act({ action: 'publish', propertyId: prop }, GINA);
+  assert.equal(started.send, true);
+  assert.ok(!(await read(null, GINA)).awaiting.some(x => x.propertyId === prop), 'no longer waiting');
+  r = await act({ action: 'setApprovers', userIds: [] }, ADMIN);
+  assert.deepEqual(r.approvers, []);
+  assert.equal((await read(null, GINA)).canApprove, false);
 });
 
 test('admins set the starting wording; drafts not yet saved follow it', async () => {

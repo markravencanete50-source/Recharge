@@ -5,6 +5,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { Button, Field, Loading, Notice, Tag, message, useRequestId } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
+import { DateField } from "./CalendarPicker";
 import { liveApi } from "./LivePages";
 import { listingPhotoLink, uploadListingPhoto } from "./backend/client";
 import { ui, type Palette } from "./theme";
@@ -14,14 +15,18 @@ import {
   type ListingFields, type ListingPhoto, type ListingSettings, type ListingView,
 } from "../../lib/hostaway-listing";
 
-// The property's listing in Hostaway (migration 20261028200000), on the lead from the set-up form onwards. Onboarding fills
-// it in; the stays team checks it and adds the photos; an admin approves it and the app creates the listing in Hostaway.
-// Admins set the starting wording and times on the Leads page.
+// The property's listing in Hostaway (migration 20261028200000), on the lead once the property is guest ready, as in the
+// Business Plan's Launch Preparation. The team books the photography (the owner is told) and adds the photos; once they are
+// in, the stays team checks the listing onboarding filled in; the Property Performance Manager (admins, and whoever they
+// name) approves it and the app creates the listing in Hostaway. Admins set the starting wording and the approvers on the
+// Leads page, where approvers also find the listings waiting for them.
 const when = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
 const pounds = (minor: number) => (minor / 100).toFixed(2);
 const toMinor = (v: string) => { const n = Number(v.replace(/[£,\s]/g, "")); return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null; };
 const toWhole = (v: string) => { const n = Number(v.trim()); return Number.isInteger(n) ? n : null; };
 const hourLabel = (h: number) => `${String(h).padStart(2, "0")}:00`;
+const day = (iso: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(iso + "T12:00:00Z"));
+const today = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(new Date());
 
 async function readListing(propertyId?: string) {
   return listingViewSchema.parse((await liveApi("/listing" + (propertyId ? "?propertyId=" + encodeURIComponent(propertyId) : ""))).data);
@@ -35,7 +40,7 @@ const MONEY_KEYS = ["nightlyMinor", "cleaningFeeMinor"] as const;
 const MULTILINE = new Set(["description", "houseRules", "checkInInstructions", "address"]);
 const TEXT_MAX: Record<(typeof TEXT_KEYS)[number], number> = { name: 200, externalName: 100, address: 1000, propertyType: 120, description: 5000, houseRules: 5000, wifiName: 200, wifiPassword: 200, accessCode: 200, checkInInstructions: 3000 };
 
-function PhotoTile({ p, propertyId, photo, index, total, edit, onCaption, onMove, onRemove }: { p: Palette; propertyId: string; photo: ListingPhoto; index: number; total: number; edit: boolean;
+function PhotoTile({ p, propertyId, photo, index, total, edit, removable, onCaption, onMove, onRemove }: { p: Palette; propertyId: string; photo: ListingPhoto; index: number; total: number; edit: boolean; removable: boolean;
   onCaption: (v: string) => void; onMove: (by: -1 | 1) => void; onRemove: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => { let active = true; listingPhotoLink(propertyId, photo.id).then(l => { if (active) setUrl(l.url); }, () => undefined); return () => { active = false; }; }, [propertyId, photo.id]);
@@ -44,10 +49,10 @@ function PhotoTile({ p, propertyId, photo, index, total, edit, onCaption, onMove
       : <View style={{ height: 120, borderRadius: 8, backgroundColor: p.wash }} />}
     <Text numberOfLines={1} style={[ui.small, { color: p.muted }]}>{`${index + 1}. ${photo.name}${photo.sent ? " (in Hostaway)" : ""}`}</Text>
     {edit ? <Field p={p} label="Caption" value={photo.caption} onChange={v => onCaption(v.slice(0, 300))} /> : !!photo.caption && <Text style={{ color: p.text, fontSize: 13 }}>{photo.caption}</Text>}
-    {edit && <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
-      <Button p={p} quiet icon="arrow-left" label="Earlier" disabled={index === 0} onPress={() => onMove(-1)} />
-      <Button p={p} quiet icon="arrow-right" label="Later" disabled={index === total - 1} onPress={() => onMove(1)} />
-      <Button p={p} quiet icon="trash-2" label="Remove" onPress={onRemove} />
+    {(edit || removable) && <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
+      {edit && <Button p={p} quiet icon="arrow-left" label="Earlier" disabled={index === 0} onPress={() => onMove(-1)} />}
+      {edit && <Button p={p} quiet icon="arrow-right" label="Later" disabled={index === total - 1} onPress={() => onMove(1)} />}
+      {removable && <Button p={p} quiet icon="trash-2" label="Remove" onPress={onRemove} />}
     </View>}
     {!!url && <Button p={p} quiet icon="external-link" label="Open" onPress={() => void Linking.openURL(url)} />}
   </View>;
@@ -56,15 +61,19 @@ function PhotoTile({ p, propertyId, photo, index, total, edit, onCaption, onMove
 export function ListingPanel({ p, propertyId }: { p: Palette; propertyId: string }) {
   const [view, setView] = useState<ListingView | null>(null), [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState(""), [note, setNote] = useState(""), [busy, setBusy] = useState(false), [open, setOpen] = useState(false), [dirty, setDirty] = useState(false);
+  const [shootOn, setShootOn] = useState(""), [photographer, setPhotographer] = useState("");
   const request = useRequestId("listing:" + propertyId);
   const fill = (v: ListingView) => {
     setView(v); setDirty(false);
-    if (v.listing) setDraft({ fields: v.listing.fields, numbers: {}, photos: v.listing.photos });
+    if (v.listing) {
+      setDraft({ fields: v.listing.fields, numbers: {}, photos: v.listing.photos });
+      setShootOn(v.listing.photography.bookedOn ?? ""); setPhotographer(v.listing.photography.photographer);
+    }
   };
   const load = useCallback(async () => { try { fill(await readListing(propertyId)); setError(""); } catch (e) { setError(message(e)); } }, [propertyId]);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   if (!view?.listing || !draft) return error ? <Notice p={p} tone="bad" text={error} /> : null;
-  const l = view.listing, edit = l.canEdit;
+  const l = view.listing, edit = l.canEdit, shoot = l.photography, addable = shoot.canAddPhotos;
   const setField = <K extends keyof ListingFields>(k: K, v: ListingFields[K]) => { setNote(""); setDirty(true); setDraft(d => d ? { ...d, fields: { ...d.fields, [k]: v } } : d); };
   const setNumber = (k: keyof ListingFields, raw: string, money: boolean) => {
     setNote(""); setDirty(true);
@@ -77,7 +86,7 @@ export function ListingPanel({ p, propertyId }: { p: Palette; propertyId: string
     if (busy) return;
     const key = JSON.stringify(body);
     const parsed = listingActionSchema.safeParse({ ...body, requestId: request.get(key), propertyId });
-    if (!parsed.success) { setError(parsed.error.issues.map(i => `${FIELD_LABEL[i.path[1] as keyof ListingFields] ?? "Listing"}: ${i.message}`)[0] ?? "Check the listing"); return; }
+    if (!parsed.success) { setError(parsed.error.issues.map(i => i.path[0] === "fields" ? `${FIELD_LABEL[i.path[1] as keyof ListingFields] ?? "Listing"}: ${i.message}` : i.path[0] === "date" ? "Choose the photography date" : i.message)[0] ?? "Check the listing"); return; }
     setBusy(true); setError("");
     try {
       const out = await liveApi("/listing", parsed.data) as { data?: unknown; note?: string };
@@ -128,11 +137,27 @@ export function ListingPanel({ p, propertyId }: { p: Palette; propertyId: string
     <Text style={[ui.small, { color: p.muted }]}>
       {l.linkedElsewhere ? `This property is already linked to Hostaway listing ${l.hostawayListingId}. Change the listing in Hostaway.`
         : l.publishedAt ? `Sent to Hostaway ${when(l.publishedAt)}${l.publishedByName ? ` by ${l.publishedByName}` : ""} (listing ${l.hostawayListingId}). Connect it to the channels in Hostaway.`
-        : l.saved ? "Check every part and add the photos. An admin then approves it and it is created in Hostaway."
-        : "Filled in from onboarding. Check every part, add the photos and save. An admin then approves it and it is created in Hostaway."}
+        : l.locked ? l.locked + " It is filled in from onboarding in the meantime."
+        : l.saved ? "Check every part and the photos. The Property Performance Manager then approves it and it is created in Hostaway."
+        : "Filled in from onboarding. Check every part, order and caption the photos, and save. The Property Performance Manager then approves it and it is created in Hostaway."}
     </Text>
+    {!l.linkedElsewhere && (shoot.canBook || shoot.bookedOn) && <View style={{ gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: p.border }}>
+      <View style={[ui.between, { gap: 8 }]}>
+        <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>Photography</Text>
+        <Tag p={p} label={shoot.receivedAt ? "Photos in" : shoot.bookedOn ? "Booked" : "To book"} tone={shoot.receivedAt ? "good" : "wait"} />
+      </View>
+      {shoot.bookedOn && <Text style={{ color: p.text, fontSize: 14 }}>{`Booked for ${day(shoot.bookedOn)}${shoot.photographer ? ` with ${shoot.photographer}` : ""}${shoot.bookedByName ? ` (by ${shoot.bookedByName})` : ""}.`}</Text>}
+      {shoot.receivedAt && <Text style={[ui.small, { color: p.muted }]}>{`Photos received ${when(shoot.receivedAt)}${shoot.receivedByName ? ` by ${shoot.receivedByName}` : ""}.`}</Text>}
+      {shoot.canBook && <View style={{ gap: 8 }}>
+        <DateField p={p} label="Photography date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today()} value={{ from: shootOn, to: shootOn }} onChange={next => setShootOn(next.from)} />
+        <Field p={p} label="Photographer (optional)" value={photographer} onChange={v => setPhotographer(v.slice(0, 200))} />
+        <Button p={p} icon="camera" label={shoot.bookedOn ? "Change the booking" : "Book the photography"} disabled={busy || !shootOn}
+          onPress={() => void act({ action: "bookPhotography", date: shootOn, photographer }, "Booked. The owner has been told in their property chat.")} />
+      </View>}
+      {!shoot.receivedAt && shoot.bookedOn && <Text style={[ui.small, { color: p.muted }]}>Add the photographer's photos below, then mark them received. The listing opens once they are in.</Text>}
+    </View>}
     {!!l.lastError && <Notice p={p} tone="bad" text={l.lastError} />}
-    {!l.linkedElsewhere && <Button p={p} icon={open ? "chevron-up" : "edit-3"} label={open ? "Close the listing" : edit ? "Check and edit the listing" : "See the listing"} onPress={() => setOpen(o => !o)} />}
+    {!l.linkedElsewhere && <Button p={p} icon={open ? "chevron-up" : "edit-3"} label={open ? "Close the listing" : edit ? "Check and edit the listing" : addable ? "Add the photos" : "See the listing"} onPress={() => setOpen(o => !o)} />}
     {open && !l.linkedElsewhere && <View style={{ gap: 12 }}>
       {(["name", "externalName", "propertyType", "address", "description"] as const).map(field)}
       <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>{(["bedrooms", "bathrooms", "beds", "guests", "nightlyMinor", "cleaningFeeMinor", "minNights", "checkInFrom", "checkInTo", "checkOut"] as const).map(field)}</View>
@@ -140,11 +165,13 @@ export function ListingPanel({ p, propertyId }: { p: Palette; propertyId: string
       <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>{`Photos (${draft.photos.length})`}</Text>
       <Text style={[ui.small, { color: p.muted }]}>The first photo is the cover. Photos go to Hostaway with the new listing; add any later ones in Hostaway.</Text>
       <View style={[ui.row, { gap: 10, flexWrap: "wrap", alignItems: "flex-start" }]}>
-        {draft.photos.map((x, i) => <PhotoTile key={x.id} p={p} propertyId={propertyId} photo={x} index={i} total={draft.photos.length} edit={edit}
+        {draft.photos.map((x, i) => <PhotoTile key={x.id} p={p} propertyId={propertyId} photo={x} index={i} total={draft.photos.length} edit={edit} removable={addable || edit}
           onCaption={v => setPhotos(draft.photos.map(y => y.id === x.id ? { ...y, caption: v } : y))} onMove={by => move(i, by)}
           onRemove={() => void act({ action: "removePhoto", photoId: x.id }, "Photo removed.")} />)}
       </View>
-      {edit && draft.photos.length < LISTING_LIMITS.photos && <Button p={p} icon="image" label="Add photos" disabled={busy} onPress={() => void addPhotos()} />}
+      {addable && draft.photos.length < LISTING_LIMITS.photos && <Button p={p} icon="image" label="Add photos" disabled={busy} onPress={() => void addPhotos()} />}
+      {shoot.canReceive && <Button p={p} icon="check-circle" label="The photos are in" disabled={busy}
+        onPress={() => void act({ action: "photosReceived" }, "Photos received. The owner has been told, and the listing is open to check.")} />}
       {edit && <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
         <Button p={p} quiet icon="refresh-ccw" label="Fill in again from onboarding" disabled={busy} onPress={() => { setNote(""); setDirty(true); setDraft(d => d ? { ...d, fields: l.prefill, numbers: {} } : d); }} />
         <Button p={p} icon="save" label="Save the listing" disabled={busy} onPress={() => void save()} />
@@ -158,6 +185,53 @@ export function ListingPanel({ p, propertyId }: { p: Palette; propertyId: string
       <Button p={p} primary icon="send" label={l.publishedAt ? "Approve and update in Hostaway" : "Approve and create in Hostaway"} disabled={busy || dirty || !l.saved || missing.length > 0}
         onPress={() => void act({ action: "publish" }, l.publishedAt ? "Updated in Hostaway." : "Created in Hostaway. Connect it to the channels there.")} />
     </View>}
+  </View>;
+}
+
+// ---------------------------------------------------------------- the Property Performance Managers, and what waits for them
+function Approvers({ p, view, onSaved }: { p: Palette; view: ListingView; onSaved: (v: ListingView) => void }) {
+  const [chosen, setChosen] = useState<string[]>(() => view.approvers.map(x => x.id));
+  const [error, setError] = useState(""), [busy, setBusy] = useState(false), [saved, setSaved] = useState(false);
+  const request = useRequestId("listing-approvers:" + chosen.join(","));
+  const admin = view.canEditSettings;
+  async function save() {
+    setBusy(true); setError("");
+    try { const v = listingViewSchema.parse((await liveApi("/listing", { action: "setApprovers", requestId: request.get(), userIds: chosen })).data); request.done(); setSaved(true); onSaved(v); }
+    catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
+  return <View style={{ gap: 8 }}>
+    <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>Property Performance Manager</Text>
+    <Text style={[ui.small, { color: p.muted }]}>Approves each listing before it is created in Hostaway, and is told when one is ready. Admins can always approve.</Text>
+    {admin ? <>
+      {view.team.length === 0 ? <Text style={[ui.small, { color: p.muted }]}>Only stays team members who can open Leads can be chosen. There are none yet.</Text>
+        : <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{view.team.map(t => {
+          const on = chosen.includes(t.id);
+          return <Button key={t.id} p={p} quiet={!on} icon={on ? "check-square" : "square"} label={t.name}
+            onPress={() => { setSaved(false); setChosen(c => on ? c.filter(x => x !== t.id) : [...c, t.id]); }} />;
+        })}</View>}
+      <Button p={p} icon="user-check" label="Save who approves" disabled={busy} onPress={() => void save()} />
+    </> : <Text style={{ color: p.text, fontSize: 13 }}>{view.approvers.length ? view.approvers.map(x => x.name).join(", ") + ", and the admins" : "The admins"}</Text>}
+    {!!error && <Notice p={p} tone="bad" text={error} />}
+    {saved && <Notice p={p} text="Saved." />}
+  </View>;
+}
+
+function Awaiting({ p, view }: { p: Palette; view: ListingView }) {
+  const [open, setOpen] = useState<string | null>(null);
+  if (!view.canApprove) return null;
+  return <View style={{ gap: 8 }}>
+    <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>{`Waiting for approval (${view.awaiting.length})`}</Text>
+    {view.awaiting.length === 0 && <Text style={[ui.small, { color: p.muted }]}>Nothing is waiting for approval.</Text>}
+    {view.awaiting.map(a => <View key={a.propertyId} style={{ gap: 8 }}>
+      <View style={[ui.between, { gap: 8 }]}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ color: p.text, fontWeight: "600" }}>{a.name}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{`${STATUS_LABEL[a.status as keyof typeof STATUS_LABEL] ?? a.status}${a.updatedAt ? `, saved ${when(a.updatedAt)}` : ""}${a.updatedByName ? ` by ${a.updatedByName}` : ""}`}</Text>
+        </View>
+        <Button p={p} quiet icon={open === a.propertyId ? "chevron-up" : "eye"} label={open === a.propertyId ? "Close" : "Open"} onPress={() => setOpen(o => o === a.propertyId ? null : a.propertyId)} />
+      </View>
+      {open === a.propertyId && <ListingPanel p={p} propertyId={a.propertyId} />}
+    </View>)}
   </View>;
 }
 
@@ -186,7 +260,7 @@ export function ListingSettingsSheet({ p, visible, onClose }: { p: Palette; visi
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (
-    <Sheet palette={p} visible={visible} onClose={onClose} title="Listings" subtitle="How each new Hostaway listing is filled in from onboarding" icon="house" width={680}>
+    <Sheet palette={p} visible={visible} onClose={onClose} title="Listings" subtitle="How each new Hostaway listing is filled in, and who approves it" icon="house" width={680}>
       <View style={{ gap: 14 }}>
         <Text style={[ui.small, { color: p.muted }]}>{`Each property's listing starts from these, with its own details from onboarding. In the description, ${DESCRIPTION_PLACEHOLDERS.map(x => `{${x}}`).join(", ")} are filled in for each property; a line whose detail is not known is left out.`}</Text>
         {!draft && !error && <Loading p={p} rows={4} />}
@@ -208,6 +282,8 @@ export function ListingSettingsSheet({ p, visible, onClose }: { p: Palette; visi
           <Button p={p} quiet icon="rotate-ccw" label="Back to the starting wording" onPress={() => { setSaved(false); setNumbers({}); setDraft(DEFAULT_LISTING_SETTINGS); }} />
           <Button p={p} primary icon="check" label="Save" disabled={busy} onPress={() => void save()} />
         </View>}
+        {view && <Awaiting p={p} view={view} />}
+        {view && <Approvers key={view.approvers.map(x => x.id).join(",")} p={p} view={view} onSaved={setView} />}
         <View style={[ui.row, { gap: 6 }]}><Feather name="info" size={14} color={p.muted} /><Text style={[ui.small, { color: p.muted, flex: 1 }]}>Connecting a new listing to Airbnb, Booking.com and the other channels is done once in Hostaway.</Text></View>
       </View>
     </Sheet>

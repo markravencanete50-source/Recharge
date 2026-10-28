@@ -57,10 +57,15 @@ const photoOrder = z.array(z.object({ id, caption: text(300) }).strict()).max(LI
 export const listingActionSchema = z.discriminatedUnion('action', [
   // The stays team's draft: the details and the photos in order, with captions.
   z.object({ action: z.literal('saveDraft'), requestId: id, propertyId: id, fields: listingFieldsSchema, photos: photoOrder }).strict(),
-  // An admin approves: the app creates (or updates) the listing in Hostaway.
+  // The Property Performance Manager approves: the app creates (or updates) the listing in Hostaway.
   z.object({ action: z.literal('publish'), requestId: id, propertyId: id }).strict(),
+  // Photography, once the property is guest ready: booked (the owner is told), then the photos are in.
+  z.object({ action: z.literal('bookPhotography'), requestId: id, propertyId: id, date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), photographer: text(200) }).strict(),
+  z.object({ action: z.literal('photosReceived'), requestId: id, propertyId: id }).strict(),
   z.object({ action: z.literal('removePhoto'), requestId: id, propertyId: id, photoId: id }).strict(),
   z.object({ action: z.literal('saveSettings'), requestId: id, settings: listingSettingsSchema }).strict(),
+  // Admins name the Property Performance Managers (admins always approve).
+  z.object({ action: z.literal('setApprovers'), requestId: id, userIds: z.array(id).max(20) }).strict(),
 ]);
 export type ListingAction = z.infer<typeof listingActionSchema>;
 export const listingReadSchema = z.object({ propertyId: id.optional() }).strict();
@@ -72,9 +77,18 @@ export const STATUS_LABEL: Record<ListingStatus, string> = {
 };
 const photoSchema = z.object({ id, name: z.string(), caption: z.string(), sort: z.number(), sent: z.boolean().default(false) });
 export type ListingPhoto = z.infer<typeof photoSchema>;
+const personSchema = z.object({ id, name: z.string() });
+const photographySchema = z.object({
+  bookedOn: z.string().nullable().default(null), photographer: z.string().default(''), bookedByName: z.string().nullable().default(null),
+  receivedAt: z.string().nullable().default(null), receivedByName: z.string().nullable().default(null),
+  canBook: z.boolean().default(false), canAddPhotos: z.boolean().default(false), canReceive: z.boolean().default(false),
+});
+export type ListingPhotography = z.infer<typeof photographySchema>;
 export const listingViewSchema = z.object({
   settings: listingSettingsSchema,
-  canEditSettings: z.boolean().default(false),
+  canEditSettings: z.boolean().default(false), canApprove: z.boolean().default(false),
+  approvers: z.array(personSchema).default([]), team: z.array(personSchema).default([]),
+  awaiting: z.array(z.object({ propertyId: id, name: z.string(), status: z.string(), updatedAt: z.string().nullable(), updatedByName: z.string().nullable() })).default([]),
   settingsUpdatedAt: z.string().nullable().default(null), settingsUpdatedByName: z.string().nullable().default(null),
   listing: z.object({
     propertyId: id, stage: z.string(),
@@ -82,7 +96,10 @@ export const listingViewSchema = z.object({
     status: z.enum(LISTING_STATUS), hostawayListingId: z.string().nullable(), linkedElsewhere: z.boolean().default(false),
     publishedAt: z.string().nullable(), publishedByName: z.string().nullable(), lastError: z.string().nullable(),
     updatedAt: z.string().nullable(), updatedByName: z.string().nullable(), version: z.number().default(0),
-    photos: z.array(photoSchema), canEdit: z.boolean(), canPublish: z.boolean(),
+    photos: z.array(photoSchema), photography: photographySchema.default({}),
+    // Why the listing is not open yet (guest readiness, then photography).
+    locked: z.string().nullable().default(null),
+    canEdit: z.boolean(), canPublish: z.boolean(),
   }).nullable().default(null),
 });
 export type ListingView = z.infer<typeof listingViewSchema>;
