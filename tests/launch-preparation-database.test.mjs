@@ -13,6 +13,8 @@ const { journeyActionSchema } = await vite.ssrLoadModule('/lib/journey-policy.ts
 const L = await vite.ssrLoadModule('/lib/launch-preparation.ts');
 const MIGRATION = 'supabase/migrations/20261029100000_launch_preparation.sql';
 const ROUND_TWO = 'supabase/migrations/20261029200000_launch_compliance_boards.sql';
+const ROUND_THREE = 'supabase/migrations/20261029300000_launch_furnishing.sql';
+const studio = await vite.ssrLoadModule('/lib/furnishing-studio.ts');
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
 create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',email_confirmed_at timestamptz);
@@ -20,10 +22,10 @@ create table auth.sessions(id uuid primary key,user_id uuid references auth.user
 create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;
 create function auth.uid() returns uuid language sql stable as $$select (auth.jwt()->>'sub')::uuid$$;`);
 for (const file of (await fs.readdir('supabase/migrations')).filter(f => f.endsWith('.sql')).sort()) await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
-const roles = ['super_admin', 'admin', 'stays', 'client', 'cleans', 'cleans'];
-const names = ['Sam', 'Morag', 'Fiona', 'Olive Owner', 'Hannah Housekeeper', 'Harry Housekeeper'];
+const roles = ['super_admin', 'admin', 'stays', 'client', 'cleans', 'cleans', 'ready', 'accounts'];
+const names = ['Sam', 'Morag', 'Fiona', 'Olive Owner', 'Hannah Housekeeper', 'Harry Housekeeper', 'Ian Installer', 'Ava Accounts'];
 const users = roles.map((_, i) => `97880000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`);
-const [SUPER, ADMIN, STAYS, OWNER, KEEPER, OTHERKEEPER] = roles.map((_, i) => i);
+const [SUPER, ADMIN, STAYS, OWNER, KEEPER, OTHERKEEPER, FITTER, ACCOUNTS] = roles.map((_, i) => i);
 const session = i => users[i].replace('9788', '9888');
 for (let i = 0; i < users.length; i++) {
   await db.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,now())', [users[i], `lch${i}@example.com`]);
@@ -88,20 +90,46 @@ async function preparedForReadiness(prop) {
   await tick(prop, 'setUp.inventory');
   const v = await read(prop);
   await tick(prop, 'setUp.condition', { ticks: v.settings.condition.map(c => c.key) });
-  await tick(prop, 'setUp.order', { note: 'Ordered from the catalogue' });
-  await tick(prop, 'setUp.install');
+  await furnishedQuickly(prop);
   for (const s of (await read(prop)).launch.steps.filter(s => s.section === 'compliance')) { await certificate(prop, s.key); await tick(prop, s.key, { expiresOn: plus(300) }); }
   await tick(prop, 'licensing.licence', { required: true, number: 'EH-STL-001' });
   await act({ action: 'allocate', propertyId: prop, housekeeperId: users[KEEPER] });
+}
+// A furnishing quote from the Furnishing Studio for the property, sent to the owner.
+async function quote(prop, extra = {}) {
+  await as(STAYS);
+  const catalogue = studio.catalogueSchema.parse(await rpc('workspace_furnishing_read', ['catalogue', null]));
+  const f = { ...studio.emptyProjectForm(today), clientName: 'Olive Owner', propertyId: prop, inputs: studio.normaliseInputs({ ...studio.DEFAULT_INPUTS, bedrooms: 1, guests: 2 }), overrides: {}, ...extra };
+  const lines = studio.estimateLines(catalogue, f.inputs, {}, f);
+  const saved = await rpc('workspace_furnishing_action', [studio.saveProjectAction(f, lines, crypto.randomUUID())]);
+  return rpc('workspace_furnishing_action', [{ action: 'moveProject', requestId: crypto.randomUUID(), id: saved.id, version: saved.version, status: 'sent' }]);
+}
+const invoiceOf = async prop => (await owner('select invoice_item_id id from private.workspace_launch_furnishing where property_id=$1', [prop]))[0].id;
+const moveInvoice = async (prop, status) => owner('update private.workspace_hub_items set status=$2 where id=$1', [await invoiceOf(prop), status]);
+// The approved quote, paid, ordered, received and installed, without the steps in between (they are tested on their own).
+async function furnishedQuickly(prop) {
+  const q = await quote(prop);
+  await act({ action: 'decideQuote', propertyId: prop, projectId: q.id, decision: 'accept' }, OWNER);
+  await moveInvoice(prop, 'paid');
+  await owner(`update private.workspace_launch_furnishing set installer_id=$2,delivery_address='8 Shore Road',install_on=current_date,install_approved_at=now(),installed_at=now() where property_id=$1`, [prop, users[FITTER]]);
+  await owner('insert into private.workspace_launch_furnishing_lines(line_id,property_id,eta,received_at) select b.id,$1,current_date,now() from private.workspace_launch_buy($1) b', [prop]);
+}
+async function photo(prop, step, lineId, i = FITTER) {
+  await as(i);
+  const fileId = crypto.randomUUID();
+  return L.launchReadSchema.parse(await rpc('workspace_launch_action', [{ action: 'addFile', requestId: crypto.randomUUID(), propertyId: prop, step, fileId, name: 'Photo.jpg', mime: 'image/jpeg', bytes: 900,
+    path: `launch/${prop}/${fileId}.jpg`, ...(lineId ? { lineId } : {}) }]));
 }
 const allTicked = v => v.settings.condition.map(c => ({ key: c.key, ok: true, note: '' }));
 
 test('the migration runs twice, stays locked down, and its starting statements match the app', async () => {
   const sql = await fs.readFile(MIGRATION, 'utf8');
   const two = await fs.readFile(ROUND_TWO, 'utf8');
-  await db.exec('reset role'); await db.exec(sql); await db.exec(two); await db.exec(sql); await db.exec(two);
-  assert.ok(!/—/.test(sql + two), 'no em dashes');
-  for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets']) {
+  const three = await fs.readFile(ROUND_THREE, 'utf8');
+  await db.exec('reset role'); await db.exec(sql); await db.exec(two); await db.exec(three); await db.exec(sql); await db.exec(two); await db.exec(three);
+  assert.ok(!/—/.test(sql + two + three), 'no em dashes');
+  for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets',
+    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
     for (const role of ['anon', 'authenticated', 'service_role']) assert.equal((await owner('select has_table_privilege($1,$2,$3) ok', [role, 'private.' + t, 'select']))[0].ok, false, role + ' ' + t);
   }
@@ -315,4 +343,83 @@ test("Recharge's parts are mirrored on their boards; ticking either completes bo
   const other = await signed('Quiet Flat');
   assert.equal((await owner('select count(*)::int n from private.workspace_launch_tickets where property_id=$1', [other]))[0].n, 0);
   await act({ action: 'saveSettings', settings: L.DEFAULT_LAUNCH_SETTINGS }, ADMIN);
+});
+
+test('furnishing: the owner approves a quote, accounts invoice and order it, the installer receives each item and installs it', async () => {
+  const prop = await signed('Furnish Flat');
+  let v = await read(prop);
+  assert.equal(stepOf(v, 'setUp.quote').state, 'locked');
+  assert.match(stepOf(v, 'setUp.quote').lockedBecause, /furnishing quote/);
+  const standard = await quote(prop, { notes: 'Standard package' });
+  const enhanced = await quote(prop, { notes: 'Enhanced package', markupPercent: 20 });
+  let mine = await read(prop, OWNER);
+  assert.equal(stepOf(mine, 'setUp.quote').state, 'todo');
+  assert.equal(mine.launch.furnishing.quotes.length, 2);
+  assert.equal(mine.launch.furnishing.canDecide, true);
+  assert.equal(mine.launch.furnishing.lines.length, 0);
+  // Declined with a note, then the other approved: the invoice opens in Receivable for the approved amount.
+  await act({ action: 'decideQuote', propertyId: prop, projectId: enhanced.id, decision: 'decline', note: 'Too much for now' }, OWNER);
+  await said(/declined\. Too much for now/);
+  mine = await act({ action: 'decideQuote', propertyId: prop, projectId: standard.id, decision: 'accept' }, OWNER);
+  assert.equal(stepOf(mine, 'setUp.quote').state, 'done');
+  assert.equal(stepOf(mine, 'setUp.invoice').state, 'todo');
+  await said(/approved \(£/);
+  await refused(act({ action: 'decideQuote', propertyId: prop, projectId: standard.id, decision: 'accept' }, OWNER), /no furnishing quote waiting/);
+  const [invoice] = await owner('select status,amount_minor::int amount,department from private.workspace_hub_items where id=$1', [await invoiceOf(prop)]);
+  assert.deepEqual(invoice, { status: 'to_send', amount: standard.quotePence, department: 'accounts' });
+  assert.equal((await owner('select status from private.workspace_furnishing_projects where id=$1', [standard.id]))[0].status, 'accepted');
+  // Two items to buy keep the test short.
+  await owner('update private.workspace_furnishing_lines l set packs=0 from private.workspace_furnishing_projects q where q.id=l.project_id and l.revision=q.line_revision and q.id=$1 and l.position>2', [standard.id]);
+  await as(ACCOUNTS); await refused(rpc('workspace_launch_read', [prop]), /Property not found/);
+
+  await moveInvoice(prop, 'sent');
+  await said(/furnishing invoice has been sent for £/);
+  await moveInvoice(prop, 'paid');
+  await said(/furnishing invoice is settled/);
+  assert.equal((await owner('select status from private.workspace_furnishing_projects where id=$1', [standard.id]))[0].status, 'purchasing');
+  v = await read(prop);
+  assert.equal(stepOf(v, 'setUp.invoice').state, 'done');
+  const items = v.launch.furnishing.lines;
+  assert.equal(items.length, 2);
+  await refused(act({ action: 'orderLines', propertyId: prop, lines: [{ lineId: items[0].id, eta: plus(3) }] }, ACCOUNTS), /Assign the installer/);
+  await act({ action: 'assignInstaller', propertyId: prop, installerId: users[FITTER], deliveryAddress: '8 Shore Road, Leith' });
+  assert.equal(await notified(FITTER, 'launch.install_assigned'), 1);
+
+  // Accounts order each item with its delivery date; the owner hears once everything is ordered.
+  const work = await read(null, ACCOUNTS);
+  assert.ok(work.furnishingWork.some(x => x.propertyId === prop));
+  await refused(act({ action: 'orderLines', propertyId: prop, lines: [{ lineId: items[0].id, eta: plus(-1) }] }, ACCOUNTS), /past/);
+  await act({ action: 'orderLines', propertyId: prop, lines: [{ lineId: items[0].id, eta: plus(3) }] }, ACCOUNTS);
+  v = await act({ action: 'orderLines', propertyId: prop, lines: [{ lineId: items[1].id, eta: plus(4) }] }, ACCOUNTS);
+  assert.equal(stepOf(v, 'setUp.order').state, 'done');
+  await said(/furnishing order has been placed\. Everything is expected by/);
+  assert.equal((await owner('select count(*)::int n from private.workspace_furnishing_lines where id=any($1::uuid[]) and purchased', [items.map(i => i.id)]))[0].n, 2, 'the studio list is ticked');
+  const tickets = await owner("select t.step,w.module_id,w.status from private.workspace_launch_tickets t join public.workspace_work_items w on w.id=t.work_id where t.property_id=$1 and t.step like 'setUp.%' order by t.step", [prop]);
+  assert.deepEqual(tickets.map(t => [t.step, t.module_id, t.status]), [['setUp.order', 'purchase-order', 'completed'], ['setUp.received', 'purchase-order', 'waiting']]);
+
+  // The installer checks each item in with a photo.
+  await refused(act({ action: 'receiveLine', propertyId: prop, lineId: items[0].id }, FITTER), /photo of the item/);
+  await refused(photo(prop, 'setUp.received', items[0].id, OWNER), /Only the installer or the team/);
+  await photo(prop, 'setUp.received', items[0].id);
+  await act({ action: 'receiveLine', propertyId: prop, lineId: items[0].id }, FITTER);
+  await photo(prop, 'setUp.received', items[1].id);
+  v = await act({ action: 'receiveLine', propertyId: prop, lineId: items[1].id }, FITTER);
+  assert.equal(stepOf(v, 'setUp.received').state, 'done');
+  assert.equal(v.launch.furnishing.lines[0].photos.length, 1);
+  await said(/All of your furnishing has arrived/);
+
+  // The installer's date waits for the team, who approve it; the owner hears; photos finish it.
+  v = await act({ action: 'proposeInstall', propertyId: prop, date: plus(5) }, FITTER);
+  assert.equal(v.launch.furnishing.installApprovedAt, null);
+  await refused(act({ action: 'completeInstall', propertyId: prop }, FITTER), /date is approved/);
+  await act({ action: 'approveInstall', propertyId: prop });
+  await said(/install is booked to be completed by/);
+  await refused(act({ action: 'completeInstall', propertyId: prop }, FITTER), /Upload photos/);
+  await photo(prop, 'setUp.install');
+  v = await act({ action: 'completeInstall', propertyId: prop }, FITTER);
+  assert.equal(stepOf(v, 'setUp.install').state, 'done');
+  assert.equal(v.launch.furnishing.installPhotos.length, 1);
+  await said(/furnishing is installed/);
+  assert.equal((await owner('select status from private.workspace_furnishing_projects where id=$1', [standard.id]))[0].status, 'complete');
+  assert.equal((await read(null, FITTER)).furnishingWork.length, 0, 'nothing left for the installer');
 });

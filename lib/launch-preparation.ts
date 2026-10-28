@@ -6,7 +6,8 @@ import { z } from 'zod';
 // utilities, safety compliance, licensing and the housekeeper are done; the housekeeper's form makes the property guest
 // ready. Admins edit the condition statements, the note under each part and whether the changeover video is required.
 // Round two (20261029200000): safety certificates with expiry reminders, and each of Recharge's parts mirrored as a ticket
-// on its section's task board (an admin setting).
+// on its section's task board (an admin setting). Round three (20261029300000): the furnishing order and install, from the
+// owner approving a Furnishing Studio quote to the installer's photos of the finished work.
 
 export const LAUNCH_SECTIONS = ['setUp', 'broadband', 'utilities', 'compliance', 'licensing', 'housekeeper', 'readiness', 'photography', 'garden', 'waste', 'guidebook', 'listing', 'pricing', 'social'] as const;
 export type LaunchSection = (typeof LAUNCH_SECTIONS)[number];
@@ -15,6 +16,10 @@ export const LAUNCH_SECTION_TITLE: Record<LaunchSection, string> = {
   readiness: 'Readiness inspection', photography: 'Photography', garden: 'Garden maintenance', waste: 'Waste collection', guidebook: 'Guidebook',
   listing: 'List the property', pricing: 'Pricing', social: 'Social media',
 };
+// The task boards are chosen per section, plus one for the furnishing order, delivery and install.
+export const BOARD_KEYS = [...LAUNCH_SECTIONS, 'furnishing'] as const;
+export type BoardKey = (typeof BOARD_KEYS)[number];
+export const BOARD_TITLE: Record<BoardKey, string> = { ...LAUNCH_SECTION_TITLE, furnishing: 'Furnishing order and install' };
 // What has to be done before the readiness inspection opens (the plan's a to f).
 export const BEFORE_READINESS: readonly LaunchSection[] = ['setUp', 'broadband', 'utilities', 'compliance', 'licensing', 'housekeeper'];
 
@@ -33,7 +38,9 @@ export const launchSettingsSchema = z.object({
   requireComplianceFile: z.boolean(),
   reminderMonths: z.number().int().min(1).max(6),
   // The task board each section's tickets go on (a module id), or '' for none.
-  boards: z.record(z.enum(LAUNCH_SECTIONS), z.string().max(80)),
+  boards: z.record(z.enum(BOARD_KEYS), z.string().max(80)),
+  // Whether the installer photographs each furnishing item as it arrives.
+  requireReceivedPhotos: z.boolean(),
 }).strict();
 export type LaunchSettings = z.infer<typeof launchSettingsSchema>;
 
@@ -72,10 +79,12 @@ export const DEFAULT_LAUNCH_SETTINGS: LaunchSettings = {
   boards: {
     compliance: 'safety-maintenance', broadband: 'new-property-inspection-board', readiness: 'new-property-inspection-board',
     guidebook: 'new-property-inspection-board', pricing: 'daily-pricing', social: 'listing-health', photography: 'listing-health', waste: 'routine-bin-garden-board',
+    furnishing: 'purchase-order',
   },
+  requireReceivedPhotos: true,
 };
 // Sections whose parts can have a board ticket; the others already raise their own onboarding tickets.
-export const TICKET_SECTIONS: readonly LaunchSection[] = ['broadband', 'compliance', 'readiness', 'photography', 'waste', 'guidebook', 'pricing', 'social'];
+export const TICKET_SECTIONS: readonly BoardKey[] = ['furnishing', 'broadband', 'compliance', 'readiness', 'photography', 'waste', 'guidebook', 'pricing', 'social'];
 // Certificates: PDF or a photo, up to 15 MB, up to 10 for each document.
 export const LAUNCH_FILE_MIMES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'] as const;
 export const LAUNCH_FILE_BYTES = 15 * 1024 * 1024;
@@ -95,7 +104,15 @@ export const launchActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('tick'), requestId: id, propertyId: id, step: z.string().max(80), data: z.record(z.unknown()).optional() }).strict(),
   z.object({ action: z.literal('reopen'), requestId: id, propertyId: id, step: z.string().max(80) }).strict(),
   // Certificates are added through the upload route; removing one goes here.
-  z.object({ action: z.literal('removeFile'), requestId: id, propertyId: id, step: z.string().max(80), fileId: id }).strict(),
+  z.object({ action: z.literal('removeFile'), requestId: id, propertyId: id, step: z.string().max(80), fileId: id, lineId: id.optional() }).strict(),
+  // The furnishing (Recharge sets up): the owner's decision on a quote, then the installer, the order, delivery and install.
+  z.object({ action: z.literal('decideQuote'), requestId: id, propertyId: id, projectId: id, decision: z.enum(['accept', 'decline']), note: z.string().max(1000).optional() }).strict(),
+  z.object({ action: z.literal('assignInstaller'), requestId: id, propertyId: id, installerId: id, deliveryAddress: z.string().trim().min(5, 'Enter the delivery address').max(500) }).strict(),
+  z.object({ action: z.literal('orderLines'), requestId: id, propertyId: id, lines: z.array(z.object({ lineId: id, eta: date }).strict()).min(1).max(400) }).strict(),
+  z.object({ action: z.literal('receiveLine'), requestId: id, propertyId: id, lineId: id }).strict(),
+  z.object({ action: z.literal('proposeInstall'), requestId: id, propertyId: id, date }).strict(),
+  z.object({ action: z.literal('approveInstall'), requestId: id, propertyId: id }).strict(),
+  z.object({ action: z.literal('completeInstall'), requestId: id, propertyId: id }).strict(),
   z.object({ action: z.literal('allocate'), requestId: id, propertyId: id, housekeeperId: id }).strict(),
   z.object({ action: z.literal('bookReadiness'), requestId: id, propertyId: id, date }).strict(),
   z.object({
@@ -113,7 +130,7 @@ export const STEP_STATES = ['todo', 'done', 'locked', 'na'] as const;
 export type StepState = (typeof STEP_STATES)[number];
 const stepSchema = z.object({
   key: z.string(), section: z.enum(LAUNCH_SECTIONS), title: z.string(), who: z.enum(['recharge', 'client']),
-  kind: z.enum(['tick', 'date', 'condition', 'expiry', 'licence', 'housekeeper', 'readiness', 'auto']),
+  kind: z.enum(['tick', 'date', 'condition', 'expiry', 'licence', 'housekeeper', 'readiness', 'auto', 'furnishingQuote', 'furnishingOrder', 'furnishingReceived', 'furnishingInstall']),
   manual: z.boolean(), state: z.enum(STEP_STATES), lockedBecause: z.string().nullable().default(null),
   data: z.record(z.unknown()).default({}), doneAt: z.string().nullable().default(null), doneByName: z.string().nullable().default(null),
   canTick: z.boolean().default(false), canReopen: z.boolean().default(false),
@@ -122,6 +139,27 @@ const stepSchema = z.object({
 });
 export type LaunchStep = z.infer<typeof stepSchema>;
 const person = z.object({ id, name: z.string() });
+const fileSchema = z.object({ id, name: z.string(), mime: z.string(), uploadedAt: z.string() });
+export const furnishingSchema = z.object({
+  quotes: z.array(z.object({
+    id, number: z.string(), status: z.string(), quotePence: z.number(), subtotalPence: z.number(), vatPence: z.number(), notes: z.string().default(''), sentAt: z.string().nullable(),
+    lines: z.array(z.object({ name: z.string(), category: z.string(), units: z.number(), pricePence: z.number() })),
+  })).default([]),
+  projectId: id.nullable().default(null), number: z.string().nullable().default(null), quotePence: z.number().nullable().default(null),
+  acceptedAt: z.string().nullable().default(null), acceptedByName: z.string().nullable().default(null),
+  invoiceStatus: z.string().nullable().default(null), settledAt: z.string().nullable().default(null),
+  installer: person.nullable().default(null), deliveryAddress: z.string().nullable().default(null),
+  lines: z.array(z.object({
+    id, name: z.string(), category: z.string(), units: z.number(), packs: z.number(), unit: z.string(), supplier: z.string().nullable().default(null), productUrl: z.string().nullable().default(null),
+    orderedAt: z.string().nullable(), eta: z.string().nullable(), receivedAt: z.string().nullable(), receivedByName: z.string().nullable(), photos: z.array(fileSchema).default([]),
+  })).default([]),
+  counts: z.object({ total: z.number(), ordered: z.number(), received: z.number() }).default({ total: 0, ordered: 0, received: 0 }),
+  installOn: z.string().nullable().default(null), installProposedByName: z.string().nullable().default(null), installApprovedAt: z.string().nullable().default(null),
+  installedAt: z.string().nullable().default(null), installedByName: z.string().nullable().default(null), installPhotos: z.array(fileSchema).default([]),
+  canDecide: z.boolean().default(false), canAssign: z.boolean().default(false), canOrder: z.boolean().default(false), canReceive: z.boolean().default(false),
+  canProposeInstall: z.boolean().default(false), canApproveInstall: z.boolean().default(false), canCompleteInstall: z.boolean().default(false),
+});
+export type LaunchFurnishing = z.infer<typeof furnishingSchema>;
 export const launchViewSchema = z.object({
   propertyId: id, name: z.string().default(''), address: z.string().nullable().default(null), stage: z.string().default(''),
   steps: z.array(stepSchema).nullable(),
@@ -134,6 +172,7 @@ export const launchViewSchema = z.object({
   }).nullable().default(null),
   access: z.string().nullable().default(null),
   isTeam: z.boolean().default(false), isOwner: z.boolean().default(false), isHousekeeper: z.boolean().default(false),
+  isInstaller: z.boolean().default(false), isAccounts: z.boolean().default(false), furnishing: furnishingSchema.nullable().default(null),
   canAllocate: z.boolean().default(false), canBookReadiness: z.boolean().default(false), canSubmitReadiness: z.boolean().default(false),
 });
 export type LaunchView = z.infer<typeof launchViewSchema>;
@@ -142,6 +181,11 @@ export const launchReadSchema = z.object({
   settingsUpdatedAt: z.string().nullable().default(null), settingsUpdatedByName: z.string().nullable().default(null),
   boardIds: z.array(z.string()).default([]),
   housekeepers: z.array(person).default([]),
+  installers: z.array(person).default([]),
+  furnishingWork: z.array(z.object({
+    propertyId: id, name: z.string(), address: z.string().nullable(), installer: z.boolean(), total: z.number(), ordered: z.number(), received: z.number(),
+    installOn: z.string().nullable(), installApproved: z.boolean(),
+  })).default([]),
   inspections: z.array(z.object({ propertyId: id, name: z.string(), address: z.string().nullable(), bookedOn: z.string() })).default([]),
   launch: launchViewSchema.nullable().default(null),
 });

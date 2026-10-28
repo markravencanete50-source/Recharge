@@ -12,8 +12,8 @@ import { ui, type Palette } from "./theme";
 import { launchFileLink, uploadLaunchFile } from "./backend/client";
 import { MODULES } from "../../lib/modules";
 import {
-  DEFAULT_LAUNCH_SETTINGS, LAUNCH_FILE_MIMES, LAUNCH_SECTIONS, TICKET_SECTIONS, LAUNCH_SECTION_TITLE, launchActionSchema, launchProgress, launchReadSchema, launchSettingsSchema, sectionMark, statementKey,
-  type LaunchRead, type LaunchSettings, type LaunchStep, type LaunchView,
+  BOARD_TITLE, DEFAULT_LAUNCH_SETTINGS, LAUNCH_FILE_MIMES, LAUNCH_SECTIONS, TICKET_SECTIONS, LAUNCH_SECTION_TITLE, launchActionSchema, launchProgress, launchReadSchema, launchSettingsSchema, sectionMark, statementKey,
+  type LaunchFurnishing, type LaunchRead, type LaunchSettings, type LaunchStep, type LaunchView,
 } from "../../lib/launch-preparation";
 
 // Launch Preparation (Business Plan v1.0, migration 20261029100000): the checklist from the onboarding package to going
@@ -238,7 +238,8 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
             </View>
             {s.kind === "expiry" && <Certificates p={p} propertyId={propertyId} step={s} editable={s.canTick || s.canReopen} busy={busy}
               onChange={r => { setRead(r); setError(""); }} onRemove={fileId => void act({ action: "removeFile", step: s.key, fileId }, "Certificate removed.")} />}
-            {!!s.ticketId && !owner && read.settings.boards[s.section] && <Text style={[ui.small, { color: p.muted }]}>{`Also on the ${boardName(read.settings.boards[s.section] ?? "")} board.`}</Text>}
+            {(s.kind.startsWith("furnishing") || s.key === "setUp.invoice") && <FurnishingStep p={p} propertyId={propertyId} step={s} launch={v} read={read} busy={busy} act={(body, done) => void act(body, done)} onRead={r => { setRead(r); setError(""); }} />}
+            {!!s.ticketId && !owner && read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] && <Text style={[ui.small, { color: p.muted }]}>{`Also on the ${boardName(read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] ?? "")} board.`}</Text>}
             {openStep === s.key && <TickForm p={p} step={s} settings={settings} busy={busy} onTick={data => void act({ action: "tick", step: s.key, ...(data ? { data } : {}) }, "Ticked.")} />}
             {s.kind === "housekeeper" && v.canAllocate && <View style={{ gap: 6 }}>
               {read.housekeepers.length === 0 ? <Text style={[ui.small, { color: p.muted }]}>There are no active housekeepers yet. Raise a recruitment to-do with the role and area.</Text>
@@ -264,6 +265,162 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
     })}
     {!!error && <Notice p={p} tone="bad" text={error} />}
     {!!note && <Notice p={p} text={note} />}
+  </View>;
+}
+
+// ---------------------------------------------------------------- the furnishing (Recharge sets up)
+const pounds = (pence: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(pence / 100);
+
+// Photos of furnishing (one item as it arrives, or the finished install): open, add and remove.
+function Photos({ p, propertyId, step, lineId, photos, editable, busy, onChange, onRemove }: {
+  p: Palette; propertyId: string; step: "setUp.received" | "setUp.install"; lineId?: string; photos: LaunchFurnishing["installPhotos"]; editable: boolean; busy: boolean;
+  onChange: (r: LaunchRead) => void; onRemove: (fileId: string) => void;
+}) {
+  const [uploading, setUploading] = useState(false), [error, setError] = useState("");
+  async function add() {
+    setError("");
+    const picked = await DocumentPicker.getDocumentAsync({ type: ["image/jpeg", "image/png", "image/webp"], copyToCacheDirectory: true, multiple: true });
+    if (picked.canceled) return;
+    setUploading(true);
+    try {
+      for (const asset of picked.assets ?? []) onChange(launchReadSchema.parse(await uploadLaunchFile(propertyId, step, { uri: asset.uri, name: asset.name, mimeType: asset.mimeType ?? "image/jpeg", file: (asset as { file?: File }).file }, lineId)));
+    } catch (e) { setError(message(e)); } finally { setUploading(false); }
+  }
+  async function open(fileId: string) { try { await Linking.openURL((await launchFileLink(propertyId, fileId)).url); } catch (e) { setError(message(e)); } }
+  return <View style={{ gap: 4 }}>
+    {photos.map(f => <View key={f.id} style={[ui.row, { gap: 6 }]}>
+      <Feather name="image" size={14} color={p.muted} />
+      <Text numberOfLines={1} style={[ui.small, { color: p.text, flex: 1 }]}>{`${f.name}, ${when(f.uploadedAt)}`}</Text>
+      <Button p={p} quiet icon="external-link" label="Open" onPress={() => void open(f.id)} />
+      {editable && <Button p={p} quiet icon="trash-2" label="Remove" disabled={busy} onPress={() => onRemove(f.id)} />}
+    </View>)}
+    {editable && <Button p={p} quiet icon="camera" label={uploading ? "Uploading" : photos.length ? "Add more photos" : "Add a photo"} disabled={uploading || busy} onPress={() => void add()} />}
+    {!!error && <Notice p={p} tone="bad" text={error} />}
+  </View>;
+}
+
+function FurnishingStep({ p, propertyId, step, launch, read, busy, act, onRead }: {
+  p: Palette; propertyId: string; step: LaunchStep; launch: LaunchView; read: LaunchRead; busy: boolean;
+  act: (body: Record<string, unknown>, done: string) => void; onRead: (r: LaunchRead) => void;
+}) {
+  const f = launch.furnishing;
+  const [openQuote, setOpenQuote] = useState<string | null>(null), [note, setNote] = useState(""), [installer, setInstaller] = useState(""), [address, setAddress] = useState("");
+  const [eta, setEta] = useState(""), [picked, setPicked] = useState<string[]>([]), [installOn, setInstallOn] = useState("");
+  if (!f) return null;
+  const removePhoto = (stepKey: string, lineId?: string) => (fileId: string) => act({ action: "removeFile", step: stepKey, fileId, ...(lineId ? { lineId } : {}) }, "Photo removed.");
+  if (step.kind === "furnishingQuote") {
+    if (!f.quotes.length) return launch.isTeam && step.state !== "done" ? <Text style={[ui.small, { color: p.muted }]}>Send the quote from the Furnishing Studio, with this property chosen. You can send more than one package for the owner to choose from.</Text> : null;
+    return <View style={{ gap: 6 }}>
+      {f.quotes.map(q => <View key={q.id} style={{ gap: 6, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border }}>
+        <View style={[ui.between, { gap: 8 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: p.text, fontWeight: "600" }}>{`${q.number}: ${pounds(q.quotePence)}`}</Text>
+            <Text style={[ui.small, { color: p.muted }]}>{q.status === "sent" ? "Waiting for the owner" : q.status === "declined" ? "Declined" : "Approved"}{q.vatPence ? `, including VAT of ${pounds(q.vatPence)}` : ""}</Text>
+          </View>
+          <Button p={p} quiet icon={openQuote === q.id ? "chevron-up" : "list"} label={openQuote === q.id ? "Hide" : "Items"} onPress={() => setOpenQuote(o => o === q.id ? null : q.id)} />
+        </View>
+        {!!q.notes && <Text style={[ui.small, { color: p.text }]}>{q.notes}</Text>}
+        {openQuote === q.id && <View style={{ gap: 2 }}>{q.lines.map((l, i) => <View key={i} style={[ui.between, { gap: 8 }]}>
+          <Text style={[ui.small, { color: p.text, flex: 1 }]}>{`${l.units} x ${l.name}`}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{pounds(l.pricePence)}</Text>
+        </View>)}</View>}
+        {f.canDecide && q.status === "sent" && <View style={{ gap: 6 }}>
+          <Field p={p} label="Note (optional, for example what to change)" value={note} onChange={v => setNote(v.slice(0, 1000))} />
+          <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+            <Button p={p} primary icon="check" label="Approve this quote" disabled={busy} onPress={() => act({ action: "decideQuote", projectId: q.id, decision: "accept", ...(note.trim() ? { note } : {}) }, "Approved. Accounts will send the invoice.")} />
+            <Button p={p} quiet icon="x" label="Decline" disabled={busy} onPress={() => act({ action: "decideQuote", projectId: q.id, decision: "decline", ...(note.trim() ? { note } : {}) }, "Declined. Recharge will be in touch.")} />
+          </View>
+        </View>}
+      </View>)}
+    </View>;
+  }
+  if (step.kind === "auto" && step.key === "setUp.invoice") {
+    if (!f.projectId) return null;
+    return <Text style={[ui.small, { color: p.muted }]}>{f.settledAt ? `Settled ${when(f.settledAt)}.` : f.invoiceStatus === "sent" ? `Invoice sent for ${pounds(f.quotePence ?? 0)}.` : `The invoice for ${pounds(f.quotePence ?? 0)} is being prepared.`}</Text>;
+  }
+  const inside = launch.isTeam || launch.isInstaller || launch.isAccounts;
+  const line = (l: LaunchFurnishing["lines"][number]) => <View style={{ flex: 1, gap: 2 }}>
+    <Text style={{ color: p.text, fontSize: 14 }}>{`${l.units} x ${l.name}`}</Text>
+    <Text style={[ui.small, { color: p.muted }]}>{[l.supplier, l.receivedAt ? `Received ${when(l.receivedAt)}${l.receivedByName ? ` by ${l.receivedByName}` : ""}` : l.eta ? `Due ${day(l.eta)}` : "Not ordered yet"].filter(Boolean).join(". ")}</Text>
+  </View>;
+  if (step.kind === "furnishingOrder") {
+    const open = f.lines.filter(l => !l.receivedAt);
+    return <View style={{ gap: 8 }}>
+      {!!f.installer && <Text style={[ui.small, { color: p.text }]}>{`Installer: ${f.installer.name}.${f.deliveryAddress ? ` Delivery to ${f.deliveryAddress.replace(/\s*\n\s*/g, ", ")}.` : ""}`}</Text>}
+      {f.canAssign && <View style={{ gap: 6 }}>
+        <Text style={{ color: p.text, fontSize: 14 }}>{f.installer ? "Change the installer or the delivery address" : "Assign the installer and the delivery address"}</Text>
+        <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{read.installers.map(h => <Choice key={h.id} p={p} on={(installer || f.installer?.id) === h.id} label={h.name} onPress={() => setInstaller(h.id)} />)}</View>
+        <Field p={p} multiline label="Delivery address" value={address || f.deliveryAddress || launch.address || ""} onChange={v => setAddress(v.slice(0, 500))} />
+        <Button p={p} icon="user-check" label="Save" disabled={busy || !(installer || f.installer?.id)}
+          onPress={() => act({ action: "assignInstaller", installerId: installer || f.installer?.id, deliveryAddress: address || f.deliveryAddress || launch.address || "" }, "Saved. The installer has been told.")} />
+      </View>}
+      {inside && f.lines.length > 0 && <Text style={[ui.small, { color: p.muted }]}>{`${f.counts.ordered} of ${f.counts.total} ordered.`}</Text>}
+      {inside && f.lines.map(l => <View key={l.id} style={[ui.row, { gap: 8, alignItems: "flex-start" }]}>
+        {f.canOrder && !l.receivedAt ? <MotionPress accessibilityRole="checkbox" accessibilityState={{ checked: picked.includes(l.id) }} onPress={() => setPicked(x => x.includes(l.id) ? x.filter(y => y !== l.id) : [...x, l.id])}>
+          <Feather name={picked.includes(l.id) ? "check-square" : "square"} size={18} color={picked.includes(l.id) ? p.success : p.muted} />
+        </MotionPress> : <Feather name={l.orderedAt ? "check-circle" : "circle"} size={16} color={l.orderedAt ? p.success : p.muted} />}
+        {line(l)}
+        {!!l.productUrl && <Button p={p} quiet icon="external-link" label="Product" onPress={() => void Linking.openURL(l.productUrl ?? "")} />}
+      </View>)}
+      {f.canOrder && open.length > 0 && <View style={{ gap: 6 }}>
+        <Button p={p} quiet icon="check-square" label={picked.length === open.length ? "Clear the selection" : "Select everything not yet received"} onPress={() => setPicked(picked.length === open.length ? [] : open.map(l => l.id))} />
+        <DateField p={p} label="Expected delivery date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today()} value={{ from: eta, to: eta }} onChange={next => setEta(next.from)} />
+        <Button p={p} icon="truck" label={`Mark ${picked.length || "the selected"} as ordered`} disabled={busy || !eta || !picked.length}
+          onPress={() => { act({ action: "orderLines", lines: picked.map(lineId => ({ lineId, eta })) }, "Ordered. The owner is told once everything is ordered."); setPicked([]); }} />
+      </View>}
+    </View>;
+  }
+  if (step.kind === "furnishingReceived") {
+    if (!inside) return f.counts.total ? <Text style={[ui.small, { color: p.muted }]}>{`${f.counts.received} of ${f.counts.total} items received.`}</Text> : null;
+    return <View style={{ gap: 8 }}>
+      <Text style={[ui.small, { color: p.muted }]}>{`${f.counts.received} of ${f.counts.total} received.${read.settings.requireReceivedPhotos ? " Photograph each item as it arrives, then mark it received." : ""}`}</Text>
+      {f.lines.filter(l => l.orderedAt).map(l => <View key={l.id} style={{ gap: 4, paddingVertical: 4 }}>
+        <View style={[ui.row, { gap: 8, alignItems: "flex-start" }]}>
+          <Feather name={l.receivedAt ? "check-circle" : "package"} size={16} color={l.receivedAt ? p.success : p.waiting} />
+          {line(l)}
+          {f.canReceive && !l.receivedAt && <Button p={p} quiet icon="check" label="Received" disabled={busy || (read.settings.requireReceivedPhotos && !l.photos.length)}
+            onPress={() => act({ action: "receiveLine", lineId: l.id }, "Marked received.")} />}
+        </View>
+        <Photos p={p} propertyId={propertyId} step="setUp.received" lineId={l.id} photos={l.photos} editable={f.canReceive && !l.receivedAt} busy={busy} onChange={onRead} onRemove={removePhoto("setUp.received", l.id)} />
+      </View>)}
+    </View>;
+  }
+  if (step.kind === "furnishingInstall") {
+    return <View style={{ gap: 8 }}>
+      {!!f.installOn && <Text style={[ui.small, { color: p.text }]}>{f.installedAt ? `Installed ${when(f.installedAt)}${f.installedByName ? ` by ${f.installedByName}` : ""}.`
+        : f.installApprovedAt ? `Install booked to be completed by ${day(f.installOn)}.` : `${f.installProposedByName ?? "The installer"} proposed ${day(f.installOn)}; waiting for the team to approve it.`}</Text>}
+      {f.canApproveInstall && <Button p={p} primary icon="check" label="Approve the install date" disabled={busy} onPress={() => act({ action: "approveInstall" }, "Approved. The owner has been told.")} />}
+      {f.canProposeInstall && <View style={{ gap: 6 }}>
+        <DateField p={p} label={launch.isTeam ? "Install completed by" : "Install completed by (the team approve it)"} mode="single" wholeMonthLink={false} empty="Choose a date" today={today()} value={{ from: installOn, to: installOn }} onChange={next => setInstallOn(next.from)} />
+        <Button p={p} icon="calendar" label={f.installOn ? "Change the install date" : "Set the install date"} disabled={busy || !installOn} onPress={() => act({ action: "proposeInstall", date: installOn }, launch.isTeam ? "Booked. The owner has been told." : "Sent to the team to approve.")} />
+      </View>}
+      {(f.installPhotos.length > 0 || f.canCompleteInstall) && <Photos p={p} propertyId={propertyId} step="setUp.install" photos={f.installPhotos} editable={f.canCompleteInstall} busy={busy} onChange={onRead} onRemove={removePhoto("setUp.install")} />}
+      {f.canCompleteInstall && <Button p={p} primary icon="check" label="Install complete" disabled={busy || !f.installPhotos.length} onPress={() => act({ action: "completeInstall" }, "Done. The owner has been told.")} />}
+    </View>;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- furnishing to order, receive and install, on Home
+export function FurnishingWork({ p }: { p: Palette }) {
+  const [read, setRead] = useState<LaunchRead | null>(null), [open, setOpen] = useState<string | null>(null), [error, setError] = useState("");
+  const load = useCallback(async () => { try { setRead(await readLaunch()); setError(""); } catch (e) { setError(message(e)); } }, []);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  if (!read || read.furnishingWork.length === 0) return null;
+  return <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, padding: 14, gap: 10 }]}>
+    <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>Furnishing</Text>
+    <Text style={[ui.small, { color: p.muted }]}>New properties whose furnishing is paid for: order each item with its delivery date, check items in as they arrive, then install.</Text>
+    {read.furnishingWork.map(x => <View key={x.propertyId} style={{ gap: 8 }}>
+      <View style={[ui.between, { gap: 8 }]}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ color: p.text, fontWeight: "600" }}>{x.name}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{[`${x.ordered} of ${x.total} ordered`, `${x.received} received`, x.installOn ? `install by ${day(x.installOn)}${x.installApproved ? "" : " (to approve)"}` : "", x.installer ? "you are the installer" : ""].filter(Boolean).join(", ")}</Text>
+        </View>
+        <Button p={p} quiet icon={open === x.propertyId ? "x" : "chevron-right"} label={open === x.propertyId ? "Close" : "Open"} onPress={() => setOpen(o => o === x.propertyId ? null : x.propertyId)} />
+      </View>
+      {open === x.propertyId && <LaunchPanel p={p} propertyId={x.propertyId} />}
+    </View>)}
+    {!!error && <Notice p={p} tone="bad" text={error} />}
   </View>;
 }
 
@@ -314,7 +471,7 @@ export function LaunchSettingsSheet({ p, visible, onClose }: { p: Palette; visib
     catch (e) { setError(message(e)); } finally { setBusy(false); }
   }
   return (
-    <Sheet palette={p} visible={visible} onClose={onClose} title="Launch preparation" subtitle="The condition checklist, notes, safety reminders and task boards" icon="check-square" width={720}>
+    <Sheet palette={p} visible={visible} onClose={onClose} title="Launch preparation" subtitle="The condition checklist, notes, safety reminders and task boards" icon="clipboard" width={720}>
       <View style={{ gap: 14 }}>
         {!draft && !error && <Loading p={p} rows={4} />}
         {draft && <>
@@ -345,6 +502,10 @@ export function LaunchSettingsSheet({ p, visible, onClose }: { p: Palette; visib
             <Text style={{ color: p.text, fontSize: 14, flex: 1 }}>Each document needs its certificate uploaded</Text>
             <Switch accessibilityLabel="Each document needs its certificate uploaded" value={draft.requireComplianceFile} disabled={!canEdit} onValueChange={v => set({ requireComplianceFile: v })} />
           </View>
+          <View style={[ui.between, { gap: 8 }]}>
+            <Text style={{ color: p.text, fontSize: 14, flex: 1 }}>The installer photographs each furnishing item as it arrives</Text>
+            <Switch accessibilityLabel="The installer photographs each furnishing item as it arrives" value={draft.requireReceivedPhotos} disabled={!canEdit} onValueChange={v => set({ requireReceivedPhotos: v })} />
+          </View>
           <Text style={{ color: p.text, fontSize: 14 }}>Remind the owner, and raise a renewal ticket, this many months before a certificate expires</Text>
           <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{[1, 2, 3, 4, 5, 6].map(m => <Choice key={m} p={p} on={draft.reminderMonths === m} label={`${m} month${m === 1 ? "" : "s"}`} onPress={() => canEdit && set({ reminderMonths: m })} />)}</View>
           <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>Task boards</Text>
@@ -352,7 +513,7 @@ export function LaunchSettingsSheet({ p, visible, onClose }: { p: Palette; visib
           {TICKET_SECTIONS.map(sec => <View key={sec} style={{ gap: 6 }}>
             <View style={[ui.between, { gap: 8 }]}>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{LAUNCH_SECTION_TITLE[sec]}</Text>
+                <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{BOARD_TITLE[sec]}</Text>
                 <Text style={[ui.small, { color: p.muted }]}>{draft.boards[sec] ? boardName(draft.boards[sec] ?? "") : "No ticket"}</Text>
               </View>
               {canEdit && <Button p={p} quiet icon={boardFor === sec ? "x" : "edit-3"} label={boardFor === sec ? "Close" : "Change"} onPress={() => setBoardFor(b => b === sec ? null : sec)} />}

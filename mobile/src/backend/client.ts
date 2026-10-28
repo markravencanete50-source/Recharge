@@ -344,11 +344,12 @@ export async function uploadListingPhoto(propertyId: string, file: { uri: string
 }
 export const listingPhotoLink = async (propertyId: string, photoId: string) => z.object({ data: z.object({ url: z.string().url(), name: z.string(), mime: z.string() }) })
   .parse(await (await workspaceRequest('/api/mobile/listing-photos?' + new URLSearchParams({ propertyId, photoId }))).json()).data;
-// A safety document's certificate in Launch Preparation (migration 20261029200000): a PDF or a photo.
-export async function uploadLaunchFile(propertyId: string, step: string, file: { uri: string; name: string; mimeType?: string; file?: File }) {
+// A safety document's certificate (a PDF or a photo) or a furnishing photo in Launch Preparation (20261029200000, 20261029300000).
+export async function uploadLaunchFile(propertyId: string, step: string, file: { uri: string; name: string; mimeType?: string; file?: File }, lineId?: string) {
   const form = new FormData();
   form.append('propertyId', propertyId);
   form.append('step', step);
+  if (lineId) form.append('lineId', lineId);
   if (Platform.OS === 'web') form.append('file', file.file ?? new File([await (await fetch(file.uri)).blob()], file.name, { type: file.mimeType ?? 'application/pdf' }));
   else form.append('file', { uri: file.uri, name: file.name, type: file.mimeType ?? 'application/pdf' } as unknown as Blob);
   return z.object({ data: z.unknown() }).parse(await (await workspaceRequest('/api/mobile/launch-files', form)).json()).data;
