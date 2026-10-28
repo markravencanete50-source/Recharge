@@ -271,7 +271,11 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
               act={(body, done) => void act(body, done)} onRead={r => { setRead(r); setError(""); }} />}
             {s.kind === "inventory" && s.state !== "locked" && <InventoryStep p={p} launch={v} busy={busy} act={(body, done) => void act(body, done)} />}
             {(s.kind.startsWith("furnishing") || s.key === "setUp.invoice") && <FurnishingStep p={p} propertyId={propertyId} step={s} launch={v} read={read} busy={busy} act={(body, done) => void act(body, done)} onRead={r => { setRead(r); setError(""); }} />}
-            {!!s.ticketId && !owner && read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] && <Text style={[ui.small, { color: p.muted }]}>{`Also on the ${boardName(read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] ?? "")} board.`}</Text>}
+            {/* Recharge's safety documents are property maintenance jobs (20261029700000): quote, approval, visit and invoice there. */}
+            {!!s.ticketId && s.section === "compliance" && s.state !== "done" && <Text style={[ui.small, { color: p.muted }]}>{owner
+              ? "We are arranging this. You will be asked to approve the contractor's quote in Repairs."
+              : "A property maintenance job: the contractor's quote, approvals, visit and invoice go through Maintenance. Upload the certificate here when it is done."}</Text>}
+            {!!s.ticketId && !owner && s.section !== "compliance" && read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] && <Text style={[ui.small, { color: p.muted }]}>{`Also on the ${boardName(read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] ?? "")} board.`}</Text>}
             {openStep === s.key && <TickForm p={p} step={s} settings={settings} busy={busy} onTick={data => void act({ action: "tick", step: s.key, ...(data ? { data } : {}) }, "Ticked.")} />}
             {s.kind === "housekeeper" && v.canAllocate && <View style={{ gap: 6 }}>
               {read.housekeepers.length === 0 ? <Text style={[ui.small, { color: p.muted }]}>There are no active housekeepers yet. Ask recruitment for one, with the area.</Text>
