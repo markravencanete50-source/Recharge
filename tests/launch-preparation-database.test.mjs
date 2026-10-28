@@ -17,6 +17,7 @@ const ROUND_THREE = 'supabase/migrations/20261029300000_launch_furnishing.sql';
 const ROUND_FOUR = 'supabase/migrations/20261029400000_launch_inventory.sql';
 const ROUND_FIVE = 'supabase/migrations/20261029500000_launch_guidebook.sql';
 const ROUND_SIX = 'supabase/migrations/20261029700000_launch_compliance_jobs.sql';
+const ROUND_SEVEN = 'supabase/migrations/20261029800000_launch_garden_quotes.sql';
 const studio = await vite.ssrLoadModule('/lib/furnishing-studio.ts');
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -142,11 +143,12 @@ test('the migration runs twice, stays locked down, and its starting statements m
   const four = await fs.readFile(ROUND_FOUR, 'utf8');
   const five = await fs.readFile(ROUND_FIVE, 'utf8');
   const six = await fs.readFile(ROUND_SIX, 'utf8');
+  const seven = await fs.readFile(ROUND_SEVEN, 'utf8');
   await db.exec('reset role');
-  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six]) await db.exec(x);
-  assert.ok(!/—/.test(sql + two + three + four + five + six), 'no em dashes');
+  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six, seven]) await db.exec(x);
+  assert.ok(!/—/.test(sql + two + three + four + five + six + seven), 'no em dashes');
   for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets',
-    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks']) {
+    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks', 'workspace_launch_garden_quotes']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
     for (const role of ['anon', 'authenticated', 'service_role']) assert.equal((await owner('select has_table_privilege($1,$2,$3) ok', [role, 'private.' + t, 'select']))[0].ok, false, role + ' ' + t);
   }
@@ -662,4 +664,65 @@ test('admins edit the guidebook template', async () => {
   await refused(rpc('workspace_launch_action', [{ action: 'saveSettings', requestId: crypto.randomUUID(), settings: { ...settings, guidebook: [{ key: 'x1', title: '', prompt: '' }] } }]), /Give every guidebook section a title/);
   r = await act({ action: 'saveSettings', settings }, ADMIN);
   assert.deepEqual(r.settings.guidebook, settings.guidebook);
+});
+
+test('garden maintenance: the team add the quote, the owner rejects it with a reason or accepts it, which ticks it off', async () => {
+  // No garden, or the owner looks after it: nothing to quote.
+  assert.equal(stepOf(await read(await signed('No Garden Flat')), 'garden.quote').state, 'na');
+  const own = await signed('Own Garden Flat', { answers: { ...ANSWERS, garden: true, gardenQuote: false } });
+  assert.equal(stepOf(await read(own), 'garden.quote').state, 'done');
+  await refused(act({ action: 'addGardenQuote', propertyId: own, contractor: 'Green Thumbs', pricePence: 12000, basis: 'month', frequency: 'weekly', details: '' }), /has not asked for a garden maintenance quote/);
+
+  // Not before the onboarding fee is settled.
+  const answers = { ...ANSWERS, garden: true, gardenQuote: true };
+  const early = await signed('Early Garden Flat', { answers, settled: false });
+  assert.equal(stepOf(await read(early), 'garden.quote').state, 'locked');
+  await refused(act({ action: 'addGardenQuote', propertyId: early, contractor: 'Green Thumbs', pricePence: 12000, basis: 'month', frequency: 'weekly', details: '' }), /onboarding fee/);
+
+  const prop = await signed('Garden Flat', { answers });
+  let v = await read(prop);
+  let s = stepOf(v, 'garden.quote');
+  assert.deepEqual([s.kind, s.who, s.state, s.canTick], ['gardenQuote', 'recharge', 'todo', false], 'not ticked by hand');
+  assert.deepEqual(v.launch.garden, { quotes: [], canQuote: true, canDecide: false });
+  await refused(act({ action: 'tick', propertyId: prop, step: 'garden.quote' }), /./);
+  // Only the team quote; only the owner decides.
+  await refused(act({ action: 'addGardenQuote', propertyId: prop, contractor: 'Green Thumbs', pricePence: 12000, basis: 'month', frequency: 'weekly', details: '' }, OWNER), /Only the team/);
+  v = await act({ action: 'addGardenQuote', propertyId: prop, contractor: 'Green Thumbs', pricePence: 12000, basis: 'month', frequency: 'weekly', details: 'Grass cut and edged, beds weeded' });
+  await said(/garden maintenance quote is ready: £120\.00 a month, weekly visits/);
+  // A new quote replaces one still waiting; the owner never sees the replaced one.
+  v = await act({ action: 'addGardenQuote', propertyId: prop, contractor: 'Leaf & Co', pricePence: 3500, basis: 'visit', frequency: 'fortnightly', details: '' });
+  assert.deepEqual(v.launch.garden.quotes.map(q => [q.contractor, q.status]), [['Leaf & Co', 'sent'], ['Green Thumbs', 'withdrawn']]);
+  let mine = (await read(prop, OWNER)).launch.garden;
+  assert.equal(mine.canDecide, true);
+  assert.equal(mine.canQuote, false);
+  assert.deepEqual(mine.quotes.map(q => q.contractor), ['Leaf & Co']);
+  const first = mine.quotes[0].id;
+  await refused(act({ action: 'decideGardenQuote', propertyId: prop, quoteId: first, decision: 'accept' }), /Only the owner/);
+  await refused(act({ action: 'decideGardenQuote', propertyId: prop, quoteId: first, decision: 'reject' }, OWNER), /Say why/);
+  await act({ action: 'decideGardenQuote', propertyId: prop, quoteId: first, decision: 'reject', reason: 'Too dear for a small lawn' }, OWNER);
+  const notes = async () => (await owner("select a.body from private.workspace_lead_activity a join private.workspace_client_enquiries e on e.id=a.enquiry_id where e.property_id=$1 order by a.created_at,a.id", [prop])).map(r => r.body);
+  assert.ok((await notes()).some(n => /rejected the garden maintenance quote from Leaf & Co: Too dear for a small lawn/.test(n)));
+  await refused(act({ action: 'decideGardenQuote', propertyId: prop, quoteId: first, decision: 'accept' }, OWNER), /replaced or already decided/);
+  mine = (await read(prop, OWNER)).launch.garden;
+  assert.deepEqual([mine.canDecide, mine.quotes[0].status, mine.quotes[0].reason], [false, 'rejected', 'Too dear for a small lawn']);
+  assert.equal(stepOf(await read(prop), 'garden.quote').state, 'todo');
+
+  // The next quote, accepted: the part is ticked and the garden set-up ticket completed.
+  await owner("select private.workspace_handover_now($1,'routine-bin-garden-board','Arrange regular garden maintenance','garden_setup','{}')", [prop]);
+  v = await act({ action: 'addGardenQuote', propertyId: prop, contractor: 'Leaf & Co', pricePence: 2500, basis: 'visit', frequency: 'fortnightly', details: '' });
+  const next = v.launch.garden.quotes[0].id;
+  v = await act({ action: 'decideGardenQuote', propertyId: prop, quoteId: next, decision: 'accept' }, OWNER);
+  s = stepOf(v, 'garden.quote');
+  assert.equal(s.state, 'done');
+  assert.equal(v.launch.garden.canDecide, false);
+  assert.equal((await owner("select count(*)::int n from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where w.property_id=$1 and d.kind='garden_setup' and w.status<>'completed'", [prop]))[0].n, 0);
+  assert.ok((await notes()).some(n => /accepted the garden maintenance quote: Leaf & Co, £25\.00 a visit, fortnightly visits/.test(n)));
+  await refused(act({ action: 'addGardenQuote', propertyId: prop, contractor: 'Late', pricePence: 100, basis: 'visit', frequency: 'weekly', details: '' }), /already accepted/);
+  // Safe to repeat: the same request gives the same answer.
+  const requestId = crypto.randomUUID();
+  const other = await signed('Second Garden Flat', { answers });
+  await as(STAYS);
+  const body = { action: 'addGardenQuote', requestId, propertyId: other, contractor: 'Green Thumbs', pricePence: 12000, basis: 'month', frequency: 'monthly', details: '' };
+  await rpc('workspace_launch_action', [body]); await rpc('workspace_launch_action', [body]);
+  assert.equal((await owner('select count(*)::int n from private.workspace_launch_garden_quotes where property_id=$1', [other]))[0].n, 1);
 });
