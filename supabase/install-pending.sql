@@ -60,3 +60,4 @@
 -- 20261029800000 launch_garden_quotes: installed by Lee 2026-10-29, verified
 -- 20261029900000 launch_condition_repairs: installed by Lee 2026-10-29, verified
 -- 20261029950000 launch_broadband: installed by Lee 2026-10-29, verified
+-- 20261030100000 launch_assignees: installed by Lee 2026-10-29, verified

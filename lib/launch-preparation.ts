@@ -11,7 +11,8 @@ import { z } from 'zod';
 // inventory, calculated from the property's details with the Furnishing Studio presets (required or additional items),
 // agreed by the owner when Recharge sets up, then ticked item by item until it is 100% complete. Round five
 // (20261029500000): the guest guidebook, filled in by the booked technician from an admin-edited template, with a private
-// guest link.
+// guest link. The set-up inspection (20261030200000): when Recharge set up, the owner gives access, the team book the
+// inspector, who prepares the inventory and reports repairs, and management approve it before the owner sees the list.
 
 export const LAUNCH_SECTIONS = ['setUp', 'broadband', 'utilities', 'compliance', 'licensing', 'housekeeper', 'readiness', 'photography', 'garden', 'waste', 'guidebook', 'listing', 'pricing', 'social'] as const;
 export type LaunchSection = (typeof LAUNCH_SECTIONS)[number];
@@ -171,6 +172,16 @@ export const launchActionSchema = z.discriminatedUnion('action', [
     action: z.literal('completeBroadband'), requestId: id, propertyId: id, wifiName: z.string().trim().min(1, 'Enter the Wi-Fi name').max(120),
     wifiPassword: z.string().min(8, 'The Wi-Fi password needs 8 to 63 characters').max(63, 'The Wi-Fi password needs 8 to 63 characters'), portal: z.literal(true, { errorMap: () => ({ message: 'Set up the Wi-Fi portal first' }) }),
   }).strict(),
+  // Recharge's set-up inspection (20261030200000): the owner's access, the inspector booked, their report with any repairs,
+  // then management approve it (sending the inventory to the owner) or send it back.
+  z.object({ action: z.literal('setInspectionAccess'), requestId: id, propertyId: id, date, access: z.string().trim().min(3, 'Say how to get into the property').max(2000) }).strict(),
+  z.object({ action: z.literal('bookInspection'), requestId: id, propertyId: id, inspectorId: id, date }).strict(),
+  z.object({
+    action: z.literal('submitInspection'), requestId: id, propertyId: id, notes: z.string().trim().max(4000),
+    repairs: z.array(z.string().trim().min(3, 'Describe each repair in 3 to 300 characters').max(300, 'Describe each repair in 3 to 300 characters')).max(30),
+  }).strict(),
+  z.object({ action: z.literal('approveInspection'), requestId: id, propertyId: id }).strict(),
+  z.object({ action: z.literal('returnInspection'), requestId: id, propertyId: id, note: z.string().trim().min(3, 'Say what needs changing').max(1000) }).strict(),
   // A set-up condition statement that cannot be ticked goes to property maintenance (20261029900000).
   z.object({ action: z.literal('reportCondition'), requestId: id, propertyId: id, conditionKey: z.string().max(40), note: z.string().trim().min(3, 'Say what is wrong').max(1000) }).strict(),
   z.object({ action: z.literal('decideGardenQuote'), requestId: id, propertyId: id, quoteId: id, decision: z.enum(['accept', 'reject']), reason: z.string().trim().max(1000).optional() }).strict(),
@@ -191,7 +202,7 @@ export const STEP_STATES = ['todo', 'done', 'locked', 'na'] as const;
 export type StepState = (typeof STEP_STATES)[number];
 const stepSchema = z.object({
   key: z.string(), section: z.enum(LAUNCH_SECTIONS), title: z.string(), who: z.enum(['recharge', 'client']),
-  kind: z.enum(['tick', 'date', 'condition', 'expiry', 'licence', 'housekeeper', 'readiness', 'auto', 'furnishingQuote', 'furnishingOrder', 'furnishingReceived', 'furnishingInstall', 'inventory', 'guidebookBook', 'guidebook', 'gardenQuote', 'broadband']),
+  kind: z.enum(['tick', 'date', 'condition', 'expiry', 'licence', 'housekeeper', 'readiness', 'auto', 'furnishingQuote', 'furnishingOrder', 'furnishingReceived', 'furnishingInstall', 'inventory', 'guidebookBook', 'guidebook', 'gardenQuote', 'broadband', 'inspection', 'inspectionReport']),
   manual: z.boolean(), state: z.enum(STEP_STATES), lockedBecause: z.string().nullable().default(null),
   data: z.record(z.unknown()).default({}), doneAt: z.string().nullable().default(null), doneByName: z.string().nullable().default(null),
   canTick: z.boolean().default(false), canReopen: z.boolean().default(false),
@@ -232,6 +243,8 @@ export const inventorySchema = z.object({
     kept: z.boolean().nullable(), decidedByName: z.string().nullable().default(null), checkedAt: z.string().nullable(), checkedByName: z.string().nullable().default(null),
   })).default([]),
   counts: z.object({ total: z.number(), checked: z.number(), undecided: z.number() }).default({ total: 0, checked: 0, undecided: 0 }),
+  // On Recharge's set-up the owner sees the list once management approve the set-up inspection (20261030200000).
+  released: z.boolean().default(true),
   canCalculate: z.boolean().default(false), canDecide: z.boolean().default(false), canApprove: z.boolean().default(false), canCheck: z.boolean().default(false),
 });
 export type LaunchInventory = z.infer<typeof inventorySchema>;
@@ -262,6 +275,14 @@ export const broadbandSchema = z.object({
   canSetDate: z.boolean().default(false), canAssign: z.boolean().default(false), canComplete: z.boolean().default(false),
 });
 export type LaunchBroadband = z.infer<typeof broadbandSchema>;
+export const inspectionSchema = z.object({
+  accessOn: z.string().nullable().default(null), access: z.string().nullable().default(null), accessByName: z.string().nullable().default(null),
+  inspector: person.nullable().default(null), inspectOn: z.string().nullable().default(null), bookedByName: z.string().nullable().default(null),
+  notes: z.string().nullable().default(null), repairs: z.number().default(0), submittedAt: z.string().nullable().default(null), submittedByName: z.string().nullable().default(null),
+  returnedNote: z.string().nullable().default(null), approvedAt: z.string().nullable().default(null), approvedByName: z.string().nullable().default(null),
+  canSetAccess: z.boolean().default(false), canBook: z.boolean().default(false), canSubmit: z.boolean().default(false), canApprove: z.boolean().default(false),
+});
+export type LaunchInspection = z.infer<typeof inspectionSchema>;
 export const launchViewSchema = z.object({
   propertyId: id, name: z.string().default(''), address: z.string().nullable().default(null), stage: z.string().default(''),
   steps: z.array(stepSchema).nullable(),
@@ -279,6 +300,7 @@ export const launchViewSchema = z.object({
   isTechnician: z.boolean().default(false), guidebook: guidebookSchema.nullable().default(null),
   garden: gardenSchema.nullable().default(null),
   isBroadbandTech: z.boolean().default(false), broadband: broadbandSchema.nullable().default(null),
+  isInspector: z.boolean().default(false), inspection: inspectionSchema.nullable().default(null),
   conditionReports: z.array(z.object({ key: z.string(), workId: id, issue: z.string(), status: z.string(), reportedAt: z.string() })).default([]),
   canAllocate: z.boolean().default(false), canBookReadiness: z.boolean().default(false), canSubmitReadiness: z.boolean().default(false),
 });
@@ -297,6 +319,8 @@ export const launchReadSchema = z.object({
   guidebookWork: z.array(z.object({ propertyId: id, name: z.string(), address: z.string().nullable(), bookOn: z.string().nullable() })).default([]),
   assignees: z.record(z.string(), person).default({}),
   broadbandWork: z.array(z.object({ propertyId: id, name: z.string(), address: z.string().nullable(), installOn: z.string().nullable() })).default([]),
+  inspectionWork: z.array(z.object({ propertyId: id, name: z.string(), address: z.string().nullable(), inspectOn: z.string().nullable(), returned: z.boolean() })).default([]),
+  inspectionReviews: z.array(z.object({ propertyId: id, name: z.string(), address: z.string().nullable(), submittedAt: z.string(), submittedByName: z.string().nullable() })).default([]),
   launch: launchViewSchema.nullable().default(null),
 });
 export type LaunchRead = z.infer<typeof launchReadSchema>;

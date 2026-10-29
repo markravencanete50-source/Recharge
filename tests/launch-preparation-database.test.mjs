@@ -21,6 +21,7 @@ const ROUND_SEVEN = 'supabase/migrations/20261029800000_launch_garden_quotes.sql
 const ROUND_EIGHT = 'supabase/migrations/20261029900000_launch_condition_repairs.sql';
 const ROUND_NINE = 'supabase/migrations/20261029950000_launch_broadband.sql';
 const ROUND_TEN = 'supabase/migrations/20261030100000_launch_assignees.sql';
+const ROUND_ELEVEN = 'supabase/migrations/20261030200000_launch_inspection.sql';
 const studio = await vite.ssrLoadModule('/lib/furnishing-studio.ts');
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -92,8 +93,12 @@ async function certificate(prop, step, i = STAYS, over = {}) {
   const out = await rpc('workspace_launch_action', [{ action: 'addFile', requestId: crypto.randomUUID(), propertyId: prop, step, fileId, name: 'Certificate.pdf', mime: 'application/pdf', bytes: 1200, path: `launch/${prop}/${fileId}.pdf`, ...over }]);
   return { fileId, read: L.launchReadSchema.parse(out) };
 }
+// Recharge's set-up inspection booked and approved by management, without the steps in between (tested on their own).
+const inspected = prop => owner(`insert into private.workspace_launch_inspections(property_id,access_on,access,inspector_id,inspect_on,submitted_at,approved_at)
+  values($1,current_date,'Keybox by the front door',$2,current_date,now(),now()) on conflict(property_id) do update set inspector_id=$2,inspect_on=current_date,approved_at=coalesce(private.workspace_launch_inspections.approved_at,now())`, [prop, users[STAYS]]);
 async function preparedForReadiness(prop) {
-  await tick(prop, 'setUp.inspection', { on: plus(2), access: 'Keybox by the front door' });
+  if (stepOf(await read(prop), 'setUp.inspection').kind === 'inspection') await inspected(prop);
+  else await tick(prop, 'setUp.inspection', { on: plus(2), access: 'Keybox by the front door' });
   await inventoried(prop);
   const v = await read(prop);
   await tick(prop, 'setUp.condition', { ticks: v.settings.condition.map(c => c.key) });
@@ -129,6 +134,7 @@ async function photo(prop, step, lineId, i = FITTER) {
 }
 // The inventory calculated by the team, every additional item accepted and approved by the owner, then all ticked.
 async function inventoried(prop, inputs = { bedrooms: 1, guests: 2 }) {
+  if (stepOf(await read(prop), 'setUp.inspection').kind === 'inspection') await inspected(prop);
   await act({ action: 'calculateInventory', propertyId: prop, inputs: studio.normaliseInputs({ ...studio.DEFAULT_INPUTS, ...inputs }) });
   const v = (await read(prop, OWNER)).launch;
   if (v.inventory.rechargeSetsUp) {
@@ -150,11 +156,12 @@ test('the migration runs twice, stays locked down, and its starting statements m
   const eight = await fs.readFile(ROUND_EIGHT, 'utf8');
   const nine = await fs.readFile(ROUND_NINE, 'utf8');
   const ten = await fs.readFile(ROUND_TEN, 'utf8');
+  const eleven = await fs.readFile(ROUND_ELEVEN, 'utf8');
   await db.exec('reset role');
-  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six, seven, eight, nine, ten]) await db.exec(x);
-  assert.ok(!/—/.test(sql + two + three + four + five + six + seven + eight + nine + ten), 'no em dashes');
+  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six, seven, eight, nine, ten, eleven]) await db.exec(x);
+  assert.ok(!/—/.test(sql + two + three + four + five + six + seven + eight + nine + ten + eleven), 'no em dashes');
   for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets',
-    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks', 'workspace_launch_garden_quotes', 'workspace_launch_broadband', 'workspace_launch_assignees']) {
+    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks', 'workspace_launch_garden_quotes', 'workspace_launch_broadband', 'workspace_launch_assignees', 'workspace_launch_inspections']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
     for (const role of ['anon', 'authenticated', 'service_role']) assert.equal((await owner('select has_table_privilege($1,$2,$3) ok', [role, 'private.' + t, 'select']))[0].ok, false, role + ' ' + t);
   }
@@ -172,7 +179,7 @@ test('the checklist follows the package, and nothing opens before the onboarding
   let v = await read(early);
   assert.ok(v.launch.steps.every(s => ['locked', 'done', 'na'].includes(s.state)), 'locked before the fee');
   assert.match(stepOf(v, 'setUp.inventory').lockedBecause, /onboarding fee is settled/);
-  await refused(tick(early, 'setUp.inspection', { on: plus(2), access: 'Keybox' }), /onboarding fee is settled/);
+  await refused(act({ action: 'setInspectionAccess', propertyId: early, date: plus(2), access: 'Keybox' }, OWNER), /onboarding fee is settled/);
   await refused(act({ action: 'calculateInventory', propertyId: early, inputs: studio.DEFAULT_INPUTS }), /onboarding fee is settled/);
 
   const prop = await signed('Shore Flat');
@@ -214,7 +221,7 @@ test('readiness opens once everything before it is done; the housekeeper submits
   const prop = await signed('Quay Flat');
   await refused(tick(prop, 'setUp.condition', { ticks: ['keyboxes'] }), /Tick every condition statement/);
   await preparedForReadiness(prop);
-  await said(/Your set-up inspection is booked for /);
+  assert.equal(stepOf(await read(prop), 'setUp.inspection').state, 'done');
   let v = await read(prop);
   assert.equal(stepOf(v, 'housekeeper.allocate').state, 'done');
   assert.equal(v.launch.housekeeper.name, 'Hannah Housekeeper');
@@ -483,6 +490,7 @@ test('the inventory quantity rules in the database match the Furnishing Studio',
 
 test('inventory, Recharge set-up: the team calculate it, the owner decides the additional items and approves, then every item is ticked', async () => {
   const prop = await signed('Inventory Flat');
+  await inspected(prop);
   const inputs = studio.normaliseInputs({ ...studio.DEFAULT_INPUTS, bedrooms: 2, guests: 4, doubleBeds: 2, garden: true });
   let v = (await read(prop, OWNER)).launch;
   assert.equal(stepOf({ launch: v }, 'setUp.inventory').kind, 'inventory');
@@ -834,4 +842,93 @@ test("each part's tickets go to the person admins choose, on their to-do list; o
   const r2 = await act({ action: 'saveLaunchAssignee', section: 'compliance', userId: null }, ADMIN);
   assert.equal(r2.assignees.compliance, undefined);
   assert.equal(await assigneeOf(await ticketOf(await signed('Nobody Flat'), 'compliance:eicr')), null);
+});
+
+test('set-up inspection, Recharge set-up: the owner gives access, the team book the inspector, who prepares the inventory and reports repairs; management approve it for the owner', async () => {
+  // The owner sets up: the plain booked date, as before.
+  const own = await read(await signed('Own Inspection Flat', { answers: { ...ANSWERS, setUp: 'self' } }), OWNER);
+  assert.equal(stepOf(own, 'setUp.inspection').kind, 'date');
+  assert.equal(own.launch.inspection, null);
+
+  const prop = await signed('Inspection Flat');
+  let v = await read(prop, OWNER);
+  let s = stepOf(v, 'setUp.inspection');
+  assert.deepEqual([s.kind, s.who, s.state, s.canTick], ['inspection', 'recharge', 'todo', false]);
+  assert.equal(stepOf(v, 'setUp.report').state, 'locked');
+  assert.match(stepOf(v, 'setUp.report').lockedBecause, /inspection is booked/);
+  assert.deepEqual([v.launch.inspection.canSetAccess, v.launch.inspection.canBook, v.launch.inspection.canApprove], [true, false, false]);
+  await refused(act({ action: 'bookInspection', propertyId: prop, inspectorId: users[FITTER], date: plus(4) }), /date and access from the owner first/);
+
+  // The owner gives the first day in and how to get in; the team are told.
+  await refused(act({ action: 'setInspectionAccess', propertyId: prop, date: plus(-1), access: 'Keybox 1234' }, OWNER), /from today/);
+  v = await act({ action: 'setInspectionAccess', propertyId: prop, date: plus(3), access: 'Keybox by the door, code 1234' }, OWNER);
+  assert.equal(v.launch.inspection.accessOn, plus(3));
+  assert.equal(v.launch.inspection.access, 'Keybox by the door, code 1234');
+  assert.equal((await owner("select count(*)::int n from private.workspace_lead_activity a join private.workspace_client_enquiries e on e.id=a.enquiry_id where e.property_id=$1 and a.body like 'The owner can give access for the set-up inspection from %'", [prop]))[0].n, 1);
+
+  // The team book the inspector, from the first day in; the owner is told.
+  await refused(act({ action: 'bookInspection', propertyId: prop, inspectorId: users[FITTER], date: plus(4) }, OWNER), /Only the team book/);
+  await refused(act({ action: 'bookInspection', propertyId: prop, inspectorId: users[FITTER], date: plus(2) }), /Choose a date from/);
+  await refused(act({ action: 'bookInspection', propertyId: prop, inspectorId: users[OWNER], date: plus(4) }), /Choose the inspector/);
+  v = await act({ action: 'bookInspection', propertyId: prop, inspectorId: users[FITTER], date: plus(4) });
+  await said(/Your set-up inspection is booked for/);
+  assert.equal(stepOf(v, 'setUp.inspection').state, 'done');
+  assert.equal(stepOf(v, 'setUp.report').state, 'todo');
+  assert.equal(v.launch.inspection.inspector.name, 'Ian Installer');
+  await act({ action: 'bookInspection', propertyId: prop, inspectorId: users[FITTER], date: plus(5) });
+  await said(/Your set-up inspection has moved to/);
+
+  // The inspector sees it on Home, opens the checklist with the access, and prepares the inventory; the owner sees nothing yet.
+  let mine = await read(null, FITTER);
+  assert.deepEqual(mine.inspectionWork.map(x => [x.propertyId, x.inspectOn, x.returned]), [[prop, plus(5), false]]);
+  mine = await read(prop, FITTER);
+  assert.equal(mine.launch.isInspector, true);
+  assert.equal(mine.launch.inspection.access, 'Keybox by the door, code 1234');
+  assert.equal(mine.launch.inspection.canSubmit, true);
+  assert.equal(mine.launch.inventory.canCalculate, true);
+  await refused(act({ action: 'submitInspection', propertyId: prop, notes: '', repairs: [] }, FITTER), /Calculate the inventory/);
+  assert.equal((await read(prop, OWNER)).launch.inventory.canCalculate, false);
+  const ready = async () => (await messages()).filter(m => /Your inventory is ready/.test(m.body)).length;
+  const before = await ready();
+  v = await act({ action: 'calculateInventory', propertyId: prop, inputs: studio.normaliseInputs({ ...studio.DEFAULT_INPUTS, bedrooms: 1, guests: 2, garden: true }) }, FITTER);
+  assert.ok(v.launch.inventory.items.length > 30);
+  assert.equal(await ready(), before, 'not before management approve it');
+  let theirs = (await read(prop, OWNER)).launch.inventory;
+  assert.deepEqual([theirs.released, theirs.items.length, theirs.canDecide], [false, 0, false]);
+  const extra = v.launch.inventory.items.find(x => x.kept === null);
+  await refused(act({ action: 'decideInventory', propertyId: prop, itemId: extra.itemId, keep: true }, OWNER), /with management/);
+
+  // The report, with repairs: each one goes to property maintenance.
+  await refused(act({ action: 'submitInspection', propertyId: prop, notes: '', repairs: ['ab'] }, FITTER), /3 to 300 characters/);
+  v = await act({ action: 'submitInspection', propertyId: prop, notes: 'Furnished to a good standard.', repairs: ['Bedroom door handle is loose', 'Bathroom extractor fan does not run'] }, FITTER);
+  assert.equal(v.launch.inspection.repairs, 2);
+  const jobs = await owner("select d.data->>'issue' issue from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where w.property_id=$1 and d.kind='maintenance' and d.data->>'issue' like 'Set-up inspection:%' order by d.data->>'issue'", [prop]);
+  assert.deepEqual(jobs.map(j => j.issue), ['Set-up inspection: Bathroom extractor fan does not run', 'Set-up inspection: Bedroom door handle is loose']);
+  await refused(act({ action: 'submitInspection', propertyId: prop, notes: '', repairs: [] }, FITTER), /already in/);
+
+  // Management review it: only admins; sent back with what to change, then approved.
+  await refused(act({ action: 'approveInspection', propertyId: prop }, FITTER), /Management approve/);
+  await refused(act({ action: 'approveInspection', propertyId: prop }), /Management approve/);
+  assert.deepEqual((await read(null, ADMIN)).inspectionReviews.map(x => x.propertyId), [prop]);
+  await refused(act({ action: 'returnInspection', propertyId: prop, note: '' }, ADMIN), /Say what needs changing/);
+  await act({ action: 'returnInspection', propertyId: prop, note: 'Count the towels again' }, ADMIN);
+  mine = await read(prop, FITTER);
+  assert.equal(mine.launch.inspection.returnedNote, 'Count the towels again');
+  assert.equal((await read(null, FITTER)).inspectionWork[0].returned, true);
+  await act({ action: 'submitInspection', propertyId: prop, notes: 'Towels counted.', repairs: [] }, FITTER);
+  v = await act({ action: 'approveInspection', propertyId: prop }, ADMIN);
+  assert.equal(v.launch.inspection.approvedByName, 'Morag');
+  assert.equal(v.launch.inspection.repairs, 2);
+  assert.equal(stepOf(v, 'setUp.report').state, 'done');
+  assert.equal(await ready(), before + 1);
+  await said(/Your inventory is ready in Launch Preparation: \d+ items, \d+ of them additional/);
+  assert.deepEqual((await read(null, ADMIN)).inspectionReviews, []);
+  theirs = (await read(prop, OWNER)).launch.inventory;
+  assert.deepEqual([theirs.released, theirs.items.length > 30, theirs.canDecide], [true, true, true]);
+  await act({ action: 'decideInventory', propertyId: prop, itemId: extra.itemId, keep: true }, OWNER);
+
+  // Done: no more changes, and the inspector no longer has the property.
+  await refused(act({ action: 'setInspectionAccess', propertyId: prop, date: plus(3), access: 'Keybox again' }, OWNER), /already approved/);
+  assert.deepEqual((await read(null, FITTER)).inspectionWork, []);
+  await refused(read(prop, FITTER), /Property not found/);
 });
