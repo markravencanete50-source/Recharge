@@ -20,6 +20,7 @@ const ROUND_SIX = 'supabase/migrations/20261029700000_launch_compliance_jobs.sql
 const ROUND_SEVEN = 'supabase/migrations/20261029800000_launch_garden_quotes.sql';
 const ROUND_EIGHT = 'supabase/migrations/20261029900000_launch_condition_repairs.sql';
 const ROUND_NINE = 'supabase/migrations/20261029950000_launch_broadband.sql';
+const ROUND_TEN = 'supabase/migrations/20261030100000_launch_assignees.sql';
 const studio = await vite.ssrLoadModule('/lib/furnishing-studio.ts');
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -148,11 +149,12 @@ test('the migration runs twice, stays locked down, and its starting statements m
   const seven = await fs.readFile(ROUND_SEVEN, 'utf8');
   const eight = await fs.readFile(ROUND_EIGHT, 'utf8');
   const nine = await fs.readFile(ROUND_NINE, 'utf8');
+  const ten = await fs.readFile(ROUND_TEN, 'utf8');
   await db.exec('reset role');
-  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six, seven, eight, nine]) await db.exec(x);
-  assert.ok(!/—/.test(sql + two + three + four + five + six + seven + eight + nine), 'no em dashes');
+  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six, seven, eight, nine, ten]) await db.exec(x);
+  assert.ok(!/—/.test(sql + two + three + four + five + six + seven + eight + nine + ten), 'no em dashes');
   for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets',
-    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks', 'workspace_launch_garden_quotes', 'workspace_launch_broadband']) {
+    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks', 'workspace_launch_garden_quotes', 'workspace_launch_broadband', 'workspace_launch_assignees']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
     for (const role of ['anon', 'authenticated', 'service_role']) assert.equal((await owner('select has_table_privilege($1,$2,$3) ok', [role, 'private.' + t, 'select']))[0].ok, false, role + ' ' + t);
   }
@@ -806,4 +808,30 @@ test('broadband set up by Recharge: the install date, the technician, then the W
   await refused(act({ action: 'setBroadbandDate', propertyId: prop, date: plus(6) }), /already set up/);
   // The guidebook still books and fills in as before, with the Wi-Fi already there.
   assert.equal(stepOf(await read(prop), 'guidebook.book').state, 'locked');
+});
+
+test("each part's tickets go to the person admins choose, on their to-do list; open tickets with nobody are assigned too", async () => {
+  const assigneeOf = async work => (await owner('select assignee_id from public.workspace_work_items where id=$1', [work]))[0].assignee_id;
+  const ticketOf = async (prop, step) => (await owner('select work_id from private.workspace_launch_tickets where property_id=$1 and step=$2', [prop, step]))[0].work_id;
+  // Before anyone is chosen: nobody.
+  const before = await signed('Unassigned Flat');
+  const job = await ticketOf(before, 'compliance:eicr');
+  assert.equal(await assigneeOf(job), null);
+  await refused(act({ action: 'saveLaunchAssignee', section: 'compliance', userId: users[STAYS] }), /Only admins/);
+  await refused(act({ action: 'saveLaunchAssignee', section: 'compliance', userId: users[OWNER] }, ADMIN), /Choose a team member/);
+  await refused(act({ action: 'saveLaunchAssignee', section: 'compliance', userId: users[KEEPER] }, ADMIN), /Choose a team member/);
+  const r = await act({ action: 'saveLaunchAssignee', section: 'compliance', userId: users[STAYS] }, ADMIN);
+  assert.deepEqual(r.assignees.compliance, { id: users[STAYS], name: 'Fiona' });
+  assert.deepEqual((await read(null, STAYS)).assignees, {}, 'only admins see the choices');
+  // The open safety job with nobody is now Fiona's; a new property's is hers from the start.
+  assert.equal(await assigneeOf(job), users[STAYS]);
+  const after = await signed('Assigned Flat');
+  assert.equal(await assigneeOf(await ticketOf(after, 'compliance:eicr')), users[STAYS]);
+  // Someone already on a ticket keeps it; nobody chosen leaves new tickets unassigned.
+  await owner('update public.workspace_work_items set assignee_id=$2 where id=$1', [job, users[ADMIN]]);
+  await act({ action: 'saveLaunchAssignee', section: 'compliance', userId: users[FITTER] }, ADMIN);
+  assert.equal(await assigneeOf(job), users[ADMIN]);
+  const r2 = await act({ action: 'saveLaunchAssignee', section: 'compliance', userId: null }, ADMIN);
+  assert.equal(r2.assignees.compliance, undefined);
+  assert.equal(await assigneeOf(await ticketOf(await signed('Nobody Flat'), 'compliance:eicr')), null);
 });

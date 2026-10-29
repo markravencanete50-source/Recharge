@@ -71,7 +71,7 @@ export type TodoHubItem = z.infer<typeof todoHubItemSchema>;
 export type TodoHub = z.infer<typeof todoHubSchema>;
 
 // 'approval' rows come from Management approvals, on the super admins' list only (lib/owner-todo.ts).
-export type DerivedKind = 'repair_update' | 'listing_check' | 'pricing_gap' | 'guest_reply' | 'onboarding' | 'licensing' | 'approval';
+export type DerivedKind = 'repair_update' | 'listing_check' | 'pricing_gap' | 'guest_reply' | 'onboarding' | 'licensing' | 'approval' | 'assigned';
 export type TodoOpen = { workId?: string; target?: HomeToolTarget };
 export type TodoLatest = { text: string; by: string | null; at: string };
 export type TodoRow = {
@@ -182,6 +182,8 @@ export type DeriveInput = {
   work: readonly OperationView[]; journeys: readonly JourneyView[];
   // Guest conversations waiting for a reply: how many, and since when the longest wait began.
   guestsWaiting?: { count: number; since: string | null } | null;
+  // The signed-in person: work assigned to them is on their list (Launch Preparation tickets, 20261030100000).
+  me?: string;
 };
 
 export function deriveTasks(input: DeriveInput): TodoRow[] {
@@ -205,9 +207,23 @@ export function deriveTasks(input: DeriveInput): TodoRow[] {
   const listingSide = headingOf({ department: LISTING_CHECKS_DEPARTMENT, assigneeId: null }, '');
   const pricingSide = headingOf({ department: PRICING_DEPARTMENT, assigneeId: null }, '');
 
+  // Work assigned to the person (Business Plan: each part's ticket "added to their to-do list"), until it is finished.
+  const assignedToMe = (w: OperationView) => !!input.me && w.assigneeId === input.me && !finished(w.status);
+  if (input.me && role !== 'client' && role !== 'cleans') {
+    for (const w of work) {
+      if (!assignedToMe(w)) continue;
+      const issue = w.kind === 'maintenance' ? oneLine(text(w.data.issue)) : '';
+      make('assigned', w.workId, 'personal', {
+        title: `${w.kind === 'maintenance' ? 'Repair' : 'Task'}: ${oneLine(w.title)}${at(placeFor(w.propertyId))}${issue && issue !== oneLine(w.title) ? ` (${issue})` : ''}`,
+        details: 'Assigned to you.', propertyId: w.propertyId, dueOn: w.dueOn ?? null, since: w.createdAt ?? '',
+        open: { workId: w.workId, ...(w.kind === 'maintenance' ? { target: TODO_TARGETS.repairs } : {}) },
+      });
+    }
+  }
+
   if (kinds.has('repair_update')) {
     for (const w of work) {
-      if (w.kind !== 'maintenance' || finished(w.status)) continue;
+      if (w.kind !== 'maintenance' || finished(w.status) || assignedToMe(w)) continue;
       const phase = text(w.data.phase) || 'triage';
       if (!REPAIR_WATCHED.includes(phase)) continue;
       // Ready only hears about repairs it has been sent.

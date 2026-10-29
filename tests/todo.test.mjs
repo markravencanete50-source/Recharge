@@ -375,3 +375,23 @@ test('the list can be ordered by due date, priority, newest, oldest or A to Z', 
   ]);
   assert.deepEqual(T.sortTodoRows(ranked, TODAY, 'priority').map(r => r.title), ['Urgent', 'High', 'Low', 'None'], 'most urgent first, no priority last');
 });
+
+test('derived tasks: work assigned to the person is on their list until it is finished (Launch Preparation tickets)', () => {
+  const work = [
+    op(30, 'launch_step', { step: 'pricing.base' }, { assigneeId: ME, title: 'Flat 1: Base price set', propertyId: id(901) }),
+    op(31, 'maintenance', { phase: 'triage', issue: 'Renew the EICR certificate.' }, { assigneeId: ME, title: 'Renew the EICR', propertyId: id(901), updatedAt: '2026-09-01T09:00:00Z' }),
+    op(32, 'launch_step', {}, { assigneeId: OTHER }),
+    op(33, 'launch_step', {}, { assigneeId: ME, status: 'completed' }),
+  ];
+  const rows = T.deriveTasks({ role: 'ready', today: TODAY, properties: [prop(1)], work, journeys: [], me: ME });
+  const mine = rows.filter(r => r.derived === 'assigned');
+  assert.deepEqual(mine.map(r => r.open.workId), [id(230), id(231)]);
+  assert.deepEqual(mine.map(r => r.title), ['Task: Flat 1: Base price set at Flat 1', 'Repair: Renew the EICR at Flat 1 (Renew the EICR certificate.)']);
+  assert.ok(mine.every(r => r.heading === 'personal' && r.automatic && r.details === 'Assigned to you.'));
+  assert.equal(mine[1].open.target.view, 'repairs');
+  // The assigned repair is not listed twice.
+  assert.equal(rows.filter(r => r.open?.workId === id(231)).length, 1);
+  // Without the person, or for cleaners and owners, nothing is added.
+  assert.equal(T.deriveTasks({ role: 'ready', today: TODAY, properties: [], work, journeys: [] }).filter(r => r.derived === 'assigned').length, 0);
+  for (const role of ['cleans', 'client']) assert.deepEqual(T.deriveTasks({ role, today: TODAY, properties: [], work, journeys: [], me: ME }), [], role);
+});
