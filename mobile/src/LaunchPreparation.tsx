@@ -288,6 +288,7 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
               onChange={r => { setRead(r); setError(""); }} onRemove={fileId => void act({ action: "removeFile", step: s.key, fileId }, "Certificate removed.")} />}
             {s.kind.startsWith("guidebook") && s.state !== "locked" && <GuidebookStep p={p} propertyId={propertyId} step={s} launch={v} read={read} busy={busy}
               act={(body, done) => void act(body, done)} onRead={r => { setRead(r); setError(""); }} />}
+            {s.kind === "broadband" && s.state !== "locked" && <BroadbandStep p={p} launch={v} read={read} busy={busy} act={(body, done) => void act(body, done)} />}
             {s.kind === "gardenQuote" && s.state !== "locked" && <GardenStep p={p} launch={v} busy={busy} act={(body, done) => void act(body, done)} />}
             {s.kind === "inventory" && s.state !== "locked" && <InventoryStep p={p} launch={v} busy={busy} act={(body, done) => void act(body, done)} />}
             {(s.kind.startsWith("furnishing") || s.key === "setUp.invoice") && <FurnishingStep p={p} propertyId={propertyId} step={s} launch={v} read={read} busy={busy} act={(body, done) => void act(body, done)} onRead={r => { setRead(r); setError(""); }} />}
@@ -479,6 +480,65 @@ function InventoryStep({ p, launch, busy, act }: { p: Palette; launch: LaunchVie
 }
 
 // ---------------------------------------------------------------- the furnishing (Recharge sets up)
+// ---------------------------------------------------------------- broadband set up by Recharge (20261029950000)
+// The owner (or the team) gives the install date; the team assign the technician; once installed, the technician (or the
+// team) resets the Wi-Fi name and password, confirms the Wi-Fi portal is collecting data, and saves them to the property.
+function BroadbandStep({ p, launch, read, busy, act }: { p: Palette; launch: LaunchView; read: LaunchRead; busy: boolean; act: (body: Record<string, unknown>, done: string) => void }) {
+  const b = launch.broadband;
+  const [on, setOn] = useState(""), [tech, setTech] = useState(""), [name, setName] = useState<string | null>(null), [password, setPassword] = useState<string | null>(null), [portal, setPortal] = useState(false);
+  if (!b) return null;
+  const wifiName = name ?? b.suggestedWifiName, wifiPassword = password ?? b.suggestedWifiPassword;
+  return <View style={{ gap: 8 }}>
+    <Text style={[ui.small, { color: p.text }]}>{[
+      b.installOn ? `Install date ${day(b.installOn)}${b.installSetByName ? `, from ${b.installSetByName}` : ""}.` : launch.isOwner ? "Let us know the date your broadband provider is installing it." : "Waiting for the install date from the owner.",
+      b.technician ? `Technician: ${b.technician.name}.` : "",
+      b.installedAt ? `Installed ${when(b.installedAt)}${b.installedByName ? ` by ${b.installedByName}` : ""}. Wi-Fi ${b.wifiName ?? ""}${b.wifiPassword ? `, password ${b.wifiPassword}` : ""}.` : "",
+    ].filter(Boolean).join(" ")}</Text>
+    {b.canSetDate && <>
+      <DateField p={p} label="Broadband install date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today()} value={{ from: on, to: on }} onChange={next => setOn(next.from)} />
+      <Button p={p} quiet icon="calendar" label={b.installOn ? "Change the date" : "Save the install date"} disabled={busy || !on}
+        onPress={() => act({ action: "setBroadbandDate", date: on }, launch.isOwner ? "Thank you. We will be there to set up the Wi-Fi." : "Saved. The owner has been told.")} />
+    </>}
+    {b.canAssign && <View style={{ gap: 6 }}>
+      <Text style={{ color: p.text, fontSize: 14 }}>{b.technician ? "Change the technician" : "Assign the technician"}</Text>
+      <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{read.installers.map(x => <Choice key={x.id} p={p} on={(tech || b.technician?.id) === x.id} label={x.name} onPress={() => setTech(x.id)} />)}</View>
+      {!!tech && tech !== b.technician?.id && <Button p={p} icon="user-check" label="Assign" disabled={busy} onPress={() => act({ action: "assignBroadbandTech", technicianId: tech }, "Assigned. It is on their Home.")} />}
+    </View>}
+    {b.canComplete && <View style={{ gap: 6 }}>
+      <Text style={{ color: p.text, fontSize: 14 }}>Once it is installed: reset the Wi-Fi name and password on the router, then save them here.</Text>
+      <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+        <View style={{ flex: 1, minWidth: 160 }}><Field p={p} label="Wi-Fi name" value={wifiName} onChange={v => setName(v.slice(0, 120))} /></View>
+        <View style={{ flex: 1, minWidth: 160 }}><Field p={p} label="Wi-Fi password" value={wifiPassword} onChange={v => setPassword(v.slice(0, 63))} /></View>
+      </View>
+      <Check p={p} on={portal} label="The Wi-Fi portal is set up and collecting data" onPress={() => setPortal(x => !x)} />
+      <Button p={p} primary icon="wifi" label="Broadband installed" disabled={busy || !portal || !wifiName.trim() || wifiPassword.length < 8}
+        onPress={() => act({ action: "completeBroadband", wifiName, wifiPassword, portal: true }, "Done. The Wi-Fi is saved to the property and the owner has been told.")} />
+    </View>}
+  </View>;
+}
+
+// Broadband set-ups the signed-in technician is assigned to, on Home.
+export function BroadbandWork({ p }: { p: Palette }) {
+  const [read, setRead] = useState<LaunchRead | null>(null), [open, setOpen] = useState<string | null>(null), [error, setError] = useState("");
+  const load = useCallback(async () => { try { setRead(await readLaunch()); setError(""); } catch (e) { setError(message(e)); } }, []);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  if (!read || read.broadbandWork.length === 0) return null;
+  return <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, padding: 14, gap: 10 }]}>
+    <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>Broadband set-ups</Text>
+    <Text style={[ui.small, { color: p.muted }]}>New properties where you set up the broadband: reset the Wi-Fi name and password, set up the Wi-Fi portal, then save them.</Text>
+    {read.broadbandWork.map(x => <View key={x.propertyId} style={{ gap: 8 }}>
+      <View style={[ui.between, { gap: 8 }]}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ color: p.text, fontWeight: "600" }}>{x.name}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{[x.address, x.installOn ? `install ${day(x.installOn)}` : "install date to come"].filter(Boolean).join(", ")}</Text>
+        </View>
+        <Button p={p} quiet icon={open === x.propertyId ? "x" : "chevron-right"} label={open === x.propertyId ? "Close" : "Open"} onPress={() => setOpen(o => o === x.propertyId ? null : x.propertyId)} />
+      </View>
+      {open === x.propertyId && <LaunchPanel p={p} propertyId={x.propertyId} />}
+    </View>)}
+  </View>;
+}
+
 // ---------------------------------------------------------------- garden maintenance (20261029800000)
 // The team add the contractor's quote (who, the price a month or a visit, how often, what it covers); the owner accepts it
 // or rejects it and says why. A rejected quote leaves room for a new one.

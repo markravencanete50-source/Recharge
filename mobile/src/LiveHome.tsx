@@ -32,7 +32,7 @@ import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import type { NoticeView, PropertyView } from "../../lib/workspace-view";
 import type { JourneyView, OperationView } from "../../lib/workflow-forms";
 import { DocumentsForYou } from "./InvoiceMaker";
-import { FurnishingWork, GuidebookWork } from "./LaunchPreparation";
+import { BroadbandWork, FurnishingWork, GuidebookWork } from "./LaunchPreparation";
 
 // London time, like every other date in the app, so the greeting is right wherever the phone is set.
 const greeting = () => { const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", hourCycle: "h23" }).format(new Date())); return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"; };
@@ -86,6 +86,7 @@ function TeamHome({ palette: p, desktop, account, properties, journeys = [], wor
       {board && <TodayBoard palette={p} account={account} properties={properties} work={work} desktop={desktop} onTool={onTool} />}
       <FurnishingWork p={p} />
       <GuidebookWork p={p} />
+      <BroadbandWork p={p} />
       {account.role === "ready" && <ReadyHome palette={p} desktop={desktop} onTool={onTool} userId={account.userId} properties={properties} />}
       {/* The places the person starred themselves; the suggestions are in the menu under Favorites. */}
       <HomeFavorites palette={p} account={account} properties={properties} entries={favoriteEntries} onOpenEntry={onOpenEntry} onTool={onTool} onSection={onNavigate} savedOnly />
