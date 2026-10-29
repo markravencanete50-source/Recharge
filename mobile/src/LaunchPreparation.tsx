@@ -289,6 +289,7 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
               onChange={r => { setRead(r); setError(""); }} onRemove={fileId => void act({ action: "removeFile", step: s.key, fileId }, "Certificate removed.")} />}
             {s.kind.startsWith("guidebook") && s.state !== "locked" && <GuidebookStep p={p} propertyId={propertyId} step={s} launch={v} read={read} busy={busy}
               act={(body, done) => void act(body, done)} onRead={r => { setRead(r); setError(""); }} />}
+            {(s.kind === "inspection" || s.kind === "inspectionReport") && s.state !== "locked" && <InspectionStep p={p} step={s} launch={v} read={read} busy={busy} act={(body, done) => void act(body, done)} />}
             {s.kind === "broadband" && s.state !== "locked" && <BroadbandStep p={p} launch={v} read={read} busy={busy} act={(body, done) => void act(body, done)} />}
             {s.kind === "gardenQuote" && s.state !== "locked" && <GardenStep p={p} launch={v} busy={busy} act={(body, done) => void act(body, done)} />}
             {s.kind === "inventory" && s.state !== "locked" && <InventoryStep p={p} launch={v} busy={busy} act={(body, done) => void act(body, done)} />}
@@ -439,7 +440,9 @@ function InventoryStep({ p, launch, busy, act }: { p: Palette; launch: LaunchVie
   if (!inv) return null;
   const inputs = draft && draft.at === inv.calculatedAt ? draft.inputs : null;
   const rs = inv.rechargeSetsUp, calculated = !!inv.calculatedAt, waiting = inv.items.filter(x => x.kept === null).length;
-  const status = !calculated ? (inv.canCalculate ? "Enter the property's details and the inventory is worked out from Recharge's presets." : "Recharge are preparing the inventory.")
+  const status = !inv.released && !inv.canCalculate && launch.isOwner ? "Recharge's inspector is preparing your inventory. You will see it here once our management team approve the inspection."
+    : !calculated ? (inv.canCalculate ? "Enter the property's details and the inventory is worked out from Recharge's presets." : "Recharge are preparing the inventory.")
+    : !inv.released ? "Calculated. Submit the inspection report below; management approve it before the owner sees the inventory."
     : !inv.approvedAt ? (inv.canApprove || inv.canDecide ? (waiting ? `Accept or reject the ${waiting} additional ${waiting === 1 ? "item" : "items"}, then approve the inventory.` : "Approve the inventory.") : `Waiting for the owner to approve${waiting ? ` (${waiting} additional ${waiting === 1 ? "item" : "items"} to decide)` : ""}.`)
     : `${inv.counts.checked} of ${inv.counts.total} items in the property.`;
   const groups = [...new Set(inv.items.map(x => x.category))];
@@ -450,7 +453,7 @@ function InventoryStep({ p, launch, busy, act }: { p: Palette; launch: LaunchVie
     {calculated && <Text style={[ui.small, { color: p.muted }]}>{[inv.calculatedByName ? `Calculated by ${inv.calculatedByName} ${when(inv.calculatedAt!)}` : "", rs && inv.approvedAt ? `Approved by ${inv.approvedByName ?? "the owner"} ${when(inv.approvedAt)}` : ""].filter(Boolean).join(". ")}</Text>}
     <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
       {inv.canCalculate && !inputs && <Button p={p} quiet icon={calculated ? "refresh-cw" : "edit-3"} label={calculated ? "Change the details" : "Enter the property details"} onPress={() => setDraft({ at: inv.calculatedAt, inputs: normaliseInputs((inv.inputs ?? {}) as Partial<StudioInputs>) })} />}
-      {calculated && <Button p={p} quiet icon={open ? "chevron-up" : "list"} label={open ? "Hide the inventory" : `Show the inventory (${inv.items.length})`} onPress={() => setOpen(o => !o)} />}
+      {calculated && inv.items.length > 0 && <Button p={p} quiet icon={open ? "chevron-up" : "list"} label={open ? "Hide the inventory" : `Show the inventory (${inv.items.length})`} onPress={() => setOpen(o => !o)} />}
       {inv.canApprove && <Button p={p} primary icon="check" label="Approve the inventory" disabled={busy} onPress={() => act({ action: "approveInventory" }, "Approved. Recharge will make sure everything is in the property.")} />}
     </View>
     {!!inputs && <View style={{ gap: 8, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border }}>
@@ -458,7 +461,7 @@ function InventoryStep({ p, launch, busy, act }: { p: Palette; launch: LaunchVie
       {calculated && rs && <Notice p={p} text="Recalculating asks the owner to approve the inventory again. Their decisions on additional items are kept." />}
       <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
         <Button p={p} primary icon="check" label={calculated ? "Recalculate the inventory" : "Calculate the inventory"} disabled={busy}
-          onPress={() => { act({ action: "calculateInventory", inputs }, rs ? "Calculated. The owner has been asked to approve it." : "Calculated. Tick each item as it is in the property."); setOpen(true); }} />
+          onPress={() => { act({ action: "calculateInventory", inputs }, !inv.released ? "Calculated. Send the inspection report when you are done." : rs ? "Calculated. The owner has been asked to approve it." : "Calculated. Tick each item as it is in the property."); setOpen(true); }} />
         <Button p={p} quiet icon="x" label="Cancel" onPress={() => setDraft(null)} />
       </View>
     </View>}
@@ -481,6 +484,89 @@ function InventoryStep({ p, launch, busy, act }: { p: Palette; launch: LaunchVie
 }
 
 // ---------------------------------------------------------------- the furnishing (Recharge sets up)
+// ---------------------------------------------------------------- the set-up inspection, when Recharge set up (20261030200000)
+// The owner (or the team) gives the first day in and how to get in; the team book the inspector and the date; the inspector
+// (or the team) prepares the inventory and sends the report with any repairs; management approve it, which sends the
+// inventory to the owner, or send it back with what to change.
+function InspectionStep({ p, step, launch, read, busy, act }: { p: Palette; step: LaunchStep; launch: LaunchView; read: LaunchRead; busy: boolean; act: (body: Record<string, unknown>, done: string) => void }) {
+  const i = launch.inspection;
+  const [on, setOn] = useState(""), [access, setAccess] = useState<string | null>(null), [who, setWho] = useState(""), [inspectOn, setInspectOn] = useState("");
+  const [notes, setNotes] = useState(""), [repairs, setRepairs] = useState(""), [returnNote, setReturnNote] = useState("");
+  if (!i) return null;
+  const fixes = repairs.split("\n").map(x => x.trim()).filter(Boolean);
+  if (step.kind === "inspection") return <View style={{ gap: 8 }}>
+    <Text style={[ui.small, { color: p.text }]}>{[
+      i.accessOn ? `Access from ${day(i.accessOn)}${i.accessByName ? `, from ${i.accessByName}` : ""}.` : launch.isOwner ? "Tell us the first day we can get into the property, and how." : "Waiting for the date and access from the owner.",
+      i.access && !launch.isOwner ? `Access: ${i.access}` : "",
+      i.inspector && i.inspectOn ? `${i.inspector.name} inspects on ${day(i.inspectOn)}.` : "",
+    ].filter(Boolean).join(" ")}</Text>
+    {i.canSetAccess && <View style={{ gap: 6 }}>
+      <DateField p={p} label="First day we can get in" mode="single" wholeMonthLink={false} empty="Choose a date" today={today()} value={{ from: on || i.accessOn || "", to: on || i.accessOn || "" }} onChange={next => setOn(next.from)} />
+      <Field p={p} multiline label="How to get into the property" value={access ?? i.access ?? ""} onChange={v => setAccess(v.slice(0, 2000))} />
+      <Button p={p} quiet icon="key" label={i.accessOn ? "Update the access" : "Save the access"} disabled={busy || !(on || i.accessOn) || (access ?? i.access ?? "").trim().length < 3}
+        onPress={() => act({ action: "setInspectionAccess", date: on || i.accessOn, access: (access ?? i.access ?? "").trim() }, launch.isOwner ? "Thank you. We will book the inspection and let you know the date." : "Saved.")} />
+    </View>}
+    {i.canBook && !!i.accessOn && <View style={{ gap: 6 }}>
+      <Text style={{ color: p.text, fontSize: 14 }}>{i.inspector ? "Change the inspector or the date" : "Book the inspector"}</Text>
+      <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{read.installers.map(x => <Choice key={x.id} p={p} on={(who || i.inspector?.id) === x.id} label={x.name} onPress={() => setWho(x.id)} />)}</View>
+      <DateField p={p} label="Inspection date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today()} value={{ from: inspectOn, to: inspectOn }} onChange={next => setInspectOn(next.from)} />
+      <Button p={p} icon="calendar" label="Book the inspection" disabled={busy || !(who || i.inspector?.id) || !inspectOn}
+        onPress={() => act({ action: "bookInspection", inspectorId: who || i.inspector?.id, date: inspectOn }, "Booked. The owner has been told, and it is on the inspector's Home.")} />
+    </View>}
+  </View>;
+  return <View style={{ gap: 8 }}>
+    <Text style={[ui.small, { color: p.text }]}>{[
+      i.approvedAt ? `Approved by ${i.approvedByName ?? "management"} ${when(i.approvedAt)}.`
+        : i.submittedAt ? `Report in from ${i.submittedByName ?? "the inspector"} ${when(i.submittedAt)}. Waiting for management approval.`
+        : launch.isOwner ? "Our inspector checks the furnishing and works out the inventory. You will see it once our management team approve it."
+        : "Calculate the inventory above from the property's details, then send the report with any repairs found.",
+      i.repairs ? `${i.repairs} ${i.repairs === 1 ? "repair" : "repairs"} sent to property maintenance.` : "",
+    ].filter(Boolean).join(" ")}</Text>
+    {!!i.notes && <Text style={[ui.small, { color: p.muted }]}>{`Notes: ${i.notes}`}</Text>}
+    {!!i.returnedNote && !i.submittedAt && <Notice p={p} text={`Sent back by management: ${i.returnedNote}`} />}
+    {i.canSubmit && <View style={{ gap: 6 }}>
+      <Field p={p} multiline label="Notes (optional)" value={notes} onChange={v => setNotes(v.slice(0, 4000))} />
+      <Field p={p} multiline label="Repairs found (one per line, each becomes a property maintenance job)" value={repairs} onChange={v => setRepairs(v.slice(0, 9000))} />
+      <Button p={p} primary icon="send" label="Send the inspection report" disabled={busy || !launch.inventory?.calculatedAt || fixes.length > 30 || fixes.some(x => x.length < 3 || x.length > 300)}
+        onPress={() => act({ action: "submitInspection", notes: notes.trim(), repairs: fixes }, "Sent. Management will review it.")} />
+      {!launch.inventory?.calculatedAt && <Text style={[ui.small, { color: p.muted }]}>Calculate the inventory first.</Text>}
+    </View>}
+    {i.canApprove && <View style={{ gap: 6 }}>
+      <Button p={p} primary icon="check" label="Approve and send the inventory to the owner" disabled={busy} onPress={() => act({ action: "approveInspection" }, "Approved. The owner has the inventory to approve.")} />
+      <Field p={p} multiline label="Or send it back: what needs changing" value={returnNote} onChange={v => setReturnNote(v.slice(0, 1000))} />
+      <Button p={p} quiet icon="corner-up-left" label="Send it back" disabled={busy || returnNote.trim().length < 3} onPress={() => act({ action: "returnInspection", note: returnNote.trim() }, "Sent back to the inspector.")} />
+    </View>}
+  </View>;
+}
+
+// Set-up inspections the signed-in inspector is booked for, and reports waiting for management (admins), on Home.
+export function InspectionWork({ p }: { p: Palette }) {
+  const [read, setRead] = useState<LaunchRead | null>(null), [open, setOpen] = useState<string | null>(null), [error, setError] = useState("");
+  const load = useCallback(async () => { try { setRead(await readLaunch()); setError(""); } catch (e) { setError(message(e)); } }, []);
+  useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
+  if (!read || read.inspectionWork.length + read.inspectionReviews.length === 0) return null;
+  const rows = [
+    ...read.inspectionWork.map(x => ({ propertyId: x.propertyId, name: x.name, detail: [x.address, x.inspectOn ? `inspect ${day(x.inspectOn)}` : "", x.returned ? "sent back by management" : ""].filter(Boolean).join(", ") })),
+    ...read.inspectionReviews.filter(x => !read.inspectionWork.some(w => w.propertyId === x.propertyId))
+      .map(x => ({ propertyId: x.propertyId, name: x.name, detail: [x.address, `report in ${when(x.submittedAt)}${x.submittedByName ? ` from ${x.submittedByName}` : ""}, to approve`].filter(Boolean).join(", ") })),
+  ];
+  return <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, padding: 14, gap: 10 }]}>
+    <Text accessibilityRole="header" style={{ color: p.text, fontSize: 16, fontWeight: "700" }}>Set-up inspections</Text>
+    <Text style={[ui.small, { color: p.muted }]}>{read.inspectionWork.length ? "New properties you inspect: work out the inventory from the property's details, then send the report with any repairs." : "Inspection reports waiting for management approval before the owner sees the inventory."}</Text>
+    {!!error && <Text style={[ui.small, { color: p.danger }]}>{error}</Text>}
+    {rows.map(x => <View key={x.propertyId} style={{ gap: 8 }}>
+      <View style={[ui.between, { gap: 8 }]}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={{ color: p.text, fontWeight: "600" }}>{x.name}</Text>
+          <Text style={[ui.small, { color: p.muted }]}>{x.detail}</Text>
+        </View>
+        <Button p={p} quiet icon={open === x.propertyId ? "x" : "chevron-right"} label={open === x.propertyId ? "Close" : "Open"} onPress={() => setOpen(o => o === x.propertyId ? null : x.propertyId)} />
+      </View>
+      {open === x.propertyId && <LaunchPanel p={p} propertyId={x.propertyId} />}
+    </View>)}
+  </View>;
+}
+
 // ---------------------------------------------------------------- broadband set up by Recharge (20261029950000)
 // The owner (or the team) gives the install date; the team assign the technician; once installed, the technician (or the
 // team) resets the Wi-Fi name and password, confirms the Wi-Fi portal is collecting data, and saves them to the property.
