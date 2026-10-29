@@ -70,7 +70,7 @@ function useTodoRows({ account, properties, journeys, work }: Pick<SectionProps,
 
   const rows = useMemo(() => [
     ...hubRows(hub?.items ?? [], userId, properties),
-    ...deriveTasks({ role, today, properties, work, journeys, guestsWaiting: waiting }),
+    ...deriveTasks({ role, today, properties, work, journeys, guestsWaiting: waiting, me: userId }),
   ], [hub, userId, properties, role, today, work, journeys, waiting]);
   const reload = useCallback(() => load(false), [load]);
   return { rows, hub, loading, error, today, reload };

@@ -162,6 +162,8 @@ export const launchActionSchema = z.discriminatedUnion('action', [
     action: z.literal('addGardenQuote'), requestId: id, propertyId: id, contractor: z.string().trim().min(1, 'Enter the contractor').max(200),
     pricePence: z.number().int().min(1, 'Enter the price').max(10_000_000), basis: z.enum(GARDEN_BASES), frequency: z.enum(GARDEN_FREQUENCIES), details: z.string().trim().max(2000),
   }).strict(),
+  // Who each part's tickets go to (20261030100000): admins only; null for nobody.
+  z.object({ action: z.literal('saveLaunchAssignee'), requestId: id, section: z.enum(['furnishing', 'broadband', 'compliance', 'readiness', 'photography', 'waste', 'guidebook', 'pricing', 'social']), userId: id.nullable() }).strict(),
   // Broadband set up by Recharge (20261029950000): the install date, the technician, then the Wi-Fi reset with the portal.
   z.object({ action: z.literal('setBroadbandDate'), requestId: id, propertyId: id, date }).strict(),
   z.object({ action: z.literal('assignBroadbandTech'), requestId: id, propertyId: id, technicianId: id }).strict(),
@@ -293,6 +295,7 @@ export const launchReadSchema = z.object({
   })).default([]),
   inspections: z.array(z.object({ propertyId: id, name: z.string(), address: z.string().nullable(), bookedOn: z.string() })).default([]),
   guidebookWork: z.array(z.object({ propertyId: id, name: z.string(), address: z.string().nullable(), bookOn: z.string().nullable() })).default([]),
+  assignees: z.record(z.string(), person).default({}),
   broadbandWork: z.array(z.object({ propertyId: id, name: z.string(), address: z.string().nullable(), installOn: z.string().nullable() })).default([]),
   launch: launchViewSchema.nullable().default(null),
 });

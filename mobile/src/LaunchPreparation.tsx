@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Linking, Platform, Switch, View } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
+import * as Crypto from "expo-crypto";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
@@ -779,6 +780,11 @@ export function LaunchSettingsSheet({ p, visible, onClose }: { p: Palette; visib
   const set = (patch: Partial<LaunchSettings>) => { setSaved(false); setDraft(d => d ? { ...d, ...patch } : d); };
   const setStatement = (i: number, patch: Partial<LaunchSettings["condition"][number]>) => draft && set({ condition: draft.condition.map((c, j) => j === i ? { ...c, ...patch } : c) });
   const move = (i: number, by: -1 | 1) => { if (!draft) return; const next = [...draft.condition]; const [x] = next.splice(i, 1); next.splice(i + by, 0, x); set({ condition: next }); };
+  async function assign(section: string, userId: string | null) {
+    setBusy(true); setError("");
+    try { const r = launchReadSchema.parse((await liveApi("/launch", { action: "saveLaunchAssignee", requestId: Crypto.randomUUID(), section, userId })).data); setRead(r); setSaved(true); }
+    catch (e) { setError(message(e)); } finally { setBusy(false); }
+  }
   async function save() {
     if (!draft) return;
     const parsed = launchSettingsSchema.safeParse(draft);
@@ -845,10 +851,19 @@ export function LaunchSettingsSheet({ p, visible, onClose }: { p: Palette; visib
             <View style={[ui.between, { gap: 8 }]}>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: p.text, fontSize: 14, fontWeight: "600" }}>{BOARD_TITLE[sec]}</Text>
-                <Text style={[ui.small, { color: p.muted }]}>{draft.boards[sec] ? boardName(draft.boards[sec] ?? "") : "No ticket"}</Text>
+                <Text style={[ui.small, { color: p.muted }]}>{`${draft.boards[sec] ? boardName(draft.boards[sec] ?? "") : "No ticket"}. ${read?.assignees[sec] ? `Assigned to ${read.assignees[sec]?.name}` : "Not assigned to anyone"}.`}</Text>
               </View>
               {canEdit && <Button p={p} quiet icon={boardFor === sec ? "x" : "edit-3"} label={boardFor === sec ? "Close" : "Change"} onPress={() => setBoardFor(b => b === sec ? null : sec)} />}
             </View>
+            {/* Who the part's tickets go to (20261030100000): saved straight away, and added to their to-do list. */}
+            {canEdit && boardFor === sec && <>
+              <Text style={[ui.small, { color: p.muted }]}>Assigned to</Text>
+              <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
+                {[...(read?.installers ?? []), null].map(x => <Choice key={x?.id ?? "nobody"} p={p} on={(read?.assignees[sec]?.id ?? null) === (x?.id ?? null)} label={x ? x.name : "Nobody"}
+                  onPress={() => void assign(sec, x?.id ?? null)} />)}
+              </View>
+              <Text style={[ui.small, { color: p.muted }]}>Board</Text>
+            </>}
             {canEdit && boardFor === sec && <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
               {[...(read?.boardIds ?? []).filter(b => MODULES.some(m => m.id === b)), ""].map(b => <Choice key={b || "none"} p={p} on={(draft.boards[sec] ?? "") === b} label={b ? boardName(b) : "No ticket"}
                 onPress={() => { set({ boards: { ...draft.boards, [sec]: b } }); setBoardFor(null); }} />)}
