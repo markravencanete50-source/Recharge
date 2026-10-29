@@ -58,3 +58,4 @@
 -- 20261029600000 Recruitment: installed by Lee 2026-10-28, verified
 -- 20261029700000 launch_compliance_jobs: installed by Lee 2026-10-28, verified
 -- 20261029800000 launch_garden_quotes: installed by Lee 2026-10-29, verified
+-- 20261029900000 launch_condition_repairs: installed by Lee 2026-10-29, verified
