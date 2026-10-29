@@ -19,6 +19,7 @@ const ROUND_FIVE = 'supabase/migrations/20261029500000_launch_guidebook.sql';
 const ROUND_SIX = 'supabase/migrations/20261029700000_launch_compliance_jobs.sql';
 const ROUND_SEVEN = 'supabase/migrations/20261029800000_launch_garden_quotes.sql';
 const ROUND_EIGHT = 'supabase/migrations/20261029900000_launch_condition_repairs.sql';
+const ROUND_NINE = 'supabase/migrations/20261029950000_launch_broadband.sql';
 const studio = await vite.ssrLoadModule('/lib/furnishing-studio.ts');
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -146,11 +147,12 @@ test('the migration runs twice, stays locked down, and its starting statements m
   const six = await fs.readFile(ROUND_SIX, 'utf8');
   const seven = await fs.readFile(ROUND_SEVEN, 'utf8');
   const eight = await fs.readFile(ROUND_EIGHT, 'utf8');
+  const nine = await fs.readFile(ROUND_NINE, 'utf8');
   await db.exec('reset role');
-  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six, seven, eight]) await db.exec(x);
-  assert.ok(!/—/.test(sql + two + three + four + five + six + seven + eight), 'no em dashes');
+  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six, seven, eight, nine]) await db.exec(x);
+  assert.ok(!/—/.test(sql + two + three + four + five + six + seven + eight + nine), 'no em dashes');
   for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets',
-    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks', 'workspace_launch_garden_quotes']) {
+    'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks', 'workspace_launch_garden_quotes', 'workspace_launch_broadband']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
     for (const role of ['anon', 'authenticated', 'service_role']) assert.equal((await owner('select has_table_privilege($1,$2,$3) ok', [role, 'private.' + t, 'select']))[0].ok, false, role + ' ' + t);
   }
@@ -344,27 +346,27 @@ test('expiry reminders: the owner in the chat and, for a document Recharge organ
 });
 
 test("Recharge's parts are mirrored on their boards; ticking either completes both", async () => {
-  const answers = { ...ANSWERS, broadbandInstalled: false, broadbandRecharge: true };
+  const answers = { ...ANSWERS, waste: 'private', wasteRecharge: true };
   const prop = await signed('Board Flat', { answers });
   const tickets = async () => owner("select t.step,w.module_id,w.status,w.id from private.workspace_launch_tickets t join public.workspace_work_items w on w.id=t.work_id where t.property_id=$1 order by t.step", [prop]);
   let list = await tickets();
-  assert.deepEqual(list.map(t => [t.step, t.module_id]), [['broadband.setUp', 'new-property-inspection-board'], ['compliance:eicr', 'stays-maintenance-reporting']],
+  assert.deepEqual(list.map(t => [t.step, t.module_id]), [['compliance:eicr', 'stays-maintenance-reporting'], ['waste.collection', 'routine-bin-garden-board']],
     "Recharge's open parts only; set-up and the owner's parts get none");
   const v = await read(prop);
-  assert.equal(stepOf(v, 'compliance:eicr').ticketId, list[1].id);
+  assert.equal(stepOf(v, 'compliance:eicr').ticketId, list[0].id);
 
   // Completed on the board: the part is ticked.
-  const board = list[0].id;
+  const board = list[1].id;
   await owner("update public.workspace_work_items set status='completed',completed_at=now() where id=$1", [board]);
-  assert.equal(stepOf(await read(prop), 'broadband.setUp').state, 'done');
+  assert.equal(stepOf(await read(prop), 'waste.collection').state, 'done');
   // Reopened on the checklist: so is the ticket. Ticked on the checklist: the ticket completes.
-  await act({ action: 'reopen', propertyId: prop, step: 'broadband.setUp' });
+  await act({ action: 'reopen', propertyId: prop, step: 'waste.collection' });
   assert.equal((await owner('select status from public.workspace_work_items where id=$1', [board]))[0].status, 'waiting');
-  await tick(prop, 'broadband.setUp');
+  await tick(prop, 'waste.collection');
   assert.equal((await owner('select status from public.workspace_work_items where id=$1', [board]))[0].status, 'completed');
   // The EICR is a job: completing it asks the team for the certificate, and the document stays to tick.
-  await owner("update private.workspace_domain_details set data=data||'{\"workStatus\":\"completed\",\"phase\":\"completed\"}' where work_id=$1", [list[1].id]);
-  await owner("update public.workspace_work_items set status='completed',completed_at=now() where id=$1", [list[1].id]);
+  await owner("update private.workspace_domain_details set data=data||'{\"workStatus\":\"completed\",\"phase\":\"completed\"}' where work_id=$1", [list[0].id]);
+  await owner("update public.workspace_work_items set status='completed',completed_at=now() where id=$1", [list[0].id]);
   assert.equal(stepOf(await read(prop), 'compliance:eicr').state, 'todo');
   assert.ok((await owner("select count(*)::int n from private.workspace_lead_activity a join private.workspace_client_enquiries e on e.id=a.enquiry_id where e.property_id=$1 and a.body like 'The EICR job is done.%'", [prop]))[0].n >= 1);
 
@@ -756,4 +758,52 @@ test('set-up condition: when Recharge set up, the team send a statement that can
   await refused(act({ action: 'reportCondition', propertyId: prop, conditionKey: key, note: 'Late' }), /already checked/);
   const theirs = await signed('Owner Set-up Flat', { answers: { ...ANSWERS, setUp: 'owner' } });
   await refused(act({ action: 'reportCondition', propertyId: theirs, conditionKey: key, note: 'Keybox lid broken' }), /owner is setting the property up/);
+});
+
+test('broadband set up by Recharge: the install date, the technician, then the Wi-Fi reset with the portal, saved to the property', async () => {
+  // Already installed, or the owner sets it up: no change.
+  assert.equal(stepOf(await read(await signed('Wired Flat')), 'broadband.setUp').kind, 'tick');
+  const answers = { ...ANSWERS, broadbandInstalled: false, broadbandRecharge: true };
+  const prop = await signed('Broadband Flat', { answers });
+  let v = await read(prop);
+  let s = stepOf(v, 'broadband.setUp');
+  assert.deepEqual([s.kind, s.who, s.state, s.canTick], ['broadband', 'recharge', 'todo', false]);
+  assert.equal(v.launch.broadband.suggestedWifiName, 'Recharge 8 Shore Road');
+  assert.equal(v.launch.broadband.suggestedWifiPassword, 'ChargeTheInternet123!');
+  assert.deepEqual([v.launch.broadband.canSetDate, v.launch.broadband.canAssign, v.launch.broadband.canComplete], [true, true, false]);
+  // Not completed on its board: it needs the Wi-Fi.
+  const [ticket] = await owner("select work_id id from private.workspace_launch_tickets where property_id=$1 and step='broadband.setUp'", [prop]);
+  await refused(owner("update public.workspace_work_items set status='completed',completed_at=now() where id=$1", [ticket.id]), /Finish/);
+
+  // The owner gives the install date; the team are told.
+  await refused(act({ action: 'setBroadbandDate', propertyId: prop, date: plus(-1) }, OWNER), /from today/);
+  v = await act({ action: 'setBroadbandDate', propertyId: prop, date: plus(5) }, OWNER);
+  assert.equal(v.launch.broadband.installOn, plus(5));
+  assert.equal(v.launch.broadband.canAssign, false, 'the owner does not assign');
+  // The team assign the technician, who sees it on Home and can open the checklist.
+  await refused(act({ action: 'assignBroadbandTech', propertyId: prop, technicianId: users[FITTER] }, OWNER), /Only the team/);
+  await refused(act({ action: 'completeBroadband', propertyId: prop, wifiName: 'x', wifiPassword: 'abcdefgh', portal: true }), /Assign the technician first/);
+  await refused(act({ action: 'assignBroadbandTech', propertyId: prop, technicianId: users[OWNER] }), /Choose the technician/);
+  await act({ action: 'assignBroadbandTech', propertyId: prop, technicianId: users[FITTER] });
+  let mine = await read(null, FITTER);
+  assert.deepEqual(mine.broadbandWork.map(x => [x.propertyId, x.installOn]), [[prop, plus(5)]]);
+  mine = await read(prop, FITTER);
+  assert.equal(mine.launch.isBroadbandTech, true);
+  assert.equal(mine.launch.broadband.canComplete, true);
+  await refused(act({ action: 'completeBroadband', propertyId: prop, wifiName: 'Recharge 8 Shore Road', wifiPassword: 'ChargeTheInternet123!', portal: true }, OWNER), /Only the technician or the team/);
+  await refused(as(FITTER).then(() => rpc('workspace_launch_action', [{ action: 'completeBroadband', requestId: crypto.randomUUID(), propertyId: prop, wifiName: 'Recharge 8 Shore Road', wifiPassword: 'short', portal: true }])), /8 to 63/);
+  await refused(as(FITTER).then(() => rpc('workspace_launch_action', [{ action: 'completeBroadband', requestId: crypto.randomUUID(), propertyId: prop, wifiName: 'Recharge 8 Shore Road', wifiPassword: 'ChargeTheInternet123!', portal: false }])), /portal/);
+  v = await act({ action: 'completeBroadband', propertyId: prop, wifiName: 'Recharge 8 Shore Road', wifiPassword: 'ChargeTheInternet123!', portal: true }, FITTER);
+  s = stepOf(v, 'broadband.setUp');
+  assert.equal(s.state, 'done');
+  assert.deepEqual([v.launch.broadband.wifiName, v.launch.broadband.wifiPassword, v.launch.broadband.portal], ['Recharge 8 Shore Road', 'ChargeTheInternet123!', true]);
+  // Saved to the property's Wi-Fi (the guidebook's), the mirrored ticket completed, the owner told.
+  const [g] = await owner('select wifi_name,wifi_password from private.workspace_launch_guidebooks where property_id=$1', [prop]);
+  assert.deepEqual(g, { wifi_name: 'Recharge 8 Shore Road', wifi_password: 'ChargeTheInternet123!' });
+  assert.equal((await owner('select status from public.workspace_work_items where id=$1', [ticket.id]))[0].status, 'completed');
+  await said(/broadband is installed and the Wi-Fi is set up/);
+  assert.deepEqual((await read(null, FITTER)).broadbandWork, []);
+  await refused(act({ action: 'setBroadbandDate', propertyId: prop, date: plus(6) }), /already set up/);
+  // The guidebook still books and fills in as before, with the Wi-Fi already there.
+  assert.equal(stepOf(await read(prop), 'guidebook.book').state, 'locked');
 });
