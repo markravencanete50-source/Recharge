@@ -84,16 +84,35 @@ function Check({ p, on, label, detail, onPress }: { p: Palette; on: boolean; lab
 }
 
 // What a part asks for before it can be ticked.
-function TickForm({ p, step, settings, busy, onTick }: { p: Palette; step: LaunchStep; settings: LaunchSettings; busy: boolean; onTick: (data?: Record<string, unknown>) => void }) {
-  const [note, setNote] = useState(""), [on, setOn] = useState(""), [access, setAccess] = useState(""), [ticks, setTicks] = useState<string[]>([]);
+function TickForm({ p, step, settings, busy, onTick, launch, onReport }: {
+  p: Palette; step: LaunchStep; settings: LaunchSettings; busy: boolean; onTick: (data?: Record<string, unknown>) => void;
+  launch?: LaunchView; onReport?: (conditionKey: string, note: string) => void;
+}) {
+  const [note, setNote] = useState(""), [reporting, setReporting] = useState<string | null>(null), [problem, setProblem] = useState(""), [on, setOn] = useState(""), [access, setAccess] = useState(""), [ticks, setTicks] = useState<string[]>([]);
   const [required, setRequired] = useState<boolean | null>(null), [number, setNumber] = useState("");
   if (step.kind === "date") return <View style={{ gap: 8 }}>
     <DateField p={p} label="Inspection date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today()} value={{ from: on, to: on }} onChange={next => setOn(next.from)} />
     <Field p={p} multiline label="How to get into the property" value={access} onChange={v => setAccess(v.slice(0, 2000))} />
     <Button p={p} icon="calendar" label="Book it" disabled={busy || !on || access.trim().length < 3} onPress={() => onTick({ on, access })} />
   </View>;
+  // When Recharge set up, a statement that cannot be ticked is reported to property maintenance (20261029900000).
+  const canReport = !!onReport && !!launch?.isTeam && step.who === "recharge";
+  const reports = launch?.conditionReports ?? [];
   if (step.kind === "condition") return <View style={{ gap: 4 }}>
-    {settings.condition.map(c => <Check key={c.key} p={p} on={ticks.includes(c.key)} label={c.title} detail={c.text} onPress={() => setTicks(t => t.includes(c.key) ? t.filter(x => x !== c.key) : [...t, c.key])} />)}
+    {settings.condition.map(c => {
+      const open = reports.filter(r => r.key === c.key), live = open.find(r => !["completed", "cancelled", "declined"].includes(r.status));
+      return <View key={c.key} style={{ gap: 4 }}>
+        <Check p={p} on={ticks.includes(c.key)} label={c.title} detail={c.text} onPress={() => setTicks(t => t.includes(c.key) ? t.filter(x => x !== c.key) : [...t, c.key])} />
+        {open.map(r => <Text key={r.workId} style={[ui.small, { color: p.muted, paddingLeft: 30 }]}>{`${live?.workId === r.workId ? "With property maintenance" : "Repaired"} (reported ${when(r.reportedAt)}): ${r.issue.replace(/^Set-up condition: [^:]*: /, "")}`}</Text>)}
+        {canReport && !live && !ticks.includes(c.key) && (reporting === c.key ? <View style={{ gap: 6, paddingLeft: 30 }}>
+          <Field p={p} multiline label="What is wrong" value={problem} onChange={v => setProblem(v.slice(0, 1000))} />
+          <View style={[ui.row, { gap: 8, flexWrap: "wrap" }]}>
+            <Button p={p} icon="tool" label="Send to property maintenance" disabled={busy || problem.trim().length < 3} onPress={() => { onReport?.(c.key, problem); setReporting(null); setProblem(""); }} />
+            <Button p={p} quiet icon="x" label="Cancel" onPress={() => { setReporting(null); setProblem(""); }} />
+          </View>
+        </View> : <View style={{ paddingLeft: 30, alignItems: "flex-start" }}><Button p={p} quiet icon="alert-triangle" label="Cannot tick: report it" onPress={() => { setReporting(c.key); setProblem(""); }} /></View>)}
+      </View>;
+    })}
     <Text style={[ui.small, { color: p.muted }]}>{`${ticks.length} of ${settings.condition.length} ticked. Anything that cannot be ticked goes to property maintenance first.`}</Text>
     <Button p={p} icon="check" label="Every statement is ticked" disabled={busy || ticks.length < settings.condition.length} onPress={() => onTick({ ticks })} />
   </View>;
@@ -277,7 +296,8 @@ export function LaunchPanel({ p, propertyId, owner = false }: { p: Palette; prop
               ? "We are arranging this. You will be asked to approve the contractor's quote in Repairs."
               : "A property maintenance job: the contractor's quote, approvals, visit and invoice go through Maintenance. Upload the certificate here when it is done."}</Text>}
             {!!s.ticketId && !owner && s.section !== "compliance" && read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] && <Text style={[ui.small, { color: p.muted }]}>{`Also on the ${boardName(read.settings.boards[s.section === "setUp" ? "furnishing" : s.section] ?? "")} board.`}</Text>}
-            {openStep === s.key && <TickForm p={p} step={s} settings={settings} busy={busy} onTick={data => void act({ action: "tick", step: s.key, ...(data ? { data } : {}) }, "Ticked.")} />}
+            {openStep === s.key && <TickForm p={p} step={s} settings={settings} busy={busy} launch={v} onTick={data => void act({ action: "tick", step: s.key, ...(data ? { data } : {}) }, "Ticked.")}
+              onReport={(conditionKey, problem) => void act({ action: "reportCondition", conditionKey, note: problem }, "Sent to property maintenance. Tick the statement once it is repaired.")} />}
             {s.kind === "housekeeper" && v.canAllocate && <View style={{ gap: 6 }}>
               {read.housekeepers.length === 0 ? <Text style={[ui.small, { color: p.muted }]}>There are no active housekeepers yet. Ask recruitment for one, with the area.</Text>
                 : <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>{read.housekeepers.map(h => <Choice key={h.id} p={p} on={(hk || v.housekeeper?.id) === h.id} label={h.name} onPress={() => setHk(h.id)} />)}</View>}

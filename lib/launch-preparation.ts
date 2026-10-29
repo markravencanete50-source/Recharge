@@ -162,6 +162,8 @@ export const launchActionSchema = z.discriminatedUnion('action', [
     action: z.literal('addGardenQuote'), requestId: id, propertyId: id, contractor: z.string().trim().min(1, 'Enter the contractor').max(200),
     pricePence: z.number().int().min(1, 'Enter the price').max(10_000_000), basis: z.enum(GARDEN_BASES), frequency: z.enum(GARDEN_FREQUENCIES), details: z.string().trim().max(2000),
   }).strict(),
+  // A set-up condition statement that cannot be ticked goes to property maintenance (20261029900000).
+  z.object({ action: z.literal('reportCondition'), requestId: id, propertyId: id, conditionKey: z.string().max(40), note: z.string().trim().min(3, 'Say what is wrong').max(1000) }).strict(),
   z.object({ action: z.literal('decideGardenQuote'), requestId: id, propertyId: id, quoteId: id, decision: z.enum(['accept', 'reject']), reason: z.string().trim().max(1000).optional() }).strict(),
   z.object({ action: z.literal('allocate'), requestId: id, propertyId: id, housekeeperId: id }).strict(),
   z.object({ action: z.literal('bookReadiness'), requestId: id, propertyId: id, date }).strict(),
@@ -259,6 +261,7 @@ export const launchViewSchema = z.object({
   inventory: inventorySchema.nullable().default(null),
   isTechnician: z.boolean().default(false), guidebook: guidebookSchema.nullable().default(null),
   garden: gardenSchema.nullable().default(null),
+  conditionReports: z.array(z.object({ key: z.string(), workId: id, issue: z.string(), status: z.string(), reportedAt: z.string() })).default([]),
   canAllocate: z.boolean().default(false), canBookReadiness: z.boolean().default(false), canSubmitReadiness: z.boolean().default(false),
 });
 export type LaunchView = z.infer<typeof launchViewSchema>;

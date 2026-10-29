@@ -18,6 +18,7 @@ const ROUND_FOUR = 'supabase/migrations/20261029400000_launch_inventory.sql';
 const ROUND_FIVE = 'supabase/migrations/20261029500000_launch_guidebook.sql';
 const ROUND_SIX = 'supabase/migrations/20261029700000_launch_compliance_jobs.sql';
 const ROUND_SEVEN = 'supabase/migrations/20261029800000_launch_garden_quotes.sql';
+const ROUND_EIGHT = 'supabase/migrations/20261029900000_launch_condition_repairs.sql';
 const studio = await vite.ssrLoadModule('/lib/furnishing-studio.ts');
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -144,9 +145,10 @@ test('the migration runs twice, stays locked down, and its starting statements m
   const five = await fs.readFile(ROUND_FIVE, 'utf8');
   const six = await fs.readFile(ROUND_SIX, 'utf8');
   const seven = await fs.readFile(ROUND_SEVEN, 'utf8');
+  const eight = await fs.readFile(ROUND_EIGHT, 'utf8');
   await db.exec('reset role');
-  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six, seven]) await db.exec(x);
-  assert.ok(!/—/.test(sql + two + three + four + five + six + seven), 'no em dashes');
+  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six, seven, eight]) await db.exec(x);
+  assert.ok(!/—/.test(sql + two + three + four + five + six + seven + eight), 'no em dashes');
   for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets',
     'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks', 'workspace_launch_garden_quotes']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
@@ -725,4 +727,33 @@ test('garden maintenance: the team add the quote, the owner rejects it with a re
   const body = { action: 'addGardenQuote', requestId, propertyId: other, contractor: 'Green Thumbs', pricePence: 12000, basis: 'month', frequency: 'monthly', details: '' };
   await rpc('workspace_launch_action', [body]); await rpc('workspace_launch_action', [body]);
   assert.equal((await owner('select count(*)::int n from private.workspace_launch_garden_quotes where property_id=$1', [other]))[0].n, 1);
+});
+
+test('set-up condition: when Recharge set up, the team send a statement that cannot be ticked to property maintenance', async () => {
+  const prop = await signed('Condition Flat');
+  let v = await read(prop);
+  const key = v.settings.condition[0].key, title = v.settings.condition[0].title;
+  assert.equal(stepOf(v, 'setUp.condition').who, 'recharge');
+  await refused(act({ action: 'reportCondition', propertyId: prop, conditionKey: key, note: 'Keybox lid broken' }, OWNER), /Only the team/);
+  await refused(act({ action: 'reportCondition', propertyId: prop, conditionKey: 'nope', note: 'Keybox lid broken' }), /Choose a condition statement/);
+  v = await act({ action: 'reportCondition', propertyId: prop, conditionKey: key, note: 'Keybox lid broken' });
+  assert.equal(v.launch.conditionReports.length, 1);
+  const [report] = v.launch.conditionReports;
+  assert.deepEqual([report.key, report.issue, report.status], [key, `Set-up condition: ${title}: Keybox lid broken`, 'waiting']);
+  // A property maintenance job the owner can see, going through the repair flow.
+  const [job] = await owner("select w.module_id,w.client_visible,d.data->>'phase' phase from public.workspace_work_items w join private.workspace_domain_details d on d.work_id=w.id where w.id=$1", [report.workId]);
+  assert.deepEqual(job, { module_id: 'stays-maintenance-reporting', client_visible: true, phase: 'triage' });
+  assert.equal((await read(prop, OWNER)).launch.conditionReports.length, 1);
+  assert.ok((await owner("select count(*)::int n from private.workspace_lead_activity a join private.workspace_client_enquiries e on e.id=a.enquiry_id where e.property_id=$1 and a.body like 'Set-up condition:%Sent to property maintenance.'", [prop]))[0].n >= 1);
+  // Not twice while it is open; again once it is repaired.
+  await refused(act({ action: 'reportCondition', propertyId: prop, conditionKey: key, note: 'Still broken' }), /already with property maintenance/);
+  await owner("update private.workspace_domain_details set data=data||'{\"workStatus\":\"completed\",\"phase\":\"completed\"}' where work_id=$1", [report.workId]);
+  await owner("update public.workspace_work_items set status='completed',completed_at=now() where id=$1", [report.workId]);
+  v = await act({ action: 'reportCondition', propertyId: prop, conditionKey: key, note: 'Broken again' });
+  assert.equal(v.launch.conditionReports.length, 2);
+  // Once checked, nothing more to report; and not when the owner sets up.
+  await tick(prop, 'setUp.condition', { ticks: v.settings.condition.map(c => c.key) });
+  await refused(act({ action: 'reportCondition', propertyId: prop, conditionKey: key, note: 'Late' }), /already checked/);
+  const theirs = await signed('Owner Set-up Flat', { answers: { ...ANSWERS, setUp: 'owner' } });
+  await refused(act({ action: 'reportCondition', propertyId: theirs, conditionKey: key, note: 'Keybox lid broken' }), /owner is setting the property up/);
 });
