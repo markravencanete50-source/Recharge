@@ -63,3 +63,4 @@
 -- 20261030100000 launch_assignees: installed by Lee 2026-10-29, verified
 -- 20261030200000 launch_inspection: installed by Lee 2026-10-29, verified
 -- 20261030300000 launch_compliance_binder: installed by Lee 2026-10-30, verified
+-- 20261031100000 lead_manager_approval: installed by Lee 2026-10-31, verified

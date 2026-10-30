@@ -70,6 +70,7 @@ import { pillBox, pillInk } from "./Pills";
 import { ownerPropertyStatus, type OwnerPropertyStatus } from "../../lib/owner-approvals";
 import { EnquiryUploadPicker, EnquiryUploadStatus, sendEnquiryFiles, type EnquiryFile } from "./EnquiryUploads";
 import { repairLimitText, type FieldIssue } from "../../lib/journey-policy";
+import { StockCard } from "./Changeover";
 // The map and its coastline (about 100 KB) load when the Portfolio card first shows.
 const ScotlandMap = lazyScreen(() => import("./ScotlandMap").then(module => module.ScotlandMap));
 
@@ -613,6 +614,8 @@ export function LiveProperties({ palette: p, desktop, account, properties, journ
         {account.role !== "client" && <SoftButton label="Add a local event" icon="calendar" palette={p} onPress={() => openForm(localEventForm(property.id))} />}
         {!!exportMessage && <Text style={[ui.small, { color: p.text }]}>{exportMessage}</Text>}
       </View>}
+      {/* Replenishable stock (20261031200000): the team who look after the property's changeovers. */}
+      {["admin", "super_admin", "stays", "cleaning_manager", "ready"].includes(account.role) && <StockCard p={p} propertyId={property.id} />}
       {invoices.some(invoice => invoice.property_id === property.id) && <View style={{ gap: 8 }}>
         <Text style={{ color: p.text, fontWeight: "700" }}>Invoices</Text>
         {invoices.filter(invoice => invoice.property_id === property.id).map(invoice => (

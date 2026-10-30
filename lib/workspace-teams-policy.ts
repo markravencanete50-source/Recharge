@@ -4,6 +4,7 @@ import { enquiryInviteSchema } from './client-enquiry';
 import { enquiryDetailsSchema } from './journey-policy';
 import { MENU_ROLES, menuLayoutSchema } from './menu-layout';
 import { leadActionSchemas, leadStepIssue } from './lead-policy';
+import { changeoverActionSchemas, changeoverIssue } from './changeover';
 import { checkShiftTimes } from './shift-hours';
 
 const id = z.string().uuid();
@@ -59,8 +60,11 @@ export const teamsReadSchema = z.object({
     // A lead's ticket (20261025300000): the enquiry, its checklist, Estimate Delivery steps and activity (enquiryId).
     'lead',
     // The leads with a step waiting for the Property Performance Manager (20261031100000).
-    'leadApprovals']),
-  from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(), invoiceId: id.optional(), enquiryId: id.optional(),
+    'leadApprovals',
+    // Changeovers (20261031200000): a clean's stock, what it used and the open repairs at the property (workId), or a
+    // property's stock (propertyId).
+    'changeover']),
+  from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(), invoiceId: id.optional(), enquiryId: id.optional(), workId: id.optional(),
   channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']).optional(),
   role: z.enum(['stays', 'cleaning_manager', 'cleans', 'ready', 'accounts']).optional(),
 }).strict().superRefine((value, context) => {
@@ -87,6 +91,8 @@ export const teamsReadSchema = z.object({
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
     else if (value.to < value.from || Date.parse(value.to) - Date.parse(value.from) > 62 * 86400000) context.addIssue({ code: 'custom', message: 'Choose up to 62 days' });
   }
+  if (value.workId && value.section !== 'changeover') context.addIssue({ code: 'custom', message: 'A clean is only for its changeover' });
+  if (value.section === 'changeover' && !value.workId === !value.propertyId) context.addIssue({ code: 'custom', message: 'Choose the clean or the property' });
   if ((value.section === 'lead') !== !!value.enquiryId) context.addIssue({ code: 'custom', message: value.enquiryId ? 'A lead is read on its own' : 'Choose a lead' });
   if ((BUSINESS_REPORT_SECTIONS as readonly string[]).includes(value.section) || value.section === 'stayAnalytics') {
     if (!value.from || !value.to) context.addIssue({ code: 'custom', message: 'Choose the dates' });
@@ -286,7 +292,10 @@ export const teamsActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('deleteEnquiry'), requestId: id, enquiryId: id, version, confirm: z.literal('DELETE').optional() }).strict(),
   // Leads (20261025300000): a comment on a lead, and its Estimate Delivery steps saved, ticked or reopened.
   ...leadActionSchemas,
+  // Changeovers (20261031200000): stock, the late time, and adding to an open repair.
+  ...changeoverActionSchemas,
 ]).superRefine((value, context) => {
+  if (value.action === 'countStock') { const issue = changeoverIssue(value); if (issue) context.addIssue({ code: 'custom', message: issue }); }
   if (value.action === 'saveLeadStep') { const issue = leadStepIssue(value.step, value.data, value.done); if (issue) context.addIssue({ code: 'custom', path: ['data'], message: issue }); }
   if (value.action === 'flagForManagement') {
     if (value.source === 'work' && (!value.workId || value.hubItemId)) context.addIssue({ code: 'custom', message: 'Flag work with its work id only' });
