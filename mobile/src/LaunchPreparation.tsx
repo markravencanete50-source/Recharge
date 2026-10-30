@@ -90,7 +90,7 @@ function TickForm({ p, step, settings, busy, onTick, launch, onReport }: {
   launch?: LaunchView; onReport?: (conditionKey: string, note: string) => void;
 }) {
   const [note, setNote] = useState(""), [reporting, setReporting] = useState<string | null>(null), [problem, setProblem] = useState(""), [on, setOn] = useState(""), [access, setAccess] = useState(""), [ticks, setTicks] = useState<string[]>([]);
-  const [required, setRequired] = useState<boolean | null>(null), [number, setNumber] = useState("");
+  const [required, setRequired] = useState<boolean | null>(null), [number, setNumber] = useState(""), [binder, setBinder] = useState(false);
   if (step.kind === "date") return <View style={{ gap: 8 }}>
     <DateField p={p} label="Inspection date" mode="single" wholeMonthLink={false} empty="Choose a date" today={today()} value={{ from: on, to: on }} onChange={next => setOn(next.from)} />
     <Field p={p} multiline label="How to get into the property" value={access} onChange={v => setAccess(v.slice(0, 2000))} />
@@ -122,7 +122,10 @@ function TickForm({ p, step, settings, busy, onTick, launch, onReport }: {
     return <View style={{ gap: 8 }}>
       <DateField p={p} label={step.state === "done" ? "New expiry date" : "Expiry date"} mode="single" wholeMonthLink={false} empty="Choose the expiry date" today={today()} value={{ from: on, to: on }} onChange={next => setOn(next.from)} />
       {needsFile && <Text style={[ui.small, { color: p.muted }]}>Upload the certificate above first.</Text>}
-      <Button p={p} icon="check" label={step.state === "done" ? "Renewed" : "In place"} disabled={busy || !on || needsFile} onPress={() => onTick({ expiresOn: on })} />
+      {/* A document Recharge organise is also kept in the property's binder (20261030300000). */}
+      {step.who === "recharge" && <Check p={p} on={binder} label="A copy is in the property's binder" onPress={() => setBinder(x => !x)} />}
+      <Button p={p} icon="check" label={step.state === "done" ? "Renewed" : "In place"} disabled={busy || !on || needsFile || (step.who === "recharge" && !binder)}
+        onPress={() => onTick(step.who === "recharge" ? { expiresOn: on, binder: true } : { expiresOn: on })} />
     </View>;
   }
   if (step.kind === "licence") return <View style={{ gap: 8 }}>
@@ -172,6 +175,7 @@ function Done({ p, step }: { p: Palette; step: LaunchStep }) {
   const bits = [
     typeof d.on === "string" ? `Booked for ${day(d.on)}` : "",
     typeof d.expiresOn === "string" ? `Expires ${when(d.expiresOn + "T12:00:00Z")}` : "",
+    d.binder === true ? "A copy is in the property's binder" : "",
     d.required === false ? "No licence needed" : typeof d.number === "string" ? `Licence ${d.number}` : "",
     typeof d.note === "string" ? d.note : "",
     step.doneAt ? `${step.manual ? "Ticked" : "Done"} ${when(step.doneAt)}${step.doneByName ? ` by ${step.doneByName}` : ""}` : "",
