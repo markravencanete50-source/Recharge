@@ -87,6 +87,7 @@ import { LiveClientReports } from "./LiveClientReports";
 import { OwnerMailbox } from "./OwnerMailbox";
 import { OwnerActions } from "./LiveOwnerHome";
 import { DeleteAccountButton, DeleteAccountSheet, PrivacySection } from "./LivePrivacy";
+import { ApplicantPortal } from "./ApplicantPortal";
 import { ACCOUNT_DELETED } from "../../lib/privacy-policy";
 import { PriceNightsLink, WorkHistory } from "./WorkHistory";
 import { WorkJumpContext } from "./WorkJump";
@@ -965,7 +966,12 @@ function Screen() {
   if (checking) return <View style={[ui.fill, { backgroundColor: p.header, alignItems: "center", justifyContent: "center", gap: 20 }]}><CompanyLogo palette={headerPalette(p)} width={180} /><ActivityIndicator accessibilityLabel="Restoring your session" color={p.headerText} /></View>;
   if (!liveApiOrigin()) return <View style={[ui.fill, { backgroundColor: p.background, padding: 24, justifyContent: "center" }]}><EmptyState palette={p} icon="inbox" title="Live connection is awaiting configuration" detail="The backend address will be added to the app when deployment is ready." /></View>;
   if (!account) return <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}><StatusBar style="light" /><LiveSignIn palette={p} notice={notice} onTheme={() => setTheme(theme === "dark" ? "light" : "dark")} onSignedIn={value => { setNotice(""); setWelcome(true); setAccount(value); }} />{!!error && <Text accessibilityRole="alert" style={[ui.small, { color: p.danger, textAlign: "center", padding: 12 }]}>{error}</Text>}</SafeAreaView>;
-  if (account.status !== "active") return <View style={[ui.fill, { backgroundColor: p.background, padding: 24, justifyContent: "center", gap: 16 }]}><EmptyState palette={p} icon="inbox" title={account.status === "pending" ? "Your access is being reviewed" : "Your access has been removed"} detail={account.status === "pending" ? "An administrator will approve your account and choose your tools. You'll then see your workspace here." : "Ask an administrator if you think this is a mistake."} /><SoftButton label="Sign out" icon="log-out" palette={p} onPress={() => { void signOut().finally(() => setAccount(null)); }} /><DeleteAccountButton p={p} onDeleted={deleted} /></View>;
+  if (account.status !== "active") {
+    const leave = <View style={{ gap: 16 }}><SoftButton label="Sign out" icon="log-out" palette={p} onPress={() => { void signOut().finally(() => setAccount(null)); }} /><DeleteAccountButton p={p} onDeleted={deleted} /></View>;
+    const waiting = <View style={[ui.fill, { backgroundColor: p.background, padding: 24, justifyContent: "center", gap: 16 }]}><EmptyState palette={p} icon="inbox" title={account.status === "pending" ? "Your access is being reviewed" : "Your access has been removed"} detail={account.status === "pending" ? "An administrator will approve your account and choose your tools. You'll then see your workspace here." : "Ask an administrator if you think this is a mistake."} />{leave}</View>;
+    // A job applicant's account (careers page, 20261031400000) stays pending and shows their applications instead.
+    return account.status === "pending" ? <SafeAreaView style={[ui.fill, { backgroundColor: p.background }]} edges={["top", "bottom"]}><ApplicantPortal key={account.userId} p={p} fallback={waiting} footer={leave} /></SafeAreaView> : waiting;
+  }
   // New team members sign their contract and finish required training first.
   return (
     <OnboardingGate key={account.userId} account={account} palette={p} onSignOut={() => { void unlinkNotifications().then(() => signOut()).catch(() => undefined).finally(() => setAccount(null)); }}>

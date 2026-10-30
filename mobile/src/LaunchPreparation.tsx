@@ -49,7 +49,7 @@ function AskHousekeeper({ p, propertyId, name, address }: { p: Palette; property
     {sent ? <Text style={[ui.small, { color: p.success }]}>Recruitment have the request. You can follow it on the Recruitment page.</Text>
       : <Button p={p} quiet icon="user-plus" label={busy ? "Opening…" : "Ask recruitment for a housekeeper"} disabled={busy} onPress={() => void open()} />}
     {!!error && <Notice text={error} p={p} tone="bad" />}
-    {rec && <RequestRoleSheet p={p} read={rec} initial={{ jobKey: job?.key, area, propertyId, notes: `Housekeeper for ${name || "a new property"}${address ? ` (${address.replace(/\n/g, ", ")})` : ""}.` }}
+    {rec && <RequestRoleSheet p={p} read={rec} initial={{ jobKey: job?.key, area, propertyId, reason: `No housekeeper is free to allocate to ${name || "a new property"}.`, notes: `Housekeeper for ${name || "a new property"}${address ? ` (${address.replace(/\n/g, ", ")})` : ""}.` }}
       onClose={() => setRec(null)} onDone={() => { setRec(null); setSent(true); }} />}
   </View>;
 }
