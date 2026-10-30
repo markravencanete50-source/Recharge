@@ -9,6 +9,8 @@ import { createServer } from 'vite';
 const vite = await createServer({ configFile: false, server: { middlewareMode: true, hmr: false } });
 const R = await vite.ssrLoadModule('/lib/recruitment.ts');
 const MIGRATION = 'supabase/migrations/20261029600000_recruitment.sql';
+// The hiring process (20261031300000) replaces its functions, so a rerun runs it again after.
+const HIRING = 'supabase/migrations/20261031300000_hiring_process.sql';
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
 create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',email_confirmed_at timestamptz);
@@ -43,7 +45,7 @@ const vacancy = (r, id) => r.vacancies.find(v => v.id === id);
 after(async () => { await db.close(); await vite.close(); });
 
 test('the migration runs twice, keeps everything private and shows the jobs from the plan', async () => {
-  await db.exec('reset role'); await db.exec(await fs.readFile(MIGRATION, 'utf8'));
+  await db.exec('reset role'); await db.exec(await fs.readFile(MIGRATION, 'utf8')); await db.exec(await fs.readFile(HIRING, 'utf8'));
   for (const table of ['workspace_recruitment_settings', 'workspace_recruiters', 'workspace_recruitment_vacancies', 'workspace_recruitment_candidates']) {
     const [row] = await owner(`select has_table_privilege('authenticated','private.${table}','select') a, has_table_privilege('anon','private.${table}','select') b`);
     assert.deepEqual(row, { a: false, b: false }, table);
@@ -80,12 +82,21 @@ test('admins name the recruiters and edit the jobs', async () => {
 test('a manager asks for a housekeeper; recruitment advertise, shortlist, the manager selects and recruitment onboard', async () => {
   const [prop] = await owner("insert into public.workspace_properties(name,address,created_by,request_id) values('Shore Flat','8 Shore Road, Leith',$1,gen_random_uuid()) returning id", [users[ADMIN]]);
   // Asking: the job must exist, an area and 1 to 20 people.
-  await refused(act(MANAGER, { action: 'requestRole', jobKey: 'astronaut', area: 'Leith', positions: 1 }), /Choose the job/);
-  await refused(act(MANAGER, { action: 'requestRole', jobKey: 'housekeeper', area: 'Leith', positions: 1, startBy: '2020-01-01' }), /from today/);
-  let r = await act(MANAGER, { action: 'requestRole', jobKey: 'housekeeper', area: 'Leith', positions: 1, notes: 'For the Shore flat', propertyId: prop.id });
+  await refused(act(MANAGER, { action: 'requestRole', jobKey: 'astronaut', area: 'Leith', reason: 'New flats', positions: 1 }), /Choose the job/);
+  await refused(act(MANAGER, { action: 'requestRole', jobKey: 'housekeeper', area: 'Leith', reason: 'New flats', positions: 1, startBy: '2020-01-01' }), /from today/);
+  let r = await act(MANAGER, { action: 'requestRole', jobKey: 'housekeeper', area: 'Leith', reason: 'No housekeeper free for the Shore flat', positions: 1, notes: 'For the Shore flat', propertyId: prop.id });
   let v = r.vacancies[0];
-  assert.deepEqual([v.title, v.role, v.area, v.propertyName, v.isMine, R.vacancyStage(v)], ['Housekeeper', 'cleans', 'Leith', 'Shore Flat', true, 'requested']);
+  assert.deepEqual([v.title, v.role, v.area, v.propertyName, v.isMine, R.vacancyStage(v), v.status], ['Housekeeper', 'cleans', 'Leith', 'Shore Flat', true, 'approval', 'requested']);
   assert.match(v.advert, /not a cleaner/);
+  // The request waits for the directors (the super admin, nobody being named): approved with the maximum budget.
+  assert.equal(await notified(SUPER, 'recruitment.approval_needed'), 1);
+  assert.equal(await notified(RECRUITER, 'recruitment.requested'), 0);
+  await refused(act(RECRUITER, { action: 'decideRequest', vacancyId: v.id, decision: 'approve', budgetMinor: 6000, budgetUnit: 'job' }), /directors approve/);
+  await refused(act(SUPER, { action: 'decideRequest', vacancyId: v.id, decision: 'approve' }), /maximum budget/);
+  r = await act(SUPER, { action: 'decideRequest', vacancyId: v.id, decision: 'approve', budgetMinor: 6000, budgetUnit: 'job' });
+  v = vacancy(r, v.id);
+  assert.deepEqual([v.status, v.budgetMinor, v.budgetUnit, v.assignedToName, R.vacancyStage(v)], ['open', 6000, 'job', 'Rita Recruiter', 'requested']);
+  assert.equal(await notified(MANAGER, 'recruitment.approved'), 1);
   // The recruiter is told (not the admins, now a recruiter is named).
   assert.equal(await notified(RECRUITER, 'recruitment.requested'), 1);
   assert.equal(await notified(ADMIN, 'recruitment.requested'), 0);
@@ -132,6 +143,9 @@ test('a manager asks for a housekeeper; recruitment advertise, shortlist, the ma
   await act(MANAGER, { action: 'chooseCandidate', vacancyId: v.id, candidateId: nina.id, decision: 'select' });
   assert.equal(await notified(RECRUITER, 'recruitment.candidate_selected'), 1);
 
+  // Selecting her offers her the job; she accepts (recruitment record it).
+  await refused(act(RECRUITER, { action: 'hireCandidate', vacancyId: v.id, candidateId: nina.id, userId: users[NEWBIE] }), /accept the job offer first/);
+  await act(RECRUITER, { action: 'answerOffer', vacancyId: v.id, candidateId: nina.id, answer: 'accept' });
   // Recruitment onboard her: her account (made in Access control) is linked; the vacancy is filled.
   await refused(act(MANAGER, { action: 'hireCandidate', vacancyId: v.id, candidateId: nina.id, userId: users[NEWBIE] }), /Recruitment onboard/);
   await refused(act(RECRUITER, { action: 'hireCandidate', vacancyId: v.id, candidateId: nina.id, userId: users[OWNER] }), /team account/);
@@ -155,7 +169,7 @@ test('a manager asks for a housekeeper; recruitment advertise, shortlist, the ma
 });
 
 test('closing and changing a vacancy, and replaying an action', async () => {
-  let r = await act(READY, { action: 'requestRole', jobKey: 'photographer', area: 'Glasgow', positions: 2 });
+  let r = await act(READY, { action: 'requestRole', jobKey: 'photographer', area: 'Glasgow', reason: 'Listings need photos', positions: 2 });
   const v = r.vacancies.find(x => x.title === 'Photographer');
   await refused(act(MANAGER, { action: 'updateVacancy', vacancyId: v.id, area: 'Glasgow', positions: 1 }), /Vacancy not found/);
   r = await act(READY, { action: 'updateVacancy', vacancyId: v.id, area: 'Glasgow and Paisley', positions: 1, startBy: '', notes: 'One is enough' });
