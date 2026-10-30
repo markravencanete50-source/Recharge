@@ -42,6 +42,10 @@ export const stepDataSchema = { internal: internalDataSchema, external: external
 export type SavableStep = keyof typeof stepDataSchema;
 export type StepData<S extends SavableStep> = z.infer<(typeof stepDataSchema)[S]>;
 export const SAVABLE_STEPS = ['internal', 'external', 'local', 'revenue'] as const;
+// The steps the Property Performance Manager approves: the consultant's Approve sends them instead of ticking them
+// (private.workspace_lead_needs_manager, migration 20261031100000).
+export const MANAGER_STEPS = ['internal'] as const;
+export const needsManager = (step: string) => (MANAGER_STEPS as readonly string[]).includes(step);
 
 // What stops a step being saved, or ticked when `done`, in plain words; null when it can go. The database checks the same.
 export function leadStepIssue(step: SavableStep, data: unknown, done: boolean): string | null {
@@ -69,8 +73,11 @@ export const leadActionSchemas = [
   z.object({ action: z.literal('addLeadComment'), requestId: id, enquiryId: id, text: text(2000).min(1, 'Write a comment') }).strict(),
   z.object({ action: z.literal('saveLeadStep'), requestId: id, enquiryId: id, step: z.enum(SAVABLE_STEPS), data: z.record(z.unknown()), done: z.boolean() }).strict(),
   z.object({ action: z.literal('reopenLeadStep'), requestId: id, enquiryId: id, step: z.enum(LEAD_STEPS) }).strict(),
+  // The Property Performance Manager approves a step sent to them, or returns it with a note (migration 20261031100000).
+  z.object({ action: z.literal('approveLeadStep'), requestId: id, enquiryId: id, step: z.enum(MANAGER_STEPS) }).strict(),
+  z.object({ action: z.literal('returnLeadStep'), requestId: id, enquiryId: id, step: z.enum(MANAGER_STEPS), note: text(1000).min(3, 'Say what to change (at least 3 characters)') }).strict(),
 ] as const;
-export const LEAD_ACTIONS = ['addLeadComment', 'saveLeadStep', 'reopenLeadStep'] as const;
+export const LEAD_ACTIONS = ['addLeadComment', 'saveLeadStep', 'reopenLeadStep', 'approveLeadStep', 'returnLeadStep'] as const;
 
 
 // The PriceLabs report as a file (lib/lead-files-server.ts): what the bucket takes, read from the file's bytes.

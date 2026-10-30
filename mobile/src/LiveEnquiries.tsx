@@ -26,7 +26,7 @@ import {
 } from "../../lib/client-enquiry";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
 import { repairLimitText } from "../../lib/journey-policy";
-import { LEADS_TITLE } from "../../lib/lead-estimate";
+import { LEADS_TITLE, LEAD_STEP_LABEL, leadApprovalsSchema, type LeadApprovals } from "../../lib/lead-estimate";
 
 // Client Enquiries: send the New Property Enquiry Form to a landlord (by email, or a link to send
 // yourself), see every answer when it comes back, and start valuing the property from it.
@@ -46,8 +46,11 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
   const [followUps, setFollowUps] = useState(false);
   const [feeSettings, setFeeSettings] = useState(false), [packageSettings, setPackageSettings] = useState(false), [listingSettings, setListingSettings] = useState(false), [launchSettings, setLaunchSettings] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [approvals, setApprovals] = useState<LeadApprovals | null>(null);
   const load = useCallback(async () => {
     try { setData(clientEnquiriesSchema.parse((await readTeams({ section: "clientEnquiries" })).data)); setError(""); } catch (e) { setError(message(e)); }
+    // What waits for the Property Performance Manager (empty for everyone else); the list still shows if this fails.
+    try { setApprovals(leadApprovalsSchema.parse((await readTeams({ section: "leadApprovals" })).data)); } catch { setApprovals(null); }
   }, []);
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
   const steps = useMemo(() => new Map((data?.items ?? []).map(e => [e.id, enquiryStep(e)])), [data]);
@@ -78,6 +81,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
         { key: "value", label: "To value", count: count("value"), alert: count("value") > 0 }, { key: "waiting", label: "Waiting", count: count("waiting") },
         { key: "progress", label: "In progress", count: count("progress") }, { key: "all", label: "All" },
       ]} />
+      {!!approvals?.items.length && <ApprovalsCard p={p} approvals={approvals} onOpen={setOpenId} />}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!data && !error && <Loading p={p} />}
       {data && !items.length && <Notice text={shown === "value" ? "No answered forms waiting. Send the form to a landlord to start." : "Nothing here yet."} p={p} />}
@@ -93,6 +97,27 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
       <EnquirySheet key={open?.id ?? "none"} p={p} enquiry={open} step={open ? steps.get(open.id)! : "sent"} emailReady={!!data?.emailReady} onClose={() => setOpenId(null)} onChanged={load}
         canDelete={!!open && canDeleteEnquiry(account.role, open)} onDeleted={async () => { setOpenId(null); await Promise.all([load(), onRefresh?.()]); }}
         onOpenProperty={id => { setOpenId(null); onOpenProperty(id); }} />
+    </View>
+  );
+}
+
+// Property Performance Manager approvals: the leads whose Internal Analysis a consultant has sent for approval.
+function ApprovalsCard({ p, approvals, onOpen }: { p: Palette; approvals: LeadApprovals; onOpen: (enquiryId: string) => void }) {
+  return (
+    <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 8 }]}>
+      <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>{`Waiting for your approval (${approvals.items.length})`}</Text>
+      <Text style={[ui.small, { color: p.muted }]}>Property Performance Manager approvals. Open a lead to approve its analysis or return it with a note.</Text>
+      {approvals.items.map(a => (
+        <MotionPress key={a.enquiryId + a.step} accessibilityRole="button" accessibilityLabel={`Open ${a.name}`} onPress={() => onOpen(a.enquiryId)}
+          style={[ui.row, { gap: 10, minHeight: 44, paddingHorizontal: 8, borderRadius: 10, backgroundColor: p.wash }]}>
+          <Feather name="check-square" size={16} color={p.primary} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: p.text, fontWeight: "600" }}>{`${a.name}: ${LEAD_STEP_LABEL[a.step]}`}</Text>
+            <Text style={[ui.small, { color: p.muted }]}>{[a.propertyName, `sent by ${a.sentByName ?? "the team"} ${ago(a.sentAt)}`].filter(Boolean).join(" · ")}</Text>
+          </View>
+          <Feather name="chevron-right" size={16} color={p.muted} />
+        </MotionPress>
+      ))}
     </View>
   );
 }
