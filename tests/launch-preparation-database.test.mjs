@@ -22,6 +22,7 @@ const ROUND_EIGHT = 'supabase/migrations/20261029900000_launch_condition_repairs
 const ROUND_NINE = 'supabase/migrations/20261029950000_launch_broadband.sql';
 const ROUND_TEN = 'supabase/migrations/20261030100000_launch_assignees.sql';
 const ROUND_ELEVEN = 'supabase/migrations/20261030200000_launch_inspection.sql';
+const ROUND_TWELVE = 'supabase/migrations/20261030300000_launch_compliance_binder.sql';
 const studio = await vite.ssrLoadModule('/lib/furnishing-studio.ts');
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
@@ -103,7 +104,7 @@ async function preparedForReadiness(prop) {
   const v = await read(prop);
   await tick(prop, 'setUp.condition', { ticks: v.settings.condition.map(c => c.key) });
   await furnishedQuickly(prop);
-  for (const s of (await read(prop)).launch.steps.filter(s => s.section === 'compliance')) { await certificate(prop, s.key); await tick(prop, s.key, { expiresOn: plus(300) }); }
+  for (const s of (await read(prop)).launch.steps.filter(s => s.section === 'compliance')) { await certificate(prop, s.key); await tick(prop, s.key, { expiresOn: plus(300), binder: true }); }
   await tick(prop, 'licensing.licence', { required: true, number: 'EH-STL-001' });
   await act({ action: 'allocate', propertyId: prop, housekeeperId: users[KEEPER] });
 }
@@ -157,9 +158,10 @@ test('the migration runs twice, stays locked down, and its starting statements m
   const nine = await fs.readFile(ROUND_NINE, 'utf8');
   const ten = await fs.readFile(ROUND_TEN, 'utf8');
   const eleven = await fs.readFile(ROUND_ELEVEN, 'utf8');
+  const twelve = await fs.readFile(ROUND_TWELVE, 'utf8');
   await db.exec('reset role');
-  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six, seven, eight, nine, ten, eleven]) await db.exec(x);
-  assert.ok(!/—/.test(sql + two + three + four + five + six + seven + eight + nine + ten + eleven), 'no em dashes');
+  for (let n = 0; n < 2; n++) for (const x of [sql, two, three, four, five, six, seven, eight, nine, ten, eleven, twelve]) await db.exec(x);
+  assert.ok(!/—/.test(sql + two + three + four + five + six + seven + eight + nine + ten + eleven + twelve), 'no em dashes');
   for (const t of ['workspace_launch_settings', 'workspace_launch_steps', 'workspace_launch_readiness', 'workspace_launch_files', 'workspace_launch_reminders', 'workspace_launch_tickets',
     'workspace_launch_furnishing', 'workspace_launch_furnishing_lines', 'workspace_launch_inventory', 'workspace_launch_inventory_items', 'workspace_launch_guidebooks', 'workspace_launch_garden_quotes', 'workspace_launch_broadband', 'workspace_launch_assignees', 'workspace_launch_inspections']) {
     assert.equal((await owner('select relrowsecurity rls from pg_class where oid=$1::regclass', ['private.' + t]))[0].rls, true, t);
@@ -326,7 +328,10 @@ test('safety certificates: the owner uploads their own, the team any; renewing r
 test('expiry reminders: the owner in the chat and, for a document Recharge organise, a renewal job, once', async () => {
   const prop = await signed('Reminder Flat');
   await certificate(prop, 'compliance:eicr');
-  await tick(prop, 'compliance:eicr', { expiresOn: plus(60) });
+  // Recharge organise the EICR: a copy goes in the property's binder (20261030300000).
+  await refused(tick(prop, 'compliance:eicr', { expiresOn: plus(60) }), /binder/);
+  const ticked = await tick(prop, 'compliance:eicr', { expiresOn: plus(60), binder: true });
+  assert.equal(stepOf(ticked, 'compliance:eicr').data.binder, true);
   await certificate(prop, 'compliance:epc', OWNER);
   await tick(prop, 'compliance:epc', { expiresOn: plus(200) }, OWNER);
   const sweep = async () => { await db.exec('reset role'); return (await db.query('select private.workspace_launch_compliance_sweep() r')).rows[0].r; };
@@ -344,7 +349,7 @@ test('expiry reminders: the owner in the chat and, for a document Recharge organ
 
   // The new certificate does not close the job: it finishes through its own steps (and the owner's expense).
   await certificate(prop, 'compliance:eicr');
-  await tick(prop, 'compliance:eicr', { expiresOn: plus(800) });
+  await tick(prop, 'compliance:eicr', { expiresOn: plus(800), binder: true });
   assert.equal((await owner('select status from public.workspace_work_items where id=$1', [reminders[0].work_id]))[0].status, 'waiting');
 
   // A document the owner looks after keeps the plain renewal ticket on the safety board.
