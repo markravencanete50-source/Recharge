@@ -19,6 +19,7 @@ import { icon, radius, space, textSize, ui, type Palette } from "./theme";
 import { addDays, Anchor, Button, dayLabel, Field, LIST_PREVIEW, london, message, Notice, Section, ShowMore, Tag, useRequestId, useWorkFocus, Loading, OnlySection, useOnlySection } from "./LiveKit";
 import { formatDay, formatMoney } from "../../lib/format";
 import { raisedByLine } from "../../lib/cleaner-repairs";
+import { housekeeperNotes } from "../../lib/changeover";
 import { readOperationsOfKind, readTeams, readWorkMedia, workspaceRequest, writeInbox, writeOperation, writeTeams } from "./backend/client";
 import { PhotoPicker, PhotoStrip } from "./Photos";
 import { PropertyAccess } from "./LiveTools";
@@ -385,6 +386,8 @@ function RepairSheet({ p, account, role, repair, propertyName, today, ownerPhone
       {repair && <>
         <Detail label="Issue" value={repair.data.issue} p={p} />
         {!["client", "ready"].includes(role) && <Detail label="Reported by" value={raisedByLine(repair.data, reportedDay)} p={p} />}
+        {/* What housekeepers added on their changeovers (20261031200000), newest first. */}
+        {!["client", "ready"].includes(role) && housekeeperNotes(repair.data).map(n => <Detail key={n.at + n.note} label={`${n.name}, ${formatDay(n.at.slice(0, 10))}`} value={n.note} p={p} />)}
         <ContractorLine p={p} data={repair.data} />
         {seesGuestChat(role) && phase !== "triage" && <GuestChatLink p={p} data={repair.data} />}
         {!!declined && <Notice text={declined} p={p} tone="bad" />}

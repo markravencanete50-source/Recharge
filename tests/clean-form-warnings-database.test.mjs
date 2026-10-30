@@ -406,12 +406,13 @@ test('sending the form stamps submittedAt on the server (20261015120000); the ap
   assert.match(sent.data.submittedAt, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   assert.ok(Math.abs(Date.parse(sent.data.submittedAt) - before) < 120000, 'stamped now');
   assert.equal(sent.data.submittedBy, users[CLEANER]);
-  // On time by the stamp: 18:00 London on the clean's day is the line.
+  // On time by the stamp: 14:45 London on the clean's day is the line (the plan's late time, 20261031200000; the 18:00
+  // reminder is unchanged).
   const onTime = async (at, day) => (await owner('select private.workspace_clean_form_on_time($1::jsonb,$2::date) v', [{ phase: 'review', submittedBy: users[CLEANER], submittedAt: at }, day]))[0].v;
-  assert.equal(await onTime('2026-12-10T18:00:00.000Z', '2026-12-10'), true, 'GMT in December: 18:00 exactly is on time');
-  assert.equal(await onTime('2026-12-10T18:00:01.000Z', '2026-12-10'), false);
-  assert.equal(await onTime('2026-07-10T17:00:00.000Z', '2026-07-10'), true, 'BST in July: 17:00 UTC is 18:00 London');
-  assert.equal(await onTime('2026-07-10T17:01:00.000Z', '2026-07-10'), false);
+  assert.equal(await onTime('2026-12-10T14:45:00.000Z', '2026-12-10'), true, 'GMT in December: 14:45 exactly is on time');
+  assert.equal(await onTime('2026-12-10T14:45:01.000Z', '2026-12-10'), false);
+  assert.equal(await onTime('2026-07-10T13:45:00.000Z', '2026-07-10'), true, 'BST in July: 13:45 UTC is 14:45 London');
+  assert.equal(await onTime('2026-07-10T13:46:00.000Z', '2026-07-10'), false);
   // The definition keeps the first stamp when a clean is sent again after a review.
   assert.match(await definition('private.workspace_operations_action(jsonb)'), /'submittedAt',coalesce\(d\.data->'submittedAt'/);
 });

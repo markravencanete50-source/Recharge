@@ -149,6 +149,9 @@ const EXACT: Record<string, NoticeCopy> = {
   // A comment on a lead (migration 20261025300000): whoever sent or valued it and everyone who commented on it.
   'enquiry.lead_comment': copy('New comment on a lead', 'Someone on the team has commented on a lead you are part of. Open Leads to read it.'),
   // Internal Analysis goes to the Property Performance Manager, who approves it or returns it (migration 20261031100000).
+  // Changeovers (migration 20261031200000): a counted stock item fell below its minimum, and a housekeeper added to a repair.
+  'cleaning.stock_low': copy('Stock is running low', 'A property has fallen below its minimum of a stock item, so a restock request has been opened. Order more from Restock requests.'),
+  'maintenance.housekeeper_note': copy('A housekeeper added to a repair', 'A housekeeper found an open repair still an issue, or something new about it, on their changeover. Open the repair to read it.'),
   'enquiry.lead_approval': copy('A lead needs your approval', 'A consultant has sent you the Internal Analysis on a lead. Open Leads to approve it or return it with a note.'),
   'enquiry.lead_approved': copy('Your analysis was approved', 'The Property Performance Manager approved the Internal Analysis you sent. Carry on with the next step on the lead.'),
   'enquiry.lead_returned': copy('Your analysis was returned', 'The Property Performance Manager returned the Internal Analysis you sent, with a note on what to change. Open the lead to see it.'),

@@ -1,3 +1,4 @@
+import { ChangeoverPanel } from "./Changeover";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ScrollView, View, useWindowDimensions } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
@@ -609,6 +610,8 @@ function JobSheet({ p, account, manager, op, mine, repairs = [], flags, now, pro
           <Field label="Report" value={report} onChange={setReport} p={p} multiline placeholder="What you cleaned, anything broken or missing, Wi-Fi checked" />
           <CleanCheckForm p={p} answers={answers} items={items} onAnswers={setAnswers} onItems={setItems}
             repairs={<CleanRepairs p={p} clean={{ workId: op.workId, version: op.version }} answers={answers} reported={problems} onSent={reported} />} />
+          {/* Changeovers (20261031200000): the late time, stock used and counted, and repairs already open here. */}
+          <ChangeoverPanel key={"changeover:" + op.workId} p={p} workId={op.workId} />
           <View style={[ui.row, { gap: 8 }]}>
             <View style={{ flex: 1 }}><Field label="Started (optional)" value={startedAt} onChange={setStartedAt} p={p} placeholder="10:30" /></View>
             <View style={{ flex: 1 }}><Field label="Finished (optional)" value={finishedAt} onChange={setFinishedAt} p={p} placeholder="13:15" /></View>
