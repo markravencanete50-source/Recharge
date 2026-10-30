@@ -97,8 +97,13 @@ test('guest replies are graded and credited to whoever was on guest relations', 
   const report = teamPerformanceSchema.parse(await read('teamPerformance', yesterday, today));
   const anna = report.people.find(x => x.fullName === 'Anna'), ben = report.people.find(x => x.fullName === 'Ben');
   assert.deepEqual([anna.green, anna.amber, anna.red, anna.percentGreen, anna.onTrack, anna.bonusTier], [2, 1, 0, 66, false, null]);
-  // By default daily work counts for 40%: Anna worked one Stays day and did none of it, so 66% × 0.6.
-  assert.deepEqual([report.targets.workWeight, anna.daysWorked, anna.workPercent, anna.score], [40, 1, 0, 40]);
+  // By default daily work counts for 40%: Anna worked her Stays day(s) and did none of the work, so 66% × 0.6. Her shift two
+  // hours ago falls on yesterday between midnight and 2am, so the days are counted as the report does (London dates).
+  await db.exec('reset role');
+  const [{ days }] = (await db.query("select count(distinct (clocked_in_at at time zone 'Europe/London')::date)::int days from private.workspace_shifts where user_id=$1 and department in ('guest_relations','client_relations')", [users[ANNA]])).rows;
+  await as(ADMIN);
+  assert.ok(days >= 1 && days <= 2, String(days));
+  assert.deepEqual([report.targets.workWeight, anna.daysWorked, anna.workPercent, anna.score], [40, days, 0, 40]);
   assert.deepEqual([ben.green, ben.amber, ben.red, ben.onTrack], [0, 0, 1, false]);
   assert.deepEqual(report.unassigned, { green: 1, amber: 0, red: 0 });
   assert.equal(anna.shifts, 2);
