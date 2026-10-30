@@ -57,7 +57,9 @@ export const teamsReadSchema = z.object({
     // Read through workspace_property_ratings, which decides who sees which properties (owners are refused for now).
     'propertyRatings',
     // A lead's ticket (20261025300000): the enquiry, its checklist, Estimate Delivery steps and activity (enquiryId).
-    'lead']),
+    'lead',
+    // The leads with a step waiting for the Property Performance Manager (20261031100000).
+    'leadApprovals']),
   from: date.optional(), to: date.optional(), propertyId: id.optional(), userId: id.optional(), invoiceId: id.optional(), enquiryId: id.optional(),
   channel: z.enum(['airbnb', 'booking_com', 'vrbo', 'direct', 'other']).optional(),
   role: z.enum(['stays', 'cleaning_manager', 'cleans', 'ready', 'accounts']).optional(),

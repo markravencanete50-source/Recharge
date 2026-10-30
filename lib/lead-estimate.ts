@@ -77,13 +77,18 @@ export type LeadStats = z.infer<typeof leadStatsSchema>;
 export const leadOurPropertySchema = z.object({ id: z.string().uuid(), name: z.string(), bedrooms: z.number(), stats: leadStatsSchema, ...placeFields });
 export const leadEventSchema = z.object({ id: z.string().uuid(), name: z.string(), on: z.string(), sourceUrl: z.string(), opportunity: z.string(), propertyId: z.string().uuid(), propertyName: z.string(), ...placeFields });
 export const leadRepairSchema = z.object({ id: z.string().uuid(), title: z.string(), status: z.string(), dueOn: z.string().nullable(), visitFrom: z.string().nullable(), contractor: z.string().nullable(), propertyId: z.string().uuid(), propertyName: z.string(), ...placeFields });
-export const leadStepRowSchema = z.object({ step: z.enum(LEAD_STEPS), data: z.record(z.unknown()), savedAt: z.string(), savedByName: z.string().nullable(), tickedAt: z.string().nullable(), tickedByName: z.string().nullable() });
+export const leadStepRowSchema = z.object({
+  step: z.enum(LEAD_STEPS), data: z.record(z.unknown()), savedAt: z.string(), savedByName: z.string().nullable(), tickedAt: z.string().nullable(), tickedByName: z.string().nullable(),
+  // Sent to the Property Performance Manager, or returned by them with a note (20261031100000; absent before it).
+  sentAt: z.string().nullable().default(null), sentByName: z.string().nullable().default(null),
+  returnedAt: z.string().nullable().default(null), returnedByName: z.string().nullable().default(null), returnedNote: z.string().nullable().default(null),
+});
 export type LeadStepRow = z.infer<typeof leadStepRowSchema>;
 export const leadActivitySchema = z.object({ id: z.number(), kind: z.enum(['comment', 'event']), text: z.string(), byId: z.string().uuid().nullable(), byName: z.string().nullable(), at: z.string() });
 export type LeadActivity = z.infer<typeof leadActivitySchema>;
 export const leadFileSchema = z.object({ id: z.string().uuid(), name: z.string(), mime: z.string(), bytes: z.number(), at: z.string() });
 export type LeadFile = z.infer<typeof leadFileSchema>;
-export const leadStateSchema = z.object({ enquiryId: z.string().uuid(), steps: z.array(leadStepRowSchema), files: z.array(leadFileSchema), activity: z.array(leadActivitySchema) });
+export const leadStateSchema = z.object({ enquiryId: z.string().uuid(), canApprove: z.boolean().default(false), steps: z.array(leadStepRowSchema), files: z.array(leadFileSchema), activity: z.array(leadActivitySchema) });
 export type LeadState = z.infer<typeof leadStateSchema>;
 export const leadReadSchema = leadStateSchema.extend({
   enquiry: clientEnquirySchema,
@@ -130,10 +135,18 @@ export const factText = (f: LeadFact) => f.value ?? TBC;
 export const missingFacts = (groups: LeadFactGroup[]) => groups.reduce((n, g) => n + g.facts.filter(f => f.value === null).length, 0);
 
 export type LeadStepState = 'done' | 'current' | 'todo';
-export type LeadSubStep = { step: LeadStep; label: string; state: LeadStepState; by: string | null; at: string | null; saved: boolean };
+export type LeadSubStep = { step: LeadStep; label: string; state: LeadStepState; by: string | null; at: string | null; saved: boolean; waiting: boolean; returned: boolean };
 export type LeadCheck = { key: string; label: string; state: LeadStepState; subSteps?: LeadSubStep[] };
 const rowOf = (steps: readonly LeadStepRow[], step: LeadStep) => steps.find(s => s.step === step);
 export const isTicked = (steps: readonly LeadStepRow[], step: LeadStep) => !!rowOf(steps, step)?.tickedAt;
+// Sent to the Property Performance Manager and not approved yet.
+export const isWaiting = (steps: readonly LeadStepRow[], step: LeadStep) => { const r = rowOf(steps, step); return !!r?.sentAt && !r.tickedAt; };
+// The leads waiting for the Property Performance Manager (their approvals list).
+export const leadApprovalsSchema = z.object({
+  canApprove: z.boolean(),
+  items: z.array(z.object({ enquiryId: z.string().uuid(), name: z.string(), propertyName: z.string().nullable(), step: z.enum(LEAD_STEPS), sentAt: z.string(), sentByName: z.string().nullable() })),
+});
+export type LeadApprovals = z.infer<typeof leadApprovalsSchema>;
 // The first step not ticked yet (the one to do next), or null when all five are.
 export const nextLeadStep = (steps: readonly LeadStepRow[]): LeadStep | null => LEAD_STEPS.find(s => !isTicked(steps, s)) ?? null;
 export const estimateDelivered = (steps: readonly LeadStepRow[]) => LEAD_STEPS.every(s => isTicked(steps, s));
@@ -159,7 +172,7 @@ export function leadChecklist(read: Pick<LeadRead, 'journey' | 'enquiry' | 'step
     return { ...check, subSteps: LEAD_STEPS.map(step => {
       const row = rowOf(read.steps, step);
       const state: LeadStepState = row?.tickedAt ? 'done' : step === next && check.state === 'current' ? 'current' : 'todo';
-      return { step, label: LEAD_STEP_LABEL[step], state, by: row?.tickedByName ?? null, at: row?.tickedAt ?? null, saved: !!row };
+      return { step, label: LEAD_STEP_LABEL[step], state, by: row?.tickedByName ?? null, at: row?.tickedAt ?? null, saved: !!row, waiting: !!row?.sentAt && !row.tickedAt, returned: !row?.tickedAt && !row?.sentAt && !!row?.returnedNote };
     }) };
   });
 }

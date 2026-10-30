@@ -14,7 +14,7 @@ import { TrackerProgress } from "./Tracker";
 import { ui, type Palette } from "./theme";
 import type { ClientEnquiry } from "../../lib/client-enquiry";
 import {
-  LEAD_FILE_RULE, LEAD_RADIUS_MILES, LEAD_STEP_HELP, LEAD_STEP_LABEL, LEAD_STEPS, MAX_LEAD_COMPARABLES, TBC, canOpenStep, estimateFromSteps, factText, feedWords, internalRows, isTicked,
+  LEAD_FILE_RULE, LEAD_RADIUS_MILES, LEAD_STEP_HELP, LEAD_STEP_LABEL, LEAD_STEPS, MAX_LEAD_COMPARABLES, TBC, canOpenStep, estimateFromSteps, factText, feedWords, internalRows, isTicked, isWaiting, needsManager,
   leadChecklist, leadFacts, leadFeed, leadReadSchema, leadStateSchema, leadStepIssue, localItems, milesText, missingFacts, placeOf, stepData, stepsOpen, withState,
   type LeadCheck, type LeadRead, type LeadStep, type SavableStep, type StepData,
 } from "../../lib/lead-estimate";
@@ -98,7 +98,7 @@ export function LeadTicket({ p, enquiry: e, subtitle, header, onClose, onChanged
               {c.subSteps.map(s => {
                 const open = s.state === "done" || canOpenStep(read.steps, s.step);
                 return <CheckRow key={s.step} p={p} small label={s.label} state={s.state} disabled={!open}
-                  hint={s.state === "done" ? (s.by ? `${s.by}, ${formatDay(s.at?.slice(0, 10))}` : "Done") : !open ? "After the step before" : s.saved ? "Draft saved" : undefined}
+                  hint={s.state === "done" ? (s.by ? `${s.by}, ${formatDay(s.at?.slice(0, 10))}` : "Done") : s.waiting ? "With the Property Performance Manager" : s.returned ? "Returned with a note" : !open ? "After the step before" : s.saved ? "Draft saved" : undefined}
                   onPress={() => setTask(s.step)} />;
               })}
             </View>}
@@ -192,7 +192,8 @@ const money = (name: string, label: string): WorkflowField => ({ name, label, ty
 const percent = (name: string, label: string): WorkflowField => ({ name, label, type: "percent", required: false });
 
 function StepTask({ p, read, step, onBack, onChanged, reload }: { p: Palette; read: LeadRead; step: LeadStep; onBack: () => void; onChanged: (state?: unknown) => Promise<void>; reload: () => Promise<void> }) {
-  const ticked = isTicked(read.steps, step), open = stepsOpen(read);
+  const ticked = isTicked(read.steps, step), open = stepsOpen(read), waiting = isWaiting(read.steps, step);
+  const [note, setNote] = useState("");
   const row = read.steps.find(s => s.step === step);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const save = useRequestId("lead-step:" + read.enquiry.id + ":" + step);
@@ -209,9 +210,19 @@ function StepTask({ p, read, step, onBack, onChanged, reload }: { p: Palette; re
   };
   const index = LEAD_STEPS.indexOf(step);
   const doneLine = ticked && row?.tickedAt ? `Ticked by ${row.tickedByName ?? "the team"} on ${formatDay(row.tickedAt.slice(0, 10))}.` : "";
+  // Internal Analysis goes to the Property Performance Manager (20261031100000): waiting, or returned with their note.
+  const waitLine = waiting && row?.sentAt ? `Sent to the Property Performance Manager by ${row.sentByName ?? "the team"} on ${formatDay(row.sentAt.slice(0, 10))}. It is ticked once they approve it.` : "";
+  const returnLine = !ticked && !waiting && row?.returnedNote ? `Returned by ${row.returnedByName ?? "the Property Performance Manager"}: ${row.returnedNote}` : "";
   const footer = <>
     {!!error && <Notice text={error} p={p} tone="bad" />}
-    {ticked && open && step !== "submit" && <Button label={busy ? "Reopening…" : "Reopen this step"} icon="rotate-ccw" p={p} disabled={busy} onPress={() => void run({ action: "reopenLeadStep", step })} />}
+    {waiting && open && read.canApprove && <View style={{ gap: 10 }}>
+      <Field label="Note if you return it" value={note} onChange={v => setNote(v.slice(0, 1000))} p={p} multiline placeholder="What to change before it comes back" />
+      <View style={[ui.row, { gap: 10, flexWrap: "wrap" }]}>
+        <Button label={busy ? "Approving…" : "Approve"} icon="check" primary p={p} disabled={busy} onPress={() => void run({ action: "approveLeadStep", step }, onBack)} />
+        <Button label="Return with the note" icon="corner-up-left" p={p} disabled={busy} onPress={() => { if (note.trim().length < 3) { setError("Say what to change (at least 3 characters)"); return; } void run({ action: "returnLeadStep", step, note: note.trim() }, onBack); }} />
+      </View>
+    </View>}
+    {(ticked || waiting) && open && step !== "submit" && <Button label={busy ? "Reopening…" : waiting ? "Take it back to change it" : "Reopen this step"} icon="rotate-ccw" p={p} disabled={busy} onPress={() => void run({ action: "reopenLeadStep", step })} />}
     <Button label="Back to the lead" icon="arrow-left" quiet p={p} onPress={onBack} />
   </>;
   return (
@@ -219,8 +230,10 @@ function StepTask({ p, read, step, onBack, onChanged, reload }: { p: Palette; re
       <View style={{ gap: 14 }}>
         <Text style={[ui.body, { color: p.muted }]}>{LEAD_STEP_HELP[step]}</Text>
         {!!doneLine && <Notice text={doneLine} p={p} />}
+        {!!waitLine && <Notice text={waitLine} p={p} />}
+        {!!returnLine && <Notice text={returnLine} p={p} tone="bad" />}
         {!open && <Notice text="The owner has moved on from the estimate, so these steps can no longer change." p={p} />}
-        {step === "internal" && <InternalTask p={p} read={read} locked={ticked || !open} busy={busy} onSave={saveStep} />}
+        {step === "internal" && <InternalTask p={p} read={read} locked={ticked || waiting || !open} busy={busy} onSave={saveStep} />}
         {step === "external" && <ExternalTask p={p} read={read} locked={ticked || !open} busy={busy} onSave={saveStep} reload={reload} setError={setError} />}
         {step === "local" && <LocalTask p={p} read={read} locked={ticked || !open} busy={busy} onSave={saveStep} />}
         {step === "revenue" && <RevenueTask p={p} read={read} locked={ticked || !open} busy={busy} onSave={saveStep} setError={setError} />}
@@ -272,7 +285,7 @@ function InternalTask({ p, read, locked, busy, onSave }: TaskProps) {
       </View>
     ))}
     {locked ? (!!notes && <Text style={[ui.body, { color: p.text }]}>{notes}</Text>) : <Field label="Notes" value={notes} onChange={setNotes} p={p} multiline placeholder="What the nearby properties tell us about this one" />}
-    <Actions p={p} locked={locked} busy={busy} done="Approve" onSave={done => onSave({ rows, notes, ...(leadPlace(read) ? {} : { noLocation: true }) }, done)} />
+    <Actions p={p} locked={locked} busy={busy} done={needsManager("internal") && !read.canApprove ? "Send to the Property Performance Manager" : "Approve"} onSave={done => onSave({ rows, notes, ...(leadPlace(read) ? {} : { noLocation: true }) }, done)} />
   </>;
 }
 

@@ -56,6 +56,9 @@ const who = (n: NoticeDetail, nameInTitle: boolean) => nameInTitle || n.event_ty
 export const PERSON_TITLE: Readonly<Record<string, (name: string) => string>> = {
   'cleaning.cleaner_responded': name => `${name} responded to a complaint`,
   'enquiry.lead_comment': name => `${name} commented on a lead`,
+  'enquiry.lead_approval': name => `${name} sent you an analysis to approve`,
+  'enquiry.lead_approved': name => `${name} approved your analysis`,
+  'enquiry.lead_returned': name => `${name} returned your analysis`,
   'feedback.received': name => `Feedback from ${name}`,
   'feedback.replied': name => `${name} replied to your feedback`,
   'hub.todo_added': name => `New to-do from ${name}`,

@@ -148,6 +148,10 @@ const EXACT: Record<string, NoticeCopy> = {
   'enquiry.duplicate': copy('An enquiry may be a duplicate', 'A returned enquiry form matches a property at the same address, an owner we already work with, or another enquiry. Check it in Leads before valuing.'),
   // A comment on a lead (migration 20261025300000): whoever sent or valued it and everyone who commented on it.
   'enquiry.lead_comment': copy('New comment on a lead', 'Someone on the team has commented on a lead you are part of. Open Leads to read it.'),
+  // Internal Analysis goes to the Property Performance Manager, who approves it or returns it (migration 20261031100000).
+  'enquiry.lead_approval': copy('A lead needs your approval', 'A consultant has sent you the Internal Analysis on a lead. Open Leads to approve it or return it with a note.'),
+  'enquiry.lead_approved': copy('Your analysis was approved', 'The Property Performance Manager approved the Internal Analysis you sent. Carry on with the next step on the lead.'),
+  'enquiry.lead_returned': copy('Your analysis was returned', 'The Property Performance Manager returned the Internal Analysis you sent, with a note on what to change. Open the lead to see it.'),
   'enquiry.follow_up_due': copy('A personal follow-up is due', 'An owner has not signed their management agreement yet. Follow up personally in the app, by email, on WhatsApp and by phone, then tick each one on the lead.'),
   'enquiry.follow_up_replied': copy('An owner replied about their agreement', 'An owner who has not signed yet has replied, so the automatic follow-ups have stopped. Follow up personally from the lead.'),
   'enquiry.fee_sent': copy('Onboarding fee invoice sent', 'Accounts have sent an owner their onboarding fee invoice. The owner has been told in the app; reminders go every 48 hours until it is settled.'),

@@ -15,6 +15,8 @@ const { clientEnquiriesSchema } = await vite.ssrLoadModule('/lib/client-enquiry.
 const { estimateComparables } = await vite.ssrLoadModule('/lib/workspace-view.ts');
 const lead = await vite.ssrLoadModule('/lib/lead-estimate.ts');
 const MINE = '20261025300000_lead_estimate_delivery.sql';
+// Internal Analysis is approved by the Property Performance Manager (20261031100000), which replaces two of MINE's functions.
+const APPROVAL = '20261031100000_lead_manager_approval.sql';
 const db = new PGlite();
 await db.exec(`set time zone 'Europe/London';create role anon;create role authenticated;create role service_role bypassrls;create schema auth;grant usage on schema auth to authenticated;
 create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}',email_confirmed_at timestamptz);
@@ -105,9 +107,35 @@ test('the steps tick in order, each with a receipt; Submit Estimate is ticked by
   assert.equal(s.steps[0].tickedAt, null);
   assert.throws(() => teamsActionSchema.parse({ action: 'saveLeadStep', requestId: crypto.randomUUID(), enquiryId: enquiry.id, step: 'internal', data: { rows: [], notes: '' }, done: true }), /Add a note/);
   await assert.rejects(raw(STAYS, { action: 'saveLeadStep', enquiryId: enquiry.id, step: 'internal', data: { rows: [{ propertyId: FAR, name: 'Merchant City flat', miles: 42 }] }, done: true }), /Only properties within 30 miles/);
+  // Fiona's Approve sends it to the Property Performance Manager (admins, and whoever they name) instead of ticking it.
   s = await act(STAYS, { action: 'saveLeadStep', enquiryId: enquiry.id, step: 'internal', data: { rows: lead.internalRows(r, from), notes: 'Old Town flat is the closest match.' }, done: true });
+  assert.equal(lead.isTicked(s.steps, 'internal'), false); assert.ok(lead.isWaiting(s.steps, 'internal'));
+  assert.equal(s.steps[0].sentByName, 'Fiona'); assert.equal(s.canApprove, false);
+  assert.equal(await notified(ADMIN, 'enquiry.lead_approval'), 1); assert.equal(await notified(STAYS, 'enquiry.lead_approval'), 0);
+  await assert.rejects(act(STAYS, { action: 'saveLeadStep', enquiryId: enquiry.id, step: 'internal', data: { rows: [], notes: 'Changed' }, done: false }), /with the Property Performance Manager/);
+  await assert.rejects(act(STAYS, { action: 'approveLeadStep', enquiryId: enquiry.id, step: 'internal' }), /Only the Property Performance Manager/);
+  await assert.rejects(act(STAYS, { action: 'saveLeadStep', enquiryId: enquiry.id, step: 'external', data: { reportUrl: 'https://app.pricelabs.co/report/1', averageRateMinor: 11000 }, done: true }), /Finish the steps before this one first/);
+  // The manager's list, then a return with a note: Fiona is told and can change it again.
+  await as(ADMIN); let waiting = lead.leadApprovalsSchema.parse(await rpc('workspace_lead_approvals'));
+  assert.equal(waiting.canApprove, true); assert.deepEqual(waiting.items.map(x => [x.enquiryId, x.step, x.sentByName]), [[enquiry.id, 'internal', 'Fiona']]);
+  await as(STAYS); assert.deepEqual(lead.leadApprovalsSchema.parse(await rpc('workspace_lead_approvals')), { canApprove: false, items: [] });
+  assert.throws(() => teamsActionSchema.parse({ action: 'returnLeadStep', requestId: crypto.randomUUID(), enquiryId: enquiry.id, step: 'internal', note: 'x' }), /at least 3/);
+  s = await act(ADMIN, { action: 'returnLeadStep', enquiryId: enquiry.id, step: 'internal', note: 'Add the Glasgow trend too.' });
+  assert.equal(lead.isWaiting(s.steps, 'internal'), false); assert.equal(s.steps[0].returnedNote, 'Add the Glasgow trend too.'); assert.equal(s.steps[0].returnedByName, 'Morag');
+  assert.equal(await notified(STAYS, 'enquiry.lead_returned'), 1);
+  assert.equal(lead.leadChecklist(await read(STAYS, enquiry.id))[1].subSteps[0].returned, true);
+  await assert.rejects(act(ADMIN, { action: 'approveLeadStep', enquiryId: enquiry.id, step: 'internal' }), /Nothing on this step is waiting/);
+  s = await act(STAYS, { action: 'saveLeadStep', enquiryId: enquiry.id, step: 'internal', data: { rows: lead.internalRows(r, from), notes: 'Old Town flat is the closest match.' }, done: true });
+  assert.equal(s.steps[0].returnedNote, null, 'sending again clears the note');
+  // Taking it back, then sending it again; the manager approves it and Fiona is told.
+  s = await act(STAYS, { action: 'reopenLeadStep', enquiryId: enquiry.id, step: 'internal' });
+  assert.equal(lead.isWaiting(s.steps, 'internal'), false);
+  await act(STAYS, { action: 'saveLeadStep', enquiryId: enquiry.id, step: 'internal', data: { rows: lead.internalRows(r, from), notes: 'Old Town flat is the closest match.' }, done: true });
+  s = await act(ADMIN, { action: 'approveLeadStep', enquiryId: enquiry.id, step: 'internal' });
   assert.ok(lead.isTicked(s.steps, 'internal'));
-  assert.equal(s.steps[0].tickedByName, 'Fiona');
+  assert.equal(s.steps[0].tickedByName, 'Morag');
+  assert.equal(await notified(STAYS, 'enquiry.lead_approved'), 1);
+  await as(ADMIN); waiting = lead.leadApprovalsSchema.parse(await rpc('workspace_lead_approvals')); assert.deepEqual(waiting.items, []);
   await assert.rejects(act(STAYS, { action: 'saveLeadStep', enquiryId: enquiry.id, step: 'internal', data: { rows: [], notes: 'Changed' }, done: false }), /Reopen it to change it/);
   // External Analysis: up to 3 comparables, the report and the average nightly rate.
   const comp = i => ({ name: 'Leith flat ' + i, url: 'https://www.airbnb.co.uk/rooms/' + i, adrMinor: 10000 + i * 500 });
@@ -145,7 +173,9 @@ test('the steps tick in order, each with a receipt; Submit Estimate is ticked by
   assert.deepEqual(checklist.map(c => [c.label, c.state]).slice(0, 3), [['Enquiry received', 'done'], ['Estimate Delivery', 'done'], ['Sign Agreement', 'current']]);
   assert.deepEqual(checklist[1].subSteps.map(x => x.state), ['done', 'done', 'done', 'done', 'done']);
   const feed = lead.leadFeed(r).map(lead.feedWords);
-  assert.ok(feed.includes('Fiona approved Internal Analysis'), feed.join(' | '));
+  assert.ok(feed.includes('Fiona sent Internal Analysis to the Property Performance Manager'), feed.join(' | '));
+  assert.ok(feed.includes('Morag returned Internal Analysis: Add the Glasgow trend too.'));
+  assert.ok(feed.includes('Morag approved Internal Analysis'));
   assert.ok(feed.includes('Fiona submitted the estimate to the client'));
   assert.ok(feed.includes('Morag added the lead by hand'));
 });
@@ -211,13 +241,15 @@ test('the migration runs twice without changing anything', async () => {
   const before = await definitions();
   const counts = 'select (select count(*) from private.workspace_lead_steps)::int s,(select count(*) from private.workspace_lead_activity)::int a,(select count(*) from private.workspace_lead_files)::int f';
   const rows = (await sql(counts))[0];
-  const text = await fs.readFile('supabase/migrations/' + MINE, 'utf8');
-  await db.exec(text);
+  const text = await fs.readFile('supabase/migrations/' + MINE, 'utf8'), later = await fs.readFile('supabase/migrations/' + APPROVAL, 'utf8');
+  await db.exec(text); await db.exec(later);
   assert.deepEqual(await definitions(), before);
   assert.deepEqual((await sql(counts))[0], rows);
   assert.equal(before[0].split('estimate comparables three: 20261025300000').length, 2, 'patched once');
   assert.equal(before[0].split('lead estimate delivery: 20261025300000').length, 2, 'patched once');
   assert.equal(before[1].split('lead actions: 20261025300000').length, 2, 'patched once');
+  assert.equal(before[1].split('lead manager approval: 20261031100000').length, 2, 'patched once');
+  assert.equal(later.includes(String.fromCharCode(0x2014)), false, 'no em dash');
   assert.equal(text.includes(String.fromCharCode(0x2014)), false, 'no em dash');
   assert.doesNotMatch(text, /\bdelete\s+from\b|\bdrop\s+table\b/i);
 });

@@ -46,6 +46,8 @@ export const workspaceTeams = rpcRoute({
     : input.section === 'stayReasonSettings' ? client.rpc('workspace_stay_reason_settings')
     // A lead's ticket (the database checks the caller works with enquiries).
     : input.section === 'lead' ? client.rpc('workspace_lead_read', { target_enquiry: input.enquiryId })
+    // What waits for the Property Performance Manager on the leads (the database checks who is asking).
+    : input.section === 'leadApprovals' ? client.rpc('workspace_lead_approvals')
     // Client enquiries also say whether the email service is set up (or the team copies the link).
     : input.section === 'clientEnquiries' ? Promise.all([client.rpc('workspace_teams_read', { section: input.section }),
       import('./integration-server').then(m => enquiryEmailReady(m.integrationSettings()), () => false)]).then(([r, email]) => r.error ? r : { ...r, data: { ...(r.data as object), emailReady: email } })
