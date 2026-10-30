@@ -52,7 +52,7 @@ export const WORKSPACE_MAP: Record<ModuleId, Destination> = {
 export const GUEST_RELATIONS_SUBS = ["cleans", "bookings", "aircover", "reactive", "preventative"] as const;
 export const CLIENT_RELATIONS_SUBS = ["onboarding", "enquiries", "licensing", "listings", "pricing", "reviews", "relisting", "purchases", "furnishing"] as const;
 // Management's own tabs and Accounts' tabs, as the screens know them today.
-export const MANAGEMENT_SUBS = ["queue", "people", "properties", "productivity", "performance", "team", "training", "limits", "decisions", "reflections", "dailytasks", "rota", "responsibilities", "access"] as const;
+export const MANAGEMENT_SUBS = ["queue", "people", "clients", "contractors", "staff", "properties", "productivity", "performance", "team", "training", "limits", "decisions", "reflections", "dailytasks", "rota", "responsibilities", "access"] as const;
 export const ACCOUNTS_SUBS = ["expenses", "payouts", "statements", "receivable", "performance", "aircover"] as const;
 // The Calendar opened on one team's work (Maintenance calendar is "ready"): the teams of lib/calendar-live.ts TEAMS.
 export const CALENDAR_TEAMS = ["stays", "ready", "cleans", "accounts"] as const;

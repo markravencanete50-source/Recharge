@@ -30,7 +30,9 @@ test('every role has stable, unique section keys', () => {
     for (const k of keys) assert.match(k, /^[a-z0-9-]+$/, role);
   }
   // Alex's menu (20 October 2026); the first section keeps each role's old key, Management "management", Finance "money".
-  assert.deepEqual(sectionKeys(panelOf('admin')), ['overview', 'maintenance', 'management', 'safety', 'onboarding', 'listings', 'property-database', 'stock', 'housekeeping', 'money', 'start']);
+  // Business Plan v2 (30 October 2026): Databases keeps the Property Database's key and moves up; Approvals, Receivable
+  // Invoices and Tasks are new.
+  assert.deepEqual(sectionKeys(panelOf('admin')), ['overview', 'property-database', 'approvals', 'receivable', 'tasks', 'maintenance', 'management', 'safety', 'onboarding', 'listings', 'stock', 'housekeeping', 'money', 'start']);
 });
 
 test('the merge only arranges: never a tool the role lacks, never one lost, each link once', () => {

@@ -356,7 +356,8 @@ function ContractSheet({ p, v, c, read, busy, onClose, onSave }: { p: Palette; v
 }
 
 // Contract templates: wording with {{blanks}}, the jobs it is for, and a director's signature.
-export function TemplatesSheet({ p, read, send, onClose, onDone }: { p: Palette; read: RecruitmentRead; send: (body: Record<string, unknown>) => Promise<RecruitmentRead>; onClose: () => void; onDone: (r: RecruitmentRead) => void }) {
+// `inline` puts the list on the page itself (the Contract Templates tool page) instead of in a sheet.
+export function TemplatesSheet({ p, read, send, onClose, onDone, inline = false }: { p: Palette; read: RecruitmentRead; send: (body: Record<string, unknown>) => Promise<RecruitmentRead>; onClose: () => void; onDone: (r: RecruitmentRead) => void; inline?: boolean }) {
   const [editing, setEditing] = useState<ContractTemplate | "new" | null>(null);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const request = useRequestId("contract-templates");
@@ -368,7 +369,7 @@ export function TemplatesSheet({ p, read, send, onClose, onDone }: { p: Palette;
   if (editing) return <TemplateEditor p={p} read={read} template={editing === "new" ? null : editing} busy={busy} error={error} onClose={() => { setEditing(null); setError(""); }}
     onSave={async body => { if (await act({ action: "saveContractTemplate", ...body }, "save:" + (editing === "new" ? "new" : editing.id))) setEditing(null); }} />;
   const jobName = (k: string) => read.settings.jobs.find(j => j.key === k)?.title ?? k;
-  return <Sheet palette={p} visible onClose={onClose} title="Contract templates" subtitle="The contracts new starters sign, pre-signed by a director" icon="signature" width={720}>
+  const list = <>
     <Line p={p} muted text="Write the wording with blanks in double curly brackets, such as {{full_name}}, {{address}} or {{rate}}. Recruitment fill them in for each new starter." />
     {!read.templates.length && <Notice p={p} text="No templates yet." />}
     {read.templates.map(t => <View key={t.id} style={{ gap: 6, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border }}>
@@ -384,7 +385,9 @@ export function TemplatesSheet({ p, read, send, onClose, onDone }: { p: Palette;
     </View>)}
     {!!error && <Notice p={p} tone="bad" text={error} />}
     <Button label="Add a template" icon="plus" p={p} disabled={busy} onPress={() => setEditing("new")} />
-  </Sheet>;
+  </>;
+  return inline ? <View style={{ gap: 12 }}>{list}</View>
+    : <Sheet palette={p} visible onClose={onClose} title="Contract templates" subtitle="The contracts new starters sign, pre-signed by a director" icon="signature" width={720}>{list}</Sheet>;
 }
 
 function TemplateEditor({ p, read, template, busy, error, onClose, onSave }: { p: Palette; read: RecruitmentRead; template: ContractTemplate | null; busy: boolean; error: string; onClose: () => void; onSave: (body: Record<string, unknown>) => Promise<void> }) {

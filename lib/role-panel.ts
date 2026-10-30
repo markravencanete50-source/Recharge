@@ -46,7 +46,10 @@ const ART_ICON: Record<ToolArt, PanelIcon> = {
 };
 
 // Tools whose picture would repeat another's in the panel (Waiting on you is the clock).
-const TOOL_ICON: Record<string, PanelIcon> = { productivity: 'activity', performance: 'award', month: 'trending-up', limits: 'sliders', bins: 'trash-2', compliance: 'file-text' };
+const TOOL_ICON: Record<string, PanelIcon> = { productivity: 'activity', performance: 'award', month: 'trending-up', limits: 'sliders', bins: 'trash-2', compliance: 'file-text',
+  earnings: 'credit-card', 'clients-db': 'users', contractors: 'tool', staff: 'user', applicants: 'user-check', 'contract-templates': 'file-text',
+  'approvals-ppm': 'check-circle', 'approvals-pom': 'check-circle', 'approvals-accounts': 'check-circle',
+  'task-broadband': 'wifi', 'task-photography': 'camera', 'task-social': 'share-2', 'task-guidebook': 'book' };
 const FORM_ICON: Partial<Record<string, PanelIcon>> = { 'new-expense': 'file-plus' };
 
 
@@ -56,7 +59,9 @@ const FORM_ICON: Partial<Record<string, PanelIcon>> = { 'new-expense': 'file-plu
 // (lib/menu-layout.ts); keep it when renaming a title. Links:
 // page:<page>[=label], area:<view>[=label], tool:<home tool key>[=label], start (the role's "start something" forms),
 // form:<form>[=label] (one of those forms, for roles that can start it),
-// same:<home tool key> (a tool another link in the panel already opens).
+// same:<home tool key> (a tool another link in the panel already opens),
+// +<any of the above> (the same place listed again in this section as well, under its own key, so a Business Plan v2
+// section such as Tasks can gather links that also keep their place in Alex's department sections).
 type Layout = { title: string; tagline: string; icon: PanelIcon; groups: [string, string, string[]][] };
 // Alex's menu (20 October 2026). The team's sections, in this order, the same for every team role; each role
 // gets only the links it can open (links it lacks drop out, and an empty section is not shown), so admins
@@ -71,11 +76,22 @@ function teamGroups(role: string): [string, string, string[]][] {
   const only = (yes: boolean, specs: string[]) => yes ? specs : [];
   return [
     // Admins' Reports is the whole business, not their own performance, so it comes last here as Reports.
+    // Business Plan v2 (30 October 2026): Inbox, Earnings and Performance.
     [FIRST_KEY[role], 'My Recharge', ['page:home', 'page:favorites', 'page:inbox=Inbox', 'page:todo=To-do',
-      ...only(!admin, ['page:analytics=My Performance', 'tool:month']),
+      ...only(!admin, ['tool:month=Earnings', 'tool:earnings=Earnings', 'page:analytics=My Performance']),
       'tool:schedule=Schedule', 'tool:today=Schedule', 'tool:rota=Schedule',
       ...only(!admin, ['tool:training', 'page:feedback=Send feedback', 'page:help=Help']),
       ...only(admin, ['page:analytics=Reports'])]],
+    // Business Plan v2's Databases, Approvals, Receivable Invoices and Tasks come next. Databases keeps the old Property
+    // Database section's key, so a saved order for it still applies. Accounts have never had the property pages.
+    ['property-database', 'Databases', [...only(role !== 'accounts', ['page:properties=Properties']), 'tool:clients-db', 'tool:contractors', 'tool:staff',
+      'tool:applicants', 'tool:contract-templates=Contract Templates']],
+    ['approvals', 'Approvals', ['tool:approvals-ppm', 'tool:approvals-pom', 'tool:approvals-accounts=Accounts']],
+    ['receivable', 'Receivable Invoices', ['+tool:receivable=Receivable Invoices']],
+    ['tasks', 'Tasks', [...only(role !== 'cleaning_manager', ['+tool:onboarding=Property Set-Up']), ...only(role === 'cleaning_manager', ['+tool:setups=Property Set-Up']),
+      role === 'ready' ? '+tool:pipeline=Property Maintenance' : '+area:repairs=Property Maintenance', 'tool:task-broadband',
+      '+tool:compliance=Safety Compliance', '+tool:licensing=Licensing', '+tool:garden=Garden Maintenance', '+tool:bins=Waste Collection', '+page:recruitment=Recruitment',
+      'tool:task-photography', 'tool:task-social', 'tool:task-guidebook', ...only(role !== 'cleans', ['+area:cleans=Changeovers']), '+tool:reviews=Reviews']],
     // Garden Maintenance and Waste Collection open the preventative visits filtered to garden or bins visits.
     ['maintenance', 'Maintenance', [...(role === 'ready' ? ['tool:pipeline=Reactive Jobs', ...VISIT_KINDS, 'area:repairs=All maintenance'] : ['area:repairs=Reactive Jobs', ...VISIT_KINDS]),
       'tool:visits', 'tool:aircover=AirCover Claims', 'tool:calendar-ready=Maintenance Calendar']],
@@ -89,8 +105,6 @@ function teamGroups(role: string): [string, string, string[]][] {
       'area:clients=Client relations']],
     ['listings', 'Listing Management', ['tool:bookings=Direct Bookings', 'tool:calendar-stays=Booking Calendar', 'tool:pricing=Pricing',
       'tool:booking-performance=Booking Performance', 'tool:reviews=Reviews', 'tool:checks=Listing Maintenance', 'area:stays=Guest relations']],
-    // Accounts have never had the property pages (lib/tool-directory.ts).
-    ['property-database', 'Property Database', only(role !== 'accounts', ['page:properties=Property Database'])],
     // Accounts' Purchases is their order fulfilment, under Finance. Reimbursement Request starts the New expense form.
     ['stock', 'Stock', [...only(role !== 'accounts', ['tool:purchases=Place Order']), 'tool:studio=Item Catalogue', 'form:new-expense=Reimbursement Request', 'tool:restock']],
     ['housekeeping', 'Housekeeping', [cleaning ? 'area:cleans=My Jobs' : 'area:cleans=Cleans', 'tool:calendar-cleans=Calendar', 'tool:review=Form Submissions',
@@ -158,7 +172,9 @@ export function rolePanel(role: string, modules: readonly string[], layout?: Men
     PAGE_ROLES[name] && !PAGE_ROLES[name]!.includes(role) ? null : { key: 'page:' + name, kind: 'page', label: label ?? pageLabel(name), icon: PAGE[name][1], section: name };
   // Reports is "My performance" for the team (their own numbers); admins keep Reports. Requests: admins decide, staff ask.
   const pageLabel = (name: Page) => name === 'analytics' && role !== 'client' && !admin ? 'My performance' : name === 'decisions' && admin ? 'Management approvals' : PAGE[name][0];
-  const resolve = (spec: string): PanelLink[] => {
+  const resolve = (spec: string, section: string): PanelLink[] => {
+    // Listed again here under a key of this section's own, so it neither moves the link nor is moved by a saved order.
+    if (spec.startsWith('+')) return resolve(spec.slice(1), section).map(l => ({ ...l, key: section + ':' + l.key }));
     if (spec.startsWith('same:')) { used.add('tool:' + spec.slice(5)); return []; }
     if (spec === 'start') return actions.map(a => ({ key: 'start:' + a.key, kind: 'start', label: a.label, icon: a.icon, target: a.target }));
     if (spec.startsWith('form:')) {
@@ -173,7 +189,7 @@ export function rolePanel(role: string, modules: readonly string[], layout?: Men
     return link ? [link] : [];
   };
   const groups: PanelGroup[] = spec.groups.map(([key, title, specs]) => ({
-    key, title, links: specs.flatMap(resolve).filter(link => !used.has(link.key) && !!used.add(link.key)),
+    key, title, links: specs.flatMap(s => resolve(s, key)).filter(link => !used.has(link.key) && !!used.add(link.key)),
   }));
   // Anything the role has that the layout does not place yet still gets a place, under More. (Its key is not the
   // old "more", so an order saved for the old More section cannot pull links out of their sections into it.)

@@ -278,14 +278,19 @@ function PropertySheet({ p, property, creating, people, onClose, onDone }: { p: 
   );
 }
 
-export function LivePeople({ palette: p, account, view }: { palette: Palette; account: WorkspaceAccount; view: "people" | "properties" }) {
+// Business Plan v2's Databases narrow People to one group: owners, Ready's contractors, or the rest of the team.
+export type PeopleGroup = "clients" | "contractors" | "staff";
+export const inGroup = (role: string, group?: PeopleGroup) => !group || (group === "clients" ? role === "client" : group === "contractors" ? role === "ready" : role !== "client" && role !== "ready");
+const GROUP_NOUN: Record<PeopleGroup, string> = { clients: "clients", contractors: "contractors", staff: "staff" };
+export function LivePeople({ palette: p, account, view, group }: { palette: Palette; account: WorkspaceAccount; view: "people" | "properties"; group?: PeopleGroup }) {
   const saved = useSaved();
   const [people, setPeople] = useState<Person[]>([]);
   const [properties, setProperties] = useState<AdminProperty[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
-  const [personFilter, setPersonFilter] = useState<PersonState | "all">("pending");
+  // A database (one group) opens on everyone in it; People opens on who is waiting.
+  const [personFilter, setPersonFilter] = useState<PersonState | "all">(group ? "all" : "pending");
   const [propertyFilter, setPropertyFilter] = useState<"active" | "onboarding" | "archived" | "all">("all");
   const [openPerson, setOpenPerson] = useState<string | null>(null);
   const [openProperty, setOpenProperty] = useState<string | null>(null);
@@ -307,10 +312,11 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
     return () => clearInterval(timer);
   }, []);
   // Start on everyone when nobody is waiting.
-  const pending = people.filter(x => x.status === "pending").length, online = people.filter(x => personState(x) === "online").length;
+  const members = useMemo(() => people.filter(x => inGroup(x.role, group)), [people, group]);
+  const pending = members.filter(x => x.status === "pending").length, online = members.filter(x => personState(x) === "online").length;
   const shownFilter = personFilter === "pending" && !pending && !loading ? "all" : personFilter;
   const q = query.trim().toLowerCase();
-  const shownPeople = useMemo(() => people.filter(x => (shownFilter === "all" || personState(x) === shownFilter) && (!q || (x.fullName + " " + (x.email ?? "")).toLowerCase().includes(q))), [people, shownFilter, q]);
+  const shownPeople = useMemo(() => members.filter(x => (shownFilter === "all" || personState(x) === shownFilter) && (!q || (x.fullName + " " + (x.email ?? "")).toLowerCase().includes(q))), [members, shownFilter, q]);
   const shownProperties = properties.filter(x => (propertyFilter === "all" ? x.status !== "archived" : x.status === propertyFilter) && (!q || (x.name + " " + x.region + " " + x.address).toLowerCase().includes(q)));
   const person = people.find(x => x.userId === openPerson) ?? null;
   const property = properties.find(x => x.id === openProperty) ?? null;
@@ -319,10 +325,10 @@ export function LivePeople({ palette: p, account, view }: { palette: Palette; ac
     <View style={{ gap: 16 }}>
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {loading && <Loading p={p} />}
-      <Search p={p} value={query} onChange={setQuery} placeholder={view === "people" ? "Search people" : "Search properties"} />
+      <Search p={p} value={query} onChange={setQuery} placeholder={view === "people" ? `Search ${group ? GROUP_NOUN[group] : "people"}` : "Search properties"} />
       {view === "people" && <>
-        <Pills p={p} values={["pending", "online", "offline", "revoked", "all"] as const} value={shownFilter} onChange={setPersonFilter} label={v => ({ pending: `Waiting (${pending})`, online: `Online (${online})`, offline: "Offline", revoked: "Revoked", all: "Everyone" })[v]} />
-        <List p={p} search={false} empty={shownFilter === "pending" ? "Nobody is waiting for approval." : shownFilter === "online" ? "Nobody is online right now." : "No people match."}>
+        <Pills p={p} values={["pending", "online", "offline", "revoked", "all"] as const} value={shownFilter} onChange={setPersonFilter} label={v => ({ pending: `Waiting (${pending})`, online: `Online (${online})`, offline: "Offline", revoked: "Revoked", all: group ? `All ${GROUP_NOUN[group]} (${members.length})` : "Everyone" })[v]} />
+        <List p={p} search={false} empty={shownFilter === "pending" ? "Nobody is waiting for approval." : shownFilter === "online" ? "Nobody is online right now." : group ? `No ${GROUP_NOUN[group]} match.` : "No people match."}>
           {shownPeople.map((x, i) => (
             <Row key={x.userId} p={p} first={i === 0} avatar={x.fullName || x.email || "?"} tone={ROLE_TONE[x.role]} title={x.fullName || x.email || "New account"} detail={`${roleLabel(x.role)} · ${x.email ?? "phone sign-up"}${!isWorkspaceAdmin(x.role) ? ` · ${x.assignments.length} propert${x.assignments.length === 1 ? "y" : "ies"}` : ""}${personState(x) === "offline" ? ` · ${lastOnline(x.seenAt)}` : ""}`}
               tags={[STATUS_TAG[personState(x)], ...(!x.emailVerified ? [["Email not verified", "wait"] as [string, "wait"]] : [])]} onPress={() => setOpenPerson(x.userId)} />

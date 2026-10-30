@@ -16,10 +16,12 @@ export type ToolFocusPlace = { section: WorkspaceSection; view?: WorkView; only:
 
 // The Work areas whose screens show one part alone (mobile/src/LiveWorkspace.tsx workPage).
 export const FOCUS_VIEWS: readonly WorkView[] = ['management', 'stays', 'clients', 'cleans', 'repairs', 'accounts'];
-// The pages a tab target can focus a part of: the owner's Portfolio (Statements, Booking calendar) and Help's Training.
+// The pages a tab target can focus a part of: the owner's Portfolio (Statements, Booking calendar), the team's Earnings
+// on My performance, Help's Training, and Recruitment's Applicants and Contract Templates (Business Plan v2's Databases).
 export const FOCUS_TABS: Partial<Record<WorkspaceSection, readonly string[]>> = {
-  analytics: ['section-statements', 'section-booking-calendar', 'section-guests-and-stays'],
+  analytics: ['section-statements', 'section-booking-calendar', 'section-guests-and-stays', 'section-earnings'],
   help: ['section-training'],
+  recruitment: ['recruitment-applicants', 'recruitment-templates'],
 };
 // Where each department's tool pages lead back to.
 export const DEPARTMENT_BACK: Partial<Record<WorkView, string>> = {

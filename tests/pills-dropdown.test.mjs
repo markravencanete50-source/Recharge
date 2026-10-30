@@ -58,7 +58,7 @@ test('Management no longer has a section dropdown: the centre lists its tools as
   assert.doesNotMatch(management, /<Pills /, 'no picker to jump from one tool to another (Lee, 16 October 2026)');
   assert.match(management, /<ToolCards p=\{p\} title="Choose a management tool" cards=\{views\.map\(v => TOOL\[v\]\)\} onOpen=\{setView\} \/>/);
   const views = management.match(/const MANAGEMENT_VIEWS = \[([^\]]*)\]/)[1].split(',').length;
-  assert.equal(views, 16, 'every tool is still there');
+  assert.equal(views, 19, 'every tool is still there, and the Clients, Contractors and Staff databases');
 });
 
 test('Pills lives in its own file; AccountsPayable re-exports it; every screen imports it from Pills.tsx', () => {

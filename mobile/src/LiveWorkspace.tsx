@@ -23,7 +23,7 @@ import { useFaqShortcut } from "./FaqShortcut";
 import { FilterBar } from "./FilterBar";
 import { RechargeSplash } from "./RechargeSplash";
 import { GreetingCard } from "./WelcomeMoment";
-import { Reports } from "./Reports";
+import { MyEarnings, Reports } from "./Reports";
 import { BusinessReports } from "./BusinessReports";
 import { StayReports } from "./StayReports";
 import { Sheet } from "./TeamFlows";
@@ -72,7 +72,7 @@ import { Anchor, AnchorRegistry, OnlySection, WorkFocusContext, dayLabel, messag
 import { ToolHeader, ToolTitled } from "./ToolPage";
 import { LiveTraining } from "./LiveTraining";
 import { DEPARTMENT_BACK, toolPageFor, type ToolPageInfo } from "../../lib/tool-focus";
-import type { HomeToolTarget } from "../../lib/home-tools";
+import { TASK_PARTS, TASK_SUB_PREFIX, type HomeToolTarget, type TaskPart } from "../../lib/home-tools";
 import { budgetChartSchema, type BudgetItem } from "../../lib/accounts-work";
 import { gateDiscountPolicy, inspectionReportFrom, workItemForms, type JourneyView, type OperationView, type WorkflowForm } from "../../lib/workflow-forms";
 import { WorkPhotos } from "./Photos";
@@ -187,6 +187,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   const nav = useMemo(() => orderPhoneBar(liveNavigationFor(account.role), panel), [account.role, panel]);
   const [phoneMenu, setPhoneMenu] = useState(false);
   const [focus, setFocus] = useState<WorkFocus | null>(null);
+  // The Tasks link whose filter was cleared (its nonce), so All work shows everything again until the next link.
+  const [taskCleared, setTaskCleared] = useState<number | null>(null);
   // Counts each visit from the menus, so opening a page again (its link in the left panel) starts it afresh: the
   // Management centre on its cards, Reports on its hub, rather than on the tool or report last opened there.
   const [visit, setVisit] = useState(0);
@@ -605,7 +607,11 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
   // Every word typed must appear in the title, the property (name or street) or the stage.
   const workWords = normalise(workQuery).split(" ").filter(Boolean);
   const places = new Map(properties.map(property => [property.id, `${property.name} ${property.address ?? ""} ${property.region ?? ""}`]));
-  const filtered = work.filter(item => workFilter === "All" || (workFilter === "Completed" ? isDone(item.status) : workFilter === "Waiting" ? isWaitingWork(item.status) : !isDone(item.status)))
+  // Business Plan v2's Tasks (lib/home-tools.ts TASK_PARTS): All work narrowed to Launch Preparation's tickets for one part.
+  const taskSub = currentView === "all" && focus?.sub?.startsWith(TASK_SUB_PREFIX) && focus.nonce !== taskCleared ? focus.sub.slice(TASK_SUB_PREFIX.length) : "";
+  const taskPart = (Object.keys(TASK_PARTS) as TaskPart[]).find(k => k === taskSub) ?? null;
+  const filtered = work.filter(item => !taskPart || (item.kind === "launch_step" && item.data.section === taskPart))
+    .filter(item => workFilter === "All" || (workFilter === "Completed" ? isDone(item.status) : workFilter === "Waiting" ? isWaitingWork(item.status) : !isDone(item.status)))
     .filter(item => { if (!workWords.length) return true; const text = normalise(`${item.title} ${places.get(item.propertyId) ?? ""} ${readableStage(item.status)}`); return workWords.every(w => text.includes(w)); });
   const todayKey = presetPeriod(1).to;
   // Issued invoices and their payments: on Reports for admins, inside Work → Accounts for Accounts
@@ -656,7 +662,8 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
         : <LiveAccounts key={"accounts:" + (focus?.sub ?? "") + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} sectionProps={sectionProps} />)}
       </OnlySection.Provider>
       {currentView === "all" && <>
-        <PageHeading palette={p} title="All work" subtitle={WORK_TITLE[account.role][1]} />
+        <PageHeading palette={p} title={taskPart ? TASK_PARTS[taskPart] : "All work"} subtitle={taskPart ? `Launch Preparation's ${TASK_PARTS[taskPart].toLowerCase()} tickets for each new property. Each is ticked when its part is done.` : WORK_TITLE[account.role][1]} />
+        {taskPart && <SoftButton label="Show all work" icon="arrow-right" palette={p} onPress={() => setTaskCleared(focus?.nonce ?? null)} />}
         {policy && <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, flexDirection: desktop ? "row" : "column", alignItems: desktop ? "center" : "stretch", gap: 12 }]}>
           <View style={{ flex: 1, gap: 4 }}>
             <Text style={{ color: p.text, fontSize: 15, fontWeight: "700" }}>Direct-booking discount policy</Text>
@@ -715,14 +722,16 @@ function Workspace({ account, realAccount, viewAs, onViewAs, notice, palette: p,
     : tab === "favorites" ? <FavoritesPage palette={p} desktop={desktop} entries={entries} onOpen={openEntry} onSearch={() => setSearchOpen(true)} />
     : tab === "work" ? workPage
     : tab === "properties" ? <LiveProperties palette={p} desktop={desktop} account={account} properties={properties} journeys={journeys} work={work} invoices={invoices} period={period} loading={loading} onForm={setForm} onOpenWork={setOpenWork} onRefresh={() => void refresh()} focusProperty={propertyFocus} />
-    : tab === "analytics" ? (account.role === "client" ? <LiveClientReports key={"portfolio:" + (focus?.nonce ?? "")} palette={p} tool={toolPage} onBack={toolBack} /> : reportsPage)
+    : tab === "analytics" ? (account.role === "client" ? <LiveClientReports key={"portfolio:" + (focus?.nonce ?? "")} palette={p} tool={toolPage} onBack={toolBack} />
+      : toolPage?.only === "section-earnings" ? <><ToolHeader p={p} back="My performance" onBack={toolBack} title={toolPage.title} detail={toolPage.detail} /><MyEarnings p={p} account={account} /></>
+      : reportsPage)
     : tab === "mailbox" ? <OwnerMailbox palette={p} account={account} journeys={journeys} properties={properties} onOpenProperty={openProperty} onSign={() => navigate("approvals")} />
     : tab === "approvals" ? <LiveApprovals palette={p} account={account} properties={properties} journeys={journeys} work={work} loading={loading} onForm={setForm} onRefresh={() => refresh()} onInbox={() => navigate("inbox")} onProperties={() => navigate("properties")} />
     : tab === "statements" ? <WorkFocusContext.Provider value={{ ...focus, sub: "statements", nonce: focus?.nonce ?? 0 }}><LiveAccounts key={"statements:" + (focus?.nonce ?? "") + ":" + visit} palette={p} account={account} properties={properties} /></WorkFocusContext.Provider>
     : tab === "enquiries" ? null
     : tab === "feedback" ? <LiveFeedback palette={p} account={account} />
     : tab === "moderation" ? <LiveModeration palette={p} onOpenConversation={openMessages} />
-    : tab === "recruitment" ? <LiveRecruitment palette={p} account={account} />
+    : tab === "recruitment" ? <LiveRecruitment key={"recruitment:" + (focus?.nonce ?? "")} palette={p} account={account} tool={toolPage} />
     : tab === "activity" ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={conversation => openMessages(conversation ?? "")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} />
     : tab === "inbox" ? <LiveChat key={"chat:" + (chatTarget?.nonce ?? 0) + ":" + (chatUpdates ?? (updatesLink ? "link" : ""))} palette={p} account={account} desktop={desktop} properties={properties} onUnread={() => { void loadUnread(); void loadWaiting(); }} guestWaiting={guestWaiting} guestEmailWaiting={guestEmailWaiting} openConversation={chatTarget?.id} focusReply={!!chatTarget?.reply}
         updates={team ? <LiveActivity palette={p} notices={notices} loading={loading} onRead={markRead} work={work} onOpenWork={setOpenWork} onOpenMessages={conversation => openMessages(conversation ?? "")} onOpenProperty={openProperty} onOpenEnquiries={() => openLink(CLIENT_ENQUIRIES_LINK)} /> : undefined} initialTab={team && (chatUpdates !== null || updatesLink) ? "updates" : undefined} onLeave={() => navigate("home")} />

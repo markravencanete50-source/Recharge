@@ -26,7 +26,7 @@ const pointsInside = t => (t.kind === 'work' && t.view !== 'calendar' && t.view 
 // Each department screen, where its sections are printed (the Section headings and the anchors a tool can name).
 const SCREENS = {
   cleans: ['mobile/src/LiveCleans.tsx'], repairs: ['mobile/src/LiveRepairs.tsx'], accounts: ['mobile/src/LiveAccountsWork.tsx', 'mobile/src/LiveWorkspace.tsx'],
-  analytics: ['mobile/src/LiveClientReports.tsx', 'mobile/src/StayReports.tsx'], help: ['mobile/src/LiveTraining.tsx'],
+  analytics: ['mobile/src/LiveClientReports.tsx', 'mobile/src/StayReports.tsx', 'mobile/src/Reports.tsx'], help: ['mobile/src/LiveTraining.tsx'],
 };
 const anchorsIn = files => {
   const found = new Set();
@@ -93,7 +93,7 @@ test('the inventory: each menu tool opens its own part only', () => {
     ['accounts', 'Budget chart', 'section-budget-chart'], ['accounts', 'Invoices', 'section-invoices'], ['accounts', 'AirCover Claims', 'aircover'],
     ['admin', 'Form Submissions', 'section-waiting-for-your-review'], ['cleaning_manager', 'Disputes', 'section-disputes-to-decide'],
     ['cleaning_manager', 'Not assigned', 'section-not-yet-assigned'], ['cleaning_manager', 'Cleaners', 'section-cleaner-performance-this-month'],
-    ['cleaning_manager', 'Schedule', 'section-schedule'], ['cleans', 'Needs a reply', 'section-needs-your-response'], ['cleans', 'My month', 'section-your-month'],
+    ['cleaning_manager', 'Schedule', 'section-schedule'], ['cleans', 'Needs a reply', 'section-needs-your-response'], ['cleans', 'Earnings', 'section-your-month'],
     ['ready', 'Reactive Jobs', 'section-reactive-maintenance'], ['ready', 'Preventative visits', 'section-preventative-maintenance'],
     ['ready', 'Garden Maintenance', 'section-preventative-maintenance'], ['ready', 'Waste Collection', 'section-preventative-maintenance'], ['ready', 'Place Order', 'section-purchase-orders'],
     ['admin', 'AirCover Claims', 'aircover'], ['admin', 'Direct Bookings', 'bookings'], ['admin', 'Pricing', 'pricing'], ['admin', 'Reviews', 'reviews'],
@@ -102,6 +102,10 @@ test('the inventory: each menu tool opens its own part only', () => {
     ['admin', 'Licensing', 'licensing'], ['admin', 'Compliance Certs', 'licensing'],
     ['admin', 'Limit Changer', 'limits'], ['admin', 'People', 'people'], ['admin', 'Access control', 'access'], ['admin', 'Daily Checklist', 'dailytasks'],
     ['client', 'My Statements', 'section-statements'], ['client', 'Calendar', 'section-booking-calendar'], ['stays', 'Training', 'section-training'],
+    // Business Plan v2's sections (30 October 2026).
+    ['stays', 'Earnings', 'section-earnings'], ['admin', 'Clients', 'clients'], ['admin', 'Contractors', 'contractors'], ['admin', 'Staff', 'staff'],
+    ['admin', 'Applicants', 'recruitment-applicants'], ['admin', 'Contract Templates', 'recruitment-templates'],
+    ['admin', 'Property Performance Manager', 'enquiries'], ['admin', 'Property Operations Manager', 'section-waiting-for-your-review'], ['admin', 'Accounts', 'expenses'],
   ];
   for (const [role, label, only] of expected) assert.equal(key(role, label), only, `${role}: ${label}`);
 });
