@@ -46,6 +46,8 @@ const endpoints = new Set([
   "/stay-survey", "/api/stay-survey",
   // The guest guidebook (no account; the private link from Launch Preparation, 20261029500000).
   "/guidebook",
+  // Careers (20261031400000): the public careers page and application, the applicant's account link and account, and the team opening a CV.
+  "/careers", "/careers/account", "/api/careers/apply", "/api/careers/account", "/api/workspace/applicant", "/api/mobile/applicant", "/api/workspace/careers-cv", "/api/mobile/careers-cv",
   // Onboarding settings (the contract used as the agreement template) and the owner's account made on Proceed.
   "/api/workspace/onboarding-settings", "/api/mobile/onboarding-settings", "/api/workspace/owner-account", "/api/mobile/owner-account",
   // The owner's onboarding checklist and the onboarding videos (migration 20261025200000).

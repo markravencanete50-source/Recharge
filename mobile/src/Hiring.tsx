@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Image, View } from "react-native";
+import { Image, Linking, View } from "react-native";
 import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { MotionPress } from "./motion";
@@ -7,6 +7,8 @@ import { Button, Field, Notice, Tag, message, useRequestId } from "./LiveKit";
 import { Sheet } from "./TeamFlows";
 import { DateField } from "./CalendarPicker";
 import { SignaturePad } from "./SignaturePad";
+import { liveApi } from "./LivePages";
+import { liveApiOrigin } from "./backend/client";
 import { ui, type Palette } from "./theme";
 import { londonClock, londonInstant, validClock } from "../../lib/team-time";
 import {
@@ -138,6 +140,8 @@ export function FormPart({ p, v, busy, onAct }: { p: Palette; v: Vacancy; busy: 
   return <View style={{ gap: 8 }}>
     <Heading p={p} text={`Application form: ${v.title}`} />
     <Line p={p} muted text={state} />
+    {/* The link to put in each advert (the careers page, 20261031400000). */}
+    {published && !!liveApiOrigin() && <Text selectable style={[ui.small, { color: p.primary }]}>{`${liveApiOrigin()!.replace(/\/$/, "")}/careers?job=${v.id}`}</Text>}
     <Field label="Hours" value={hours} onChange={setHours} p={p} placeholder="For example 16 to 25 hours a week, weekends" />
     <Field label="Expected earnings" value={earnings} onChange={setEarnings} p={p} placeholder="For example £13 an hour, or £35 to £60 per clean" />
     <Field label="Job description" value={advert} onChange={setAdvert} p={p} multiline />
@@ -228,12 +232,14 @@ function InterviewSheet({ p, v, busy, onClose, onSave }: { p: Palette; v: Vacanc
 export function CandidateHiring({ p, v, c, read, busy, onAct }: { p: Palette; v: Vacancy; c: Candidate; read: RecruitmentRead; busy: boolean; onAct: Act }) {
   const [booking, setBooking] = useState(false), [outcome, setOutcome] = useState<"done" | "no_show" | null>(null), [note, setNote] = useState("");
   const [contracting, setContracting] = useState(false), [signing, setSigning] = useState(false), [signedName, setSignedName] = useState(c.fullName), [reading, setReading] = useState(false);
-  if (v.status !== "open" && !c.contract && !c.interviewStatus && !c.offerStatus) return null;
+  const applicant = <ApplicantPart p={p} v={v} c={c} read={read} busy={busy} onAct={onAct} />;
+  if (v.status !== "open" && !c.contract && !c.interviewStatus && !c.offerStatus) return applicant;
   const s = c.interviewStatus, taken = new Set(v.candidates.filter(x => x.id !== c.id && x.interviewStatus === "booked").map(x => x.interviewAt));
   const free = v.interview.slots.filter(x => future(x) && !taken.has(x));
   const live = v.status === "open" && c.status !== "hired";
   const key = (k: string) => k + ":" + c.id;
   return <View style={{ gap: 6 }}>
+    {applicant}
     {s && <Line p={p} text={INTERVIEW_STATUS_LABEL[s] + (s === "booked" && c.interviewAt ? `: ${slotLabel(c.interviewAt)}` : s === "invited" && c.interviewExpiresAt ? `, answer by ${slotLabel(c.interviewExpiresAt)}` : "") + (c.interviewNote ? `. ${c.interviewNote}` : "")} />}
     {c.offerStatus && <Line p={p} text={OFFER_STATUS_LABEL[c.offerStatus] + (c.offerNote ? `: ${c.offerNote}` : "")} />}
     {live && v.canInterview && <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
@@ -283,6 +289,39 @@ export function CandidateHiring({ p, v, c, read, busy, onAct }: { p: Palette; v:
     {live && v.canContract && c.offerStatus === "accepted" && !c.contract && <Button label="Create their contract" icon="file-plus" primary p={p} disabled={busy} onPress={() => setContracting(true)} />}
     {contracting && <ContractSheet p={p} v={v} c={c} read={read} busy={busy} onClose={() => setContracting(false)}
       onSave={async body => { if (await onAct({ action: "issueContract", candidateId: c.id, ...body }, "The contract is created. They sign it next.", key("contract"))) setContracting(false); }} />}
+  </View>;
+}
+
+// A careers applicant (migration 20261031400000): their CV, whether they made an account, and messages with recruitment
+// (each one also emailed to them from careers@).
+function ApplicantPart({ p, v, c, read, busy, onAct }: { p: Palette; v: Vacancy; c: Candidate; read: RecruitmentRead; busy: boolean; onAct: Act }) {
+  const [opening, setOpening] = useState(false), [error, setError] = useState(""), [writing, setWriting] = useState(false), [text, setText] = useState("");
+  if (c.source !== "careers" && !c.cvFile && !c.messages.length) return null;
+  async function openCv() {
+    setOpening(true); setError("");
+    try {
+      const file = await liveApi(`/careers-cv?candidateId=${encodeURIComponent(c.id)}`);
+      const url = (file.data as { url?: string } | undefined)?.url;
+      if (!url) throw new Error("The CV could not be opened just now");
+      await Linking.openURL(url);
+    } catch (e) { setError(message(e)); } finally { setOpening(false); }
+  }
+  return <View style={{ gap: 6 }}>
+    {c.source === "careers" && <Line p={p} muted text={`Applied on the careers page${c.appliedAt ? ` on ${when(c.appliedAt)}` : ""}. ${c.hasAccount ? "They have an account to follow their application." : "They have not made their account yet."}`} />}
+    <View style={[ui.row, { gap: 6, flexWrap: "wrap" }]}>
+      {c.cvFile && <Button label={opening ? "Opening…" : "Open their CV"} icon="file-text" quiet p={p} disabled={opening} onPress={() => void openCv()} />}
+      {read.canRecruit && !!c.email && <Button label={writing ? "Hide" : c.messages.length ? `Messages (${c.messages.length})` : "Message them"} icon="message-circle" quiet p={p} onPress={() => setWriting(!writing)} />}
+    </View>
+    {!!error && <Notice p={p} tone="bad" text={error} />}
+    {writing && <View style={{ gap: 6, padding: 10, borderRadius: 12, borderWidth: 1, borderColor: p.border }}>
+      {c.messages.map(m => <View key={m.id} style={{ alignSelf: m.fromApplicant ? "flex-start" : "flex-end", maxWidth: "88%", padding: 8, borderRadius: 10, backgroundColor: m.fromApplicant ? p.wash : p.surface, borderWidth: 1, borderColor: p.border }}>
+        <Text style={{ color: p.muted, fontSize: 12 }}>{m.authorName} · {slotLabel(m.at)}</Text>
+        <Text style={{ color: p.text, fontSize: 14 }}>{m.body}</Text>
+      </View>)}
+      {!c.messages.length && <Line p={p} muted text="No messages yet. They get each message by email too." />}
+      <Field label="Your message" value={text} onChange={setText} p={p} multiline />
+      <Button label="Send" icon="send" p={p} disabled={busy || !text.trim()} onPress={() => void onAct({ action: "sendMessage", candidateId: c.id, body: text.trim() }, `Sent to ${c.fullName}, by email too.`, "message:" + c.id).then(ok => { if (ok) setText(""); })} />
+    </View>}
   </View>;
 }
 

@@ -68,6 +68,8 @@ export const contractSchema = z.object({
   signedHow: z.enum(['candidate', 'paper']).nullable(),
 });
 export type HiringContract = z.infer<typeof contractSchema>;
+export const messageSchema = z.object({ id, fromApplicant: z.boolean(), body: z.string(), at: z.string(), authorName: z.string() });
+export type RecruitmentMessage = z.infer<typeof messageSchema>;
 export const candidateSchema = z.object({
   id, fullName: z.string(), email: z.string(), phone: z.string(), cvUrl: z.string(), notes: z.string(), status: z.enum(CANDIDATE_STATUSES),
   decisionNote: z.string(), decidedByName: z.string().nullable(), decidedAt: z.string().nullable(),
@@ -77,6 +79,9 @@ export const candidateSchema = z.object({
   interviewAt: z.string().nullable().default(null), interviewNote: z.string().default(''),
   offerStatus: z.enum(OFFER_STATUSES).nullable().default(null), offeredAt: z.string().nullable().default(null), offerAnsweredAt: z.string().nullable().default(null), offerNote: z.string().default(''),
   contract: contractSchema.nullable().default(null),
+  // The applicant's side (careers page, migration 20261031400000): their CV file, whether they made an account, and messages.
+  cvFile: z.object({ name: z.string(), mime: z.string(), bytes: z.number() }).nullable().default(null), appliedAt: z.string().nullable().default(null),
+  hasAccount: z.boolean().default(false), messages: z.array(messageSchema).default([]),
 });
 export type Candidate = z.infer<typeof candidateSchema>;
 export const VACANCY_STATUSES = ['requested', 'open', 'filled', 'cancelled', 'rejected'] as const;
@@ -227,6 +232,8 @@ export const recruitmentActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('hireCandidate'), ...vacancy, candidateId: id, userId: id }).strict(),
   z.object({ action: z.literal('cancelVacancy'), ...vacancy, reason: z.string().trim().min(1, 'Say why the vacancy is closed').max(1000) }).strict(),
   z.object({ action: z.literal('reopenVacancy'), ...vacancy }).strict(),
+  // A message to a careers applicant (their account and an email), sent by workspace_recruitment_message.
+  z.object({ action: z.literal('sendMessage'), ...candidate, body: z.string().trim().min(1, 'Write a message').max(4000) }).strict(),
 ]);
 export type RecruitmentAction = z.infer<typeof recruitmentActionSchema>;
 export const recruitmentQuerySchema = z.object({}).strict();

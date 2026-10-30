@@ -66,6 +66,13 @@ function startScheduledJobs(controller: { cron?: string; scheduledTime?: number 
       console.error('Owner email replies failed; the next run retries.');
     }));
   }
+  // Every minute too: the careers@ emails to applicants (20261031400000): received, shortlisted, interview, offer, contract
+  // and messages. Each queued email is sent once (a retry is the same email); nothing goes until email is set up.
+  if (env.RESEND_API_KEY) {
+    ctx.waitUntil(import('../lib/careers-email-server').then(module => module.runCareersEmails()).catch(() => {
+      console.error('Careers emails failed; the next run retries.');
+    }));
+  }
   // Every minute too: guests' messages from Hostaway (one request, plus the conversations that changed),
   // so the reply-time clock starts within about a minute. Off unless switched on, like the sync below.
   const hostawayOn = Boolean(env.HOSTAWAY_ACCOUNT_ID && env.HOSTAWAY_API_KEY && env.HOSTAWAY_SYNC_ENABLED === 'true');

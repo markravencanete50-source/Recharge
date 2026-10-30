@@ -6,4 +6,5 @@ export const workspaceRecruitment = rpcRoute({
   readSchema: recruitmentQuerySchema, actionSchema: recruitmentActionSchema, bodyLimit: 340_000, unavailable: 'Recruitment is temporarily unavailable',
   read: client => client.rpc('workspace_recruitment_read'),
   action: 'workspace_recruitment_action',
+  actionFor: input => input.action === 'sendMessage' ? 'workspace_recruitment_message' : 'workspace_recruitment_action',
 });
