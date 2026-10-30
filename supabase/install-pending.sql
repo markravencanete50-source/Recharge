@@ -65,3 +65,4 @@
 -- 20261030300000 launch_compliance_binder: installed by Lee 2026-10-30, verified
 -- 20261031100000 lead_manager_approval: installed by Lee 2026-10-31, verified
 -- 20261031200000 changeover_standards: installed by Lee 2026-10-31, verified
+-- 20261031300000 hiring_process + 20261031400000 careers: installed by Lee 2026-10-30, verified
