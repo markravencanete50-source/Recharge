@@ -6,6 +6,7 @@ import { MotionPress } from "./motion";
 import { Button, Field, Loading, Notice, RefreshButton, Tag, message, useRequestId } from "./LiveKit";
 import { PageHeading, liveApi } from "./LivePages";
 import { Segmented } from "./Segmented";
+import { ToolHeader } from "./ToolPage";
 import { Sheet } from "./TeamFlows";
 import { DateField } from "./CalendarPicker";
 import { ChoiceField } from "./ChoiceField";
@@ -13,6 +14,7 @@ import { AddPersonSheet } from "./LiveAccessControl";
 import { ApprovalPart, AssignPart, CandidateHiring, Choice, FormPart, InterviewSetup, MarketingPart, QuestionsEditor, RequirementsPart, StepsPart, TemplatesSheet } from "./Hiring";
 import { ui, type Palette } from "./theme";
 import type { WorkspaceAccount } from "../../lib/workspace-account-policy";
+import type { ToolPageInfo } from "../../lib/tool-focus";
 import type { WorkspaceRole } from "../../lib/modules";
 import {
   CANDIDATE_STATUS_LABEL, HIRE_ROLES, HIRE_ROLE_LABEL, VACANCY_STAGE_LABEL, jobKey, recruitmentActionSchema, recruitmentReadSchema, vacancyStage,
@@ -77,10 +79,14 @@ export function RequestRoleSheet({ p, read, initial, onClose, onDone }: {
   </Sheet>;
 }
 
-export function LiveRecruitment({ palette: p, account }: { palette: Palette; account: WorkspaceAccount }) {
+// `tool` is set when a menu link opens one part on its own page (lib/tool-focus.ts): Business Plan v2's Databases →
+// Applicants (everyone who applied, across the vacancies) or Contract Templates. Back, or opening an applicant's
+// vacancy, shows the whole Recruitment page.
+export function LiveRecruitment({ palette: p, account, tool }: { palette: Palette; account: WorkspaceAccount; tool?: ToolPageInfo | null }) {
   const [read, setRead] = useState<RecruitmentRead | null>(null);
   const [error, setError] = useState(""), [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"open" | "closed">("open");
+  const [alone, setAlone] = useState(!!tool);
+  const [filter, setFilter] = useState<"open" | "closed" | "applicants">("open");
   const [asking, setAsking] = useState(false), [settings, setSettings] = useState(false), [templates, setTemplates] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const load = useCallback(async () => {
@@ -91,7 +97,17 @@ export function LiveRecruitment({ palette: p, account }: { palette: Palette; acc
   useEffect(() => { let active = true; queueMicrotask(() => { if (active) void load(); }); return () => { active = false; }; }, [load]);
 
   const open = read?.vacancies.filter(v => v.status === "open" || v.status === "requested") ?? [], closed = read?.vacancies.filter(v => v.status !== "open" && v.status !== "requested") ?? [];
-  const shown = filter === "open" ? open : closed;
+  const shown = filter === "open" ? open : filter === "closed" ? closed : [];
+  const keepsTemplates = !!read && (read.canRecruit || read.canApprove);
+  const openVacancy = (v: Vacancy) => { setAlone(false); setFilter(v.status === "open" || v.status === "requested" ? "open" : "closed"); setOpenId(v.id); };
+  if (tool && alone) return <View style={{ gap: 16 }}>
+    <ToolHeader p={p} back="Recruitment" onBack={() => setAlone(false)} title={tool.title} detail={tool.detail} />
+    {!!error && <Notice text={error} p={p} tone="bad" />}
+    {!read && loading && <Loading p={p} />}
+    {read && (tool.only === "recruitment-templates"
+      ? keepsTemplates ? <TemplatesSheet p={p} read={read} send={send} onClose={() => setAlone(false)} onDone={setRead} inline /> : <Notice text="Contract templates are kept by recruitment and the directors." p={p} />
+      : read.canRecruit ? <Applicants p={p} read={read} onOpen={openVacancy} /> : <Notice text="Recruitment see every applicant. Ask for a role and they share a shortlist with you on Recruitment." p={p} />)}
+  </View>;
   return <View style={{ gap: 16 }}>
     <PageHeading palette={p} title="Recruitment" subtitle={read?.canRecruit ? "Vacancies, adverts, candidates and new starters." : "Ask recruitment for a role and choose from the shortlist."}
       action={<RefreshButton p={p} loading={loading} onPress={() => void load()} />} />
@@ -104,13 +120,33 @@ export function LiveRecruitment({ palette: p, account }: { palette: Palette; acc
         {read.canEditSettings && <Button label="Jobs, recruiters and directors" icon="settings" quiet p={p} onPress={() => setSettings(true)} />}
       </View>
       {read.canRecruit && !read.recruiters.length && read.canEditSettings && <Notice text="No recruiters are named yet, so admins hear about new requests. Name the Recruitment Manager in Jobs and recruiters." p={p} />}
-      <Segmented p={p} label="Vacancies" value={filter} onChange={setFilter} items={[{ key: "open", label: "Open", count: open.length, alert: open.some(v => (v.isMine && vacancyStage(v) === "choosing") || v.canDecide) }, { key: "closed", label: "Filled and closed", count: closed.length }]} />
-      {!shown.length && <Notice text={filter === "open" ? "No open vacancies. Ask for a role when your team needs someone new." : "Nothing filled or closed in the last six months."} p={p} />}
+      <Segmented p={p} label="Vacancies" value={filter} onChange={setFilter} items={[{ key: "open", label: "Open", count: open.length, alert: open.some(v => (v.isMine && vacancyStage(v) === "choosing") || v.canDecide) }, { key: "closed", label: "Filled and closed", count: closed.length },
+        ...(read.canRecruit ? [{ key: "applicants" as const, label: "Applicants", count: read.vacancies.reduce((n, v) => n + v.candidates.length, 0) }] : [])]} />
+      {filter === "applicants" && (read.canRecruit
+        ? <Applicants p={p} read={read} onOpen={openVacancy} />
+        : <Notice text="Recruitment see every applicant. Ask for a role and they share a shortlist with you here." p={p} />)}
+      {filter !== "applicants" && !shown.length && <Notice text={filter === "open" ? "No open vacancies. Ask for a role when your team needs someone new." : "Nothing filled or closed in the last six months."} p={p} />}
       {shown.map(v => <VacancyCard key={v.id} p={p} v={v} read={read} account={account} open={openId === v.id} onToggle={() => setOpenId(openId === v.id ? null : v.id)} onChange={setRead} />)}
       {asking && <RequestRoleSheet p={p} read={read} onClose={() => setAsking(false)} onDone={next => { setRead(next); setAsking(false); setFilter("open"); }} />}
       {templates && <TemplatesSheet p={p} read={read} send={send} onClose={() => setTemplates(false)} onDone={setRead} />}
       {settings && <SettingsSheet p={p} read={read} onClose={() => setSettings(false)} onDone={next => { setRead(next); setSettings(false); }} />}
     </>}
+  </View>;
+}
+
+// Everyone who applied or was added, across the vacancies, newest first; each opens its vacancy.
+function Applicants({ p, read, onOpen }: { p: Palette; read: RecruitmentRead; onOpen: (v: Vacancy) => void }) {
+  const rows = read.vacancies.flatMap(v => v.candidates.map(c => ({ v, c }))).sort((a, b) => (b.c.appliedAt ?? "").localeCompare(a.c.appliedAt ?? ""));
+  if (!rows.length) return <Notice text="No applicants yet. They show here as people apply on the careers page or are added to a vacancy." p={p} />;
+  return <View style={{ gap: 8 }}>
+    {rows.map(({ v, c }) => <MotionPress key={c.id} accessibilityRole="button" accessibilityLabel={`Open ${c.fullName}, ${v.title}`} onPress={() => onOpen(v)}
+      style={[ui.between, { gap: 10, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: p.border, backgroundColor: p.surface }]}>
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text style={{ color: p.text, fontSize: 15, fontWeight: "600" }}>{c.fullName}</Text>
+        <Text style={[ui.small, { color: p.muted }]}>{[v.title, c.appliedAt ? "applied " + when(c.appliedAt) : "added by recruitment", c.email].filter(Boolean).join(" · ")}</Text>
+      </View>
+      <Tag p={p} label={CANDIDATE_STATUS_LABEL[c.status]} tone={CANDIDATE_TONE[c.status]} />
+    </MotionPress>)}
   </View>;
 }
 

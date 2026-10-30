@@ -90,8 +90,9 @@ test('a role preview keeps only the records that role could be shown', () => {
   assert.ok(admin.work('anything') && admin.invoices && admin.journeys && admin.notices);
 });
 
-// Alex's menu (20 October 2026): the team's sections in this order, each role seeing only what it can open.
-const TEAM_SECTIONS = ['My Recharge', 'Maintenance', 'Management', 'Safety & Compliance', 'Property Onboarding', 'Listing Management', 'Property Database', 'Stock', 'Housekeeping', 'Finance', 'Start something'];
+// Alex's menu (20 October 2026): the team's sections in this order, each role seeing only what it can open. Business Plan
+// v2 (30 October 2026) adds Databases (the old Property Database), Approvals, Receivable Invoices and Tasks after My Recharge.
+const TEAM_SECTIONS = ['My Recharge', 'Databases', 'Approvals', 'Receivable Invoices', 'Tasks', 'Maintenance', 'Management', 'Safety & Compliance', 'Property Onboarding', 'Listing Management', 'Stock', 'Housekeeping', 'Finance', 'Start something'];
 const linkOf = (role, key) => links(rolePanel(role, DEFAULT_ROLE_MODULES[role])).find(l => l.key === key);
 const has = (role, key, modules = DEFAULT_ROLE_MODULES[role]) => links(rolePanel(role, modules)).some(l => l.key === key);
 const sectionOf = (role, key) => rolePanel(role, DEFAULT_ROLE_MODULES[role]).groups.find(g => g.links.some(l => l.key === key))?.title;
@@ -119,7 +120,11 @@ test('the team menu runs My Recharge to Finance in Alex\'s order, Home, Favourit
   assert.deepEqual(at('Safety & Compliance'), ['Licensing', 'Compliance Certs', 'Safety & Compliance Calendar']);
   assert.deepEqual(at('Property Onboarding'), ['New Property Inspections', 'Leads', 'Property Status', 'Calendar', 'Client relations']);
   assert.deepEqual(at('Listing Management'), ['Direct Bookings', 'Booking Calendar', 'Pricing', 'Booking Performance', 'Reviews', 'Listing Maintenance', 'Guest relations']);
-  assert.deepEqual(at('Property Database'), ['Property Database']);
+  assert.deepEqual(at('Databases'), ['Properties', 'Clients', 'Contractors', 'Staff', 'Applicants', 'Contract Templates']);
+  assert.deepEqual(at('Approvals'), ['Property Performance Manager', 'Property Operations Manager', 'Accounts']);
+  assert.deepEqual(at('Receivable Invoices'), ['Receivable Invoices']);
+  assert.deepEqual(at('Tasks'), ['Property Set-Up', 'Property Maintenance', 'Broadband', 'Safety Compliance', 'Licensing', 'Garden Maintenance', 'Waste Collection',
+    'Recruitment', 'Photography', 'Social media', 'Guidebook', 'Changeovers', 'Reviews']);
   assert.deepEqual(at('Stock'), ['Place Order', 'Item Catalogue', 'Reimbursement Request']);
   assert.deepEqual(at('Housekeeping'), ['Cleans', 'Calendar', 'Form Submissions']);
   assert.deepEqual(at('Finance'), ['Order Fulfilment', 'Payable Invoices', 'Receivable Invoices', 'Client Funds & Expenses', 'Owner Statements', 'Profit/Loss Reporting', 'Accounts desk']);
@@ -197,7 +202,7 @@ test('the menu\'s calendars open the Calendar on one team, for the teams the rol
   for (const role of ['admin', 'super_admin', 'stays']) assert.equal(links(rolePanel(role, DEFAULT_ROLE_MODULES[role])).filter(l => l.key.startsWith('tool:calendar-')).length, 5, role);
   const accounts = rolePanel('accounts', DEFAULT_ROLE_MODULES.accounts);
   assert.ok(!links(accounts).some(l => l.key.startsWith('tool:calendar-')));
-  assert.deepEqual(accounts.groups.map(g => g.title), ['My Recharge', 'Management', 'Stock', 'Finance', 'Start something']);
+  assert.deepEqual(accounts.groups.map(g => g.title), ['My Recharge', 'Databases', 'Approvals', 'Receivable Invoices', 'Tasks', 'Management', 'Stock', 'Finance', 'Start something']);
   // Ready cannot open Licensing, so no Safety & Compliance for its calendar alone; its Onboarding keeps the calendar.
   assert.ok(!linkOf('ready', 'tool:calendar-safety'));
   assert.equal(linkOf('ready', 'tool:calendar-onboarding').label, 'Calendar');
@@ -286,4 +291,41 @@ test('the owner menu: Home, Favourites, Inbox, My Portfolio, My Statements, Cale
   assert.deepEqual(panel.groups.map(g => g.key), ['your-properties', 'requests', 'start']);
   assert.deepEqual(panel.groups[1].links.map(l => l.key), ['area:repairs', 'area:all', 'tool:furnishing', 'page:help']);
   assert.ok(!links(panel).some(l => l.key === 'page:calendar' || l.key.startsWith('tool:calendar-')), 'owners have no team Calendar page');
+});
+
+// Business Plan v2's sections (30 October 2026).
+test('Plan v2: My Recharge has Inbox, Earnings and Performance; Databases, Approvals and Tasks open the right places', () => {
+  for (const role of ['stays', 'cleans', 'cleaning_manager', 'ready', 'accounts']) {
+    const mine = rolePanel(role, DEFAULT_ROLE_MODULES[role]).groups[0].links.map(l => l.label);
+    assert.ok(mine.indexOf('Inbox') < mine.indexOf('Earnings') && mine.indexOf('Earnings') < mine.indexOf('My Performance'), role + ': ' + mine);
+  }
+  // A cleaner's earnings are My month; the rest of the team's are the Earnings part of My performance.
+  assert.equal(linkOf('cleans', 'tool:month').label, 'Earnings');
+  assert.deepEqual(deepLinkFor(linkOf('stays', 'tool:earnings').target), { section: 'analytics', anchor: 'section-earnings' });
+  assert.ok(!has('admin', 'tool:earnings') && !has('cleans', 'tool:earnings'));
+  // Databases: people records in the Management centre, applicants and contract templates in Recruitment.
+  for (const [key, sub] of [['tool:clients-db', 'clients'], ['tool:contractors', 'contractors'], ['tool:staff', 'staff']]) {
+    assert.deepEqual(deepLinkFor(linkOf('admin', key).target), { section: 'work', view: 'management', sub }, key);
+    assert.ok(!has('stays', key), 'the people records are management\'s: ' + key);
+  }
+  assert.deepEqual(deepLinkFor(linkOf('admin', 'tool:applicants').target), { section: 'recruitment', anchor: 'recruitment-applicants' });
+  assert.deepEqual(deepLinkFor(linkOf('ready', 'tool:contract-templates').target), { section: 'recruitment', anchor: 'recruitment-templates' });
+  assert.ok(!has('cleans', 'tool:applicants'), 'housekeepers have no Recruitment page');
+  // Approvals by who decides.
+  assert.deepEqual(deepLinkFor(linkOf('admin', 'tool:approvals-ppm').target), { section: 'work', view: 'clients', sub: 'enquiries', anchor: 'section-ppm-approvals' });
+  assert.deepEqual(deepLinkFor(linkOf('cleaning_manager', 'tool:approvals-pom').target), { section: 'work', view: 'cleans', anchor: 'section-waiting-for-your-review' });
+  assert.deepEqual(deepLinkFor(linkOf('accounts', 'tool:approvals-accounts').target), { section: 'work', view: 'accounts', sub: 'expenses' });
+  assert.ok(!has('accounts', 'tool:approvals-ppm') && !has('stays', 'tool:approvals-accounts'));
+  // Tasks list places that keep their department section too, each under a key of the Tasks section's own.
+  assert.equal(sectionOf('admin', 'tool:licensing'), 'Safety & Compliance');
+  assert.equal(sectionOf('admin', 'tasks:tool:licensing'), 'Tasks');
+  assert.equal(sectionOf('admin', 'tool:receivable'), 'Finance');
+  assert.equal(sectionOf('admin', 'receivable:tool:receivable'), 'Receivable Invoices');
+  assert.deepEqual(linkOf('admin', 'tasks:tool:licensing').target, linkOf('admin', 'tool:licensing').target);
+  assert.equal(linkOf('ready', 'tasks:tool:pipeline').label, 'Property Maintenance');
+  assert.equal(linkOf('cleaning_manager', 'tasks:tool:setups').label, 'Property Set-Up');
+  for (const part of ['broadband', 'photography', 'social', 'guidebook'])
+    assert.deepEqual(deepLinkFor(linkOf('stays', 'tool:task-' + part).target), { section: 'work', view: 'all', sub: 'task-' + part }, part);
+  // Every key stays within what a saved menu order may hold.
+  for (const role of roles) for (const l of links(rolePanel(role, MODULE_IDS))) assert.match(l.key, /^[a-z0-9:_=-]{1,80}$/, role + ' ' + l.key);
 });

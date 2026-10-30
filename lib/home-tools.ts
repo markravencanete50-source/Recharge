@@ -10,7 +10,7 @@ export type ToolArt =
 export type HomeToolTarget =
   | { kind: 'work'; view: WorkView; sub?: string; anchor?: string; open?: HomeForm; workId?: string }
   // 'activity' stays a valid deep-link target so old links work; it opens Messages → Updates now.
-  | { kind: 'tab'; tab: 'properties' | 'analytics' | 'activity' | 'help' | 'approvals' | 'enquiries' | 'mailbox'; anchor?: string }
+  | { kind: 'tab'; tab: 'properties' | 'analytics' | 'activity' | 'help' | 'approvals' | 'enquiries' | 'mailbox' | 'recruitment'; anchor?: string }
   | { kind: 'tracker'; module: ModuleId }
   | { kind: 'calculator' };
 // Forms a Home shortcut can open straight away, inside their Work view.
@@ -52,6 +52,34 @@ const BINS = tool('bins', 'Waste collection', 'Bins visits, due and done', 'box'
 // Licensing's safety certificates (gas safety, EICR and PAT, EPC...) are steps inside each licence application in
 // the same tracker; it has no certificates part of its own, so Compliance Certs opens the tracker as Licensing does.
 const COMPLIANCE = (needs?: ModuleId[]) => tool('compliance', 'Compliance certificates', 'Gas safety, EICR, EPC and more', 'shield', work('clients', { sub: 'licensing' }), needs);
+
+// Business Plan v2's sections (Lee, 30 October 2026): Databases, Approvals and Tasks.
+// Databases: the people records, each its own Management centre tool (People filtered to owners, Ready's contractors or
+// the team), and Recruitment's applicants and contract templates (mobile/src/LiveRecruitment.tsx reads the anchor).
+const CLIENTS_DB = tool('clients-db', 'Clients', 'Every owner account and their properties', 'people', work('management', { sub: 'clients' }));
+const CONTRACTORS = tool('contractors', 'Contractors', 'Ready\'s contractors and the properties they cover', 'hardhat', work('management', { sub: 'contractors' }));
+const STAFF = tool('staff', 'Staff', 'Everyone on the team, by role', 'people', work('management', { sub: 'staff' }));
+const recruitment = (anchor: string): HomeToolTarget => ({ kind: 'tab', tab: 'recruitment', anchor });
+const APPLICANTS = tool('applicants', 'Applicants', 'Everyone who applied, across the vacancies', 'search', recruitment('recruitment-applicants'));
+const CONTRACT_TEMPLATES = tool('contract-templates', 'Contract templates', 'The contracts sent with an offer', 'signature', recruitment('recruitment-templates'));
+// Earnings: the team's own pay (timesheet and VA pay) on My performance. Cleaners' earnings are My month.
+const EARNINGS = tool('earnings', 'Earnings', 'Your hours and pay', 'wallet', { kind: 'tab', tab: 'analytics', anchor: 'section-earnings' });
+// Approvals by who decides: the Property Performance Manager's leads (Leads, mobile/src/LiveEnquiries.tsx), the Property
+// Operations Manager's changeover forms (Cleans' review list) and Accounts' expenses evidence.
+const APPROVALS_PPM = tool('approvals-ppm', 'Property Performance Manager', 'Internal analyses sent for approval', 'hourglass', work('clients', { sub: 'enquiries', anchor: 'section-ppm-approvals' }));
+const APPROVALS_POM = tool('approvals-pom', 'Property Operations Manager', 'Changeover forms to approve or reject', 'hourglass', work('cleans', { section: 'Waiting for your review' }));
+const APPROVALS_ACCOUNTS = tool('approvals-accounts', 'Accounts approvals', 'Expenses evidence to approve', 'hourglass', work('accounts', { sub: 'expenses' }));
+// Tasks: Launch Preparation's tickets for one part (broadband, photography...), in All work (mobile/src/LiveWorkspace.tsx).
+export const TASK_PARTS = { broadband: 'Broadband', photography: 'Photography', social: 'Social media', guidebook: 'Guidebook' } as const;
+export type TaskPart = keyof typeof TASK_PARTS;
+export const TASK_SUB_PREFIX = 'task-';
+const task = (part: TaskPart, detail: string, art: ToolArt) => tool('task-' + part, TASK_PARTS[part], detail, art, work('all', { sub: TASK_SUB_PREFIX + part }));
+const TASKS = [
+  task('broadband', 'Installs, Wi-Fi and the router portal', 'bell'),
+  task('photography', 'Shoots booked and photos in', 'search'),
+  task('social', 'New properties to post', 'chat'),
+  task('guidebook', 'Guest guidebooks to fill in', 'star'),
+];
 
 const BY_ROLE: Record<string, Candidate[]> = {
   admin: [
@@ -170,6 +198,7 @@ const PANEL_ONLY: Record<string, Candidate[]> = {
     tool('profit-loss', 'Profit and loss', 'Fees, cleaning margin and occupancy', 'pie', work('accounts', { sub: 'performance' })),
     CALENDAR_READY, CALENDAR_STAYS, CALENDAR_CLEANS,
     GARDEN, BINS, COMPLIANCE(), CALENDAR_SAFETY, CALENDAR_ONBOARDING,
+    CLIENTS_DB, CONTRACTORS, STAFF, APPLICANTS, CONTRACT_TEMPLATES, APPROVALS_PPM, APPROVALS_POM, APPROVALS_ACCOUNTS, ...TASKS,
   ],
   stays: [
     tool('enquiries', 'Leads', 'Send the property form, value replies', 'mail', { kind: 'tab', tab: 'enquiries' }, ['property-onboarding']),
@@ -181,15 +210,17 @@ const PANEL_ONLY: Record<string, Candidate[]> = {
     CALENDAR_READY, CALENDAR_STAYS, CALENDAR_CLEANS,
     // Guest relations open Maintenance's routine visits (mobile/src/LiveRepairs.tsx) with the tools New routine visit needs.
     { ...GARDEN, needs: ROUTINE_MODULES }, { ...BINS, needs: ROUTINE_MODULES }, COMPLIANCE(['licensing']), CALENDAR_SAFETY, CALENDAR_ONBOARDING,
+    EARNINGS, APPLICANTS, CONTRACT_TEMPLATES, { ...APPROVALS_PPM, needs: ['property-onboarding'] }, ...TASKS,
   ],
   cleans: [CALENDAR_CLEANS],
-  cleaning_manager: [CALENDAR_CLEANS, CALENDAR_STAYS],
-  ready: [CALENDAR_READY, CALENDAR_STAYS, GARDEN, BINS, CALENDAR_SAFETY, CALENDAR_ONBOARDING],
+  cleaning_manager: [CALENDAR_CLEANS, CALENDAR_STAYS, EARNINGS, APPLICANTS, CONTRACT_TEMPLATES, APPROVALS_POM],
+  ready: [CALENDAR_READY, CALENDAR_STAYS, GARDEN, BINS, CALENDAR_SAFETY, CALENDAR_ONBOARDING, EARNINGS, APPLICANTS, CONTRACT_TEMPLATES, ...TASKS],
   accounts: [
     tool('receivable', 'Receivable invoices', 'Invoices to send and settle', 'receipt', work('accounts', { sub: 'receivable' })),
     tool('profit-loss', 'Profit and loss', 'Fees, cleaning margin and occupancy', 'pie', work('accounts', { sub: 'performance' })),
     tool('aircover', 'AirCover claims', 'Add and close claims', 'shield', work('accounts', { sub: 'aircover' }), ['aircover-reporting']),
     CALENDAR_READY, CALENDAR_STAYS, CALENDAR_CLEANS, CALENDAR_SAFETY, CALENDAR_ONBOARDING,
+    EARNINGS, APPLICANTS, CONTRACT_TEMPLATES, APPROVALS_ACCOUNTS,
   ],
   // The Statements part of the owner's Portfolio page (mobile/src/LiveClientReports.tsx).
   // Calendar is the Booking calendar part of the same page.

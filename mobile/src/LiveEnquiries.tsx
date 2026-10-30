@@ -4,7 +4,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { Text } from "./Typography";
 import { ChoiceField } from "./ChoiceField";
 import { Entrance, MotionPress, motionTokens } from "./motion";
-import { Button, Field, Loading, Notice, StatGrid, StatTile, Tag, message, useRequestId } from "./LiveKit";
+import { Anchor, Button, Field, Loading, Notice, StatGrid, StatTile, Tag, message, useRequestId, useWorkFocus } from "./LiveKit";
 import { Initials } from "./LiveAccounts";
 import { PageHeading, SoftButton } from "./LivePages";
 import { Segmented } from "./Segmented";
@@ -47,6 +47,8 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
   const [feeSettings, setFeeSettings] = useState(false), [packageSettings, setPackageSettings] = useState(false), [listingSettings, setListingSettings] = useState(false), [launchSettings, setLaunchSettings] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<LeadApprovals | null>(null);
+  // Menu → Approvals → Property Performance Manager lands on the approvals card, shown even when it is empty.
+  const askedApprovals = useWorkFocus()?.anchor === "section-ppm-approvals";
   const load = useCallback(async () => {
     try { setData(clientEnquiriesSchema.parse((await readTeams({ section: "clientEnquiries" })).data)); setError(""); } catch (e) { setError(message(e)); }
     // What waits for the Property Performance Manager (empty for everyone else); the list still shows if this fails.
@@ -81,7 +83,7 @@ export function LiveEnquiries({ palette: p, account, onOpenProperty, onRefresh }
         { key: "value", label: "To value", count: count("value"), alert: count("value") > 0 }, { key: "waiting", label: "Waiting", count: count("waiting") },
         { key: "progress", label: "In progress", count: count("progress") }, { key: "all", label: "All" },
       ]} />
-      {!!approvals?.items.length && <ApprovalsCard p={p} approvals={approvals} onOpen={setOpenId} />}
+      {(!!approvals?.items.length || askedApprovals) && <Anchor id="section-ppm-approvals"><ApprovalsCard p={p} approvals={approvals ?? { canApprove: false, items: [] }} onOpen={setOpenId} /></Anchor>}
       {!!error && <Notice text={error} p={p} tone="bad" />}
       {!data && !error && <Loading p={p} />}
       {data && !items.length && <Notice text={shown === "value" ? "No answered forms waiting. Send the form to a landlord to start." : "Nothing here yet."} p={p} />}
@@ -106,7 +108,9 @@ function ApprovalsCard({ p, approvals, onOpen }: { p: Palette; approvals: LeadAp
   return (
     <View style={[ui.card, { backgroundColor: p.surface, borderColor: p.border, gap: 8 }]}>
       <Text accessibilityRole="header" style={{ color: p.text, fontWeight: "700" }}>{`Waiting for your approval (${approvals.items.length})`}</Text>
-      <Text style={[ui.small, { color: p.muted }]}>Property Performance Manager approvals. Open a lead to approve its analysis or return it with a note.</Text>
+      <Text style={[ui.small, { color: p.muted }]}>{approvals.items.length ? "Property Performance Manager approvals. Open a lead to approve its analysis or return it with a note."
+        : approvals.canApprove ? "Property Performance Manager approvals. Nothing is waiting for you: a lead shows here when a consultant sends its Internal Analysis."
+        : "Property Performance Manager approvals. Only the Property Performance Managers approve analyses; admins choose who they are."}</Text>
       {approvals.items.map(a => (
         <MotionPress key={a.enquiryId + a.step} accessibilityRole="button" accessibilityLabel={`Open ${a.name}`} onPress={() => onOpen(a.enquiryId)}
           style={[ui.row, { gap: 10, minHeight: 44, paddingHorizontal: 8, borderRadius: 10, backgroundColor: p.wash }]}>

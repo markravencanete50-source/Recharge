@@ -59,12 +59,16 @@ function ShiftChangesWaiting({ p, onOpen }: { p: Palette; onOpen: () => void }) 
   );
 }
 
-const MANAGEMENT_VIEWS = ["queue", "people", "properties", "productivity", "performance", "team", "training", "onboarding", "limits", "decisions", "vapay", "reflections", "dailytasks", "rota", "responsibilities", "access"] as const;
+const MANAGEMENT_VIEWS = ["queue", "people", "clients", "contractors", "staff", "properties", "productivity", "performance", "team", "training", "onboarding", "limits", "decisions", "vapay", "reflections", "dailytasks", "rota", "responsibilities", "access"] as const;
 type ManagementView = (typeof MANAGEMENT_VIEWS)[number];
 // Each tool's card on the Management centre and the heading of its own page: its name, one line on what is inside, its icon.
 const TOOL: Record<ManagementView, ToolCard<ManagementView>> = {
   queue: { key: "queue", label: "Waiting on you", detail: "Approvals, flags and requests that need a management decision.", icon: "clock" },
   people: { key: "people", label: "People", detail: "Team accounts, roles and the tools each person has.", icon: "users" },
+  // Business Plan v2's Databases: People narrowed to the owners, Ready's contractors or the team.
+  clients: { key: "clients", label: "Clients", detail: "Every owner account, its properties and its status.", icon: "users" },
+  contractors: { key: "contractors", label: "Contractors", detail: "Ready's contractors and the properties each one covers.", icon: "tool" },
+  staff: { key: "staff", label: "Staff", detail: "Everyone on the team, with their role and properties.", icon: "user" },
   properties: { key: "properties", label: "Properties", detail: "Add and edit properties and choose who works on each.", icon: "home" },
   productivity: { key: "productivity", label: "Productivity", detail: "Every clock in and out, with hours by week and month.", icon: "activity" },
   performance: { key: "performance", label: "Team performance", detail: "KPIs, shifts, guest replies and sign-offs.", icon: "award" },
@@ -163,6 +167,7 @@ export function LiveManagement({ palette: p, account, properties, work, onOpenWo
       {view === "productivity" && <LiveProductivity key={productivityTab} palette={p} account={account} initial={productivityTab} />}
       {view === "performance" && <LiveTeamPerformance palette={p} role={account.role} />}
       {(view === "people" || view === "properties") && <LivePeople palette={p} account={account} view={view} />}
+      {(view === "clients" || view === "contractors" || view === "staff") && <LivePeople palette={p} account={account} view="people" group={view} />}
 
       {view === "team" && <Button label={loading ? "Refreshing…" : "Refresh"} icon="refresh-cw" p={p} disabled={loading} onPress={() => void load()} />}
       </ToolTitled.Provider>

@@ -79,7 +79,8 @@ test('the rota, the responsibilities register and the personal timesheet are mou
   const reports = read('mobile/src/Reports.tsx');
   assert.match(reports, /import \{ TimesheetTab \} from '\.\/LiveTeamTime'/);
   assert.match(reports, /account&&account\.role!=='client'&&<View style=\{\{gap:12\}\}>[^]*<TimesheetTab p=\{p\} account=\{account\}\/>/);
-  assert.ok(reports.indexOf('<MyPerformance') < reports.indexOf('<TimesheetTab'), 'below the personal card');
+  // The timesheet is part of Earnings (Business Plan v2), which sits below the personal card.
+  assert.ok(reports.indexOf('{account&&<MyPerformance') < reports.indexOf('<MyEarnings p={p}'), 'below the personal card');
 });
 
 test('Stays can sign off a day with no open shift, from Home, and only Stays', () => {

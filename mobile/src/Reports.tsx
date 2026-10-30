@@ -15,6 +15,7 @@ import { MyPerformance } from './MyPerformance';
 import { TimesheetTab } from './LiveTeamTime';
 import { VaPayPanel } from './VaPay';
 import { useToolTitled } from './ToolPage';
+import { Anchor } from './LiveKit';
 import type { WorkspaceAccount } from '../../lib/workspace-account-policy';
 import type { OperationView } from '../../lib/workflow-forms';
 // The team's "My performance" page: the person's own numbers first (when the host passes `account`), then the
@@ -22,6 +23,14 @@ import type { OperationView } from '../../lib/workflow-forms';
 // In the admins' Reports hub (ReportsHub.tsx) each half is a report of its own: `part` "mine" is My performance and
 // "trends" the Business overview, and the hub's page heading stands in for this one's.
 const OVERVIEW_PERIODS:readonly PeriodKey[]=['30d','90d','12m','custom'];
+// Earnings: the hours worked, and a VA's own requests for invoice (VA pay, 20261022200000; the database answers nothing to
+// anyone else). My Recharge → Earnings opens this alone as a tool page (mobile/src/LiveWorkspace.tsx).
+export function MyEarnings({p,account}:{p:Palette;account:WorkspaceAccount}){
+  return <Anchor id="section-earnings"><View style={{gap:24}}>
+    {account&&account.role!=='client'&&<View style={{gap:12}}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>My timesheet</Text><TimesheetTab p={p} account={account}/></View>}
+    <VaPayPanel p={p} account={account} place="mine"/>
+  </View></Anchor>;
+}
 export function Reports({snapshot,period,role,palette:p,onDates,onPeriod,onExport,exporting,exportMessage,account:person,work,part='all'}:{snapshot:AnalyticsSnapshot;period:AnalyticsPeriod;role:WorkspaceRole;palette:Palette;onDates:()=>void;onPeriod?:(period:AnalyticsPeriod)=>void;onExport:()=>void;exporting:boolean;exportMessage:string;account?:WorkspaceAccount;work?:OperationView[];part?:'all'|'mine'|'trends'}) {
   const titled=useToolTitled(),account=part==='trends'?undefined:person,trends=part!=='mine';
   const report=useMemo(()=>reportPresentation(snapshot,period),[snapshot,period]);
@@ -33,9 +42,9 @@ export function Reports({snapshot,period,role,palette:p,onDates,onPeriod,onExpor
   return <View style={{gap:24}}>
     {!titled&&<Entrance sessionKey={'reports:'+role+':heading'}><View style={{gap:8}}><Text accessibilityRole="header" style={[ui.title,{color:p.text}]}>{account?'My performance':snapshot.title}</Text><Text style={[ui.body,{color:p.muted}]}>{account?'Your own numbers: replies, tasks done, time worked and your bonus tier.':snapshot.description}</Text></View></Entrance>}
     {account&&<MyPerformance palette={p} account={account} work={work} page/>}
-    {account&&account.role!=='client'&&<View style={{gap:12}}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>My timesheet</Text><TimesheetTab p={p} account={account}/></View>}
-    {/* VA pay (20261022200000): a VA's own requests for invoice; the database answers nothing to anyone else. */}
-    {account&&account.role!=='client'&&<VaPayPanel p={p} account={account} place="mine"/>}
+    {/* Earnings (Business Plan v2: My Recharge → Earnings lands here): the hours worked, and a VA's own requests for invoice
+        (VA pay, 20261022200000; the database answers nothing to anyone else). */}
+    {account&&account.role!=='client'&&<MyEarnings p={p} account={account}/>}
     {account&&trends&&<View style={{gap:4}}><Text accessibilityRole="header" style={[ui.sectionTitle,{color:p.text}]}>{snapshot.title}</Text><Text style={[ui.small,{color:p.muted}]}>{snapshot.description}</Text></View>}
     {trends&&<>
     <View style={[ui.row,{gap:12,flexWrap:'wrap'}]}>
