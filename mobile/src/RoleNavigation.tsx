@@ -86,6 +86,29 @@ function RoleCard({panel,palette:p,viewing,onBack,backLabel='Back to my view'}:{
   </View>;
 }
 
+// The panel's links scroll without a mouse wheel too (Lee, 31 October 2026): the scroll bar shows and can be
+// dragged, and an arrow button at the top or bottom edge appears while more links sit beyond it and pages to them.
+function PanelScroll({palette:p,children}:{palette:Palette;children:React.ReactNode}) {
+  const ref=useRef<ScrollView>(null);
+  const [m,setM]=useState({y:0,view:0,content:0});
+  const above=m.y>4, below=m.y+m.view<m.content-4;
+  const page=(dir:1|-1)=>ref.current?.scrollTo({y:Math.max(0,m.y+dir*Math.max(120,m.view*0.7)),animated:true});
+  const arrow=(dir:1|-1)=><MotionPress {...hover} accessibilityRole="button" accessibilityLabel={dir>0?'Scroll the menu down':'Scroll the menu up'} onPress={()=>page(dir)}
+    style={[ui.row,{position:'absolute',left:14,right:14,[dir>0?'bottom':'top']:6,height:30,borderRadius:12,justifyContent:'center',gap:6,borderWidth:1,borderColor:p.border,backgroundColor:p.surface,...depth.card}]}>
+    <Feather name={dir>0?'chevron-down':'chevron-up'} size={15} color={p.muted}/><Text style={{fontSize:12,fontWeight:'600',color:p.muted}}>{dir>0?'More below':'Back up'}</Text>
+  </MotionPress>;
+  return <View style={{flex:1,minHeight:0}}>
+    <ScrollView ref={ref} testID="sidebar-scroll" contentContainerStyle={{paddingHorizontal:14,paddingTop:16,paddingBottom:44}} showsVerticalScrollIndicator={Platform.OS==='web'} scrollEventThrottle={32}
+      onScroll={e=>{const y=e.nativeEvent.contentOffset.y;setM(o=>Math.abs(o.y-y)<2?o:{...o,y});}}
+      onLayout={e=>{const view=e.nativeEvent.layout.height;setM(o=>o.view===view?o:{...o,view});}}
+      onContentSizeChange={(_w,content)=>setM(o=>o.content===content?o:{...o,content})}>
+      {children}
+    </ScrollView>
+    {above&&arrow(-1)}
+    {below&&arrow(1)}
+  </View>;
+}
+
 // The live workspace's desktop left panel: the role's own heading and groups (lib/role-panel.ts).
 // While a super admin views as someone, it is that person's or role's panel, marked as a view.
 export function RoleNavigation({panel,selected,palette:p,onOpen,onProfile,onCollapse,badges={},viewing,onBack,backLabel,me}:{
@@ -96,10 +119,10 @@ export function RoleNavigation({panel,selected,palette:p,onOpen,onProfile,onColl
 }) {
   return <View testID="workspace-sidebar" style={{width:264,backgroundColor:p.isDark?p.surface:p.background,borderRightWidth:1,borderColor:p.border}}>
     <View testID="sidebar-brand" style={[ui.between,{height:81,paddingHorizontal:16,gap:12,backgroundColor:p.header,borderBottomWidth:1,borderColor:p.isDark?p.border:p.header}]}><CompanyLogo palette={p} width={144}/><MotionPress accessibilityRole="button" accessibilityLabel="Hide left panel" accessibilityState={{expanded:true}} onPress={onCollapse} style={[ui.iconButton,{width:44,height:44,borderRadius:14,backgroundColor:p.headerControl,borderColor:p.headerBorder}]}><Feather name="chevrons-left" size={18} color={p.headerControlText}/></MotionPress></View>
-    <ScrollView contentContainerStyle={{paddingHorizontal:14,paddingTop:16,paddingBottom:24}} showsVerticalScrollIndicator={false}>
+    <PanelScroll palette={p}>
       <RoleCard panel={panel} palette={p} viewing={viewing} onBack={onBack} backLabel={backLabel}/>
       {desktopPanel(panel).groups.map(group=><Group key={group.key} group={group} selected={selected} palette={p} badges={badges} onOpen={onOpen}/>)}
-    </ScrollView>
+    </PanelScroll>
     <MotionPress {...hover} accessibilityRole="button" accessibilityLabel="Open profile and preferences" onPress={onProfile} style={[ui.row,{gap:12,margin:14,padding:12,borderRadius:18,borderWidth:1,borderColor:p.border,backgroundColor:p.surface,...depth.card}]}>
       {me?.photo?<PersonAvatar p={p} name={me.name} userId={me.userId} photo={me.photo} size={38}/>:<View style={{width:38,height:38,borderRadius:12,backgroundColor:p.header,alignItems:'center',justifyContent:'center'}}><Feather name="settings" size={17} color={p.headerText}/></View>}
       <View style={{flex:1,minWidth:0}}><Text numberOfLines={1} style={{fontSize:13,fontWeight:'600',color:p.text}}>Profile</Text><Text numberOfLines={1} style={{fontSize:12,color:p.muted}}>Photo, theme and sign out</Text></View>
